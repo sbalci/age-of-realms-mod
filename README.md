@@ -98,3 +98,8 @@ Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-com
 - Rivers and lakes are stocked with fish. Fish regrow at a rate per water type; a shoal fished below 20% never recovers; understocked bodies restock slowly while two or more healthy shoals remain.
 - Fresh water is tinted slightly green; select a fish or ship to see its water type.
 - Switches: `?rivers=off`, `?fishregen=off`.
+
+### Batch 3: wells, clean water, thirst (`games/realms/js/wells.js`)
+- New Well building (Economic, hotkey C, 40 wood + 10 stone). Water capacity = 8 free + 10 per Town Center cistern (+15 near fresh water) + 12 per well (x1.5 near a river or lake, x0.6 if only the sea is near).
+- Population above capacity: gathering slows (down to 50%) and units wear down toward 1 hp but never die of thirst. The top bar shows capacity next to population.
+- Computer players dig wells ahead of their population. Switch: `?thirst=off`.
