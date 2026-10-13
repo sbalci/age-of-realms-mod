@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d10; color: #f0e6d0; font-family: 'Crimson Text', Georgia, serif; font-size: 15px; user-select: none; }
 #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
-body.in-game #game { height: calc(100vh - 170px); top: 34px; }
+body.in-game #game { height: calc(100vh - 204px); top: 34px; }
 body.in-editor #game { left: 330px; width: calc(100vw - 330px); top: 36px; height: calc(100vh - 36px); }
 .hidden { display: none !important; }
 .screen { position: fixed; inset: 0; pointer-events: none; }

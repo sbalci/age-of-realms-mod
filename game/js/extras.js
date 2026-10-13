@@ -303,3 +303,25 @@ if (typeof updateTopbar === 'function') {
     }
   };
 }
+
+// ---------------------------------------------------------------- edge scrolling at the window edges
+// The canvas sits between the top bar and the bottom panel, so pushing the mouse to the very bottom (or top) of the
+// screen lands on the HUD and the canvas never sees it. Scroll whenever the pointer touches a window edge.
+const EX_PTR = { x: -1, y: -1, inWin: false };
+if (typeof window !== 'undefined') {
+  window.addEventListener('mousemove', e => { EX_PTR.x = e.clientX; EX_PTR.y = e.clientY; EX_PTR.inWin = true; }, true);
+  document.addEventListener('mouseleave', () => { EX_PTR.inWin = false; });
+  window.addEventListener('blur', () => { EX_PTR.inWin = false; });
+}
+if (typeof scrollCamera === 'function') {
+  const _sc = scrollCamera;
+  scrollCamera = function (dt) {
+    _sc(dt);
+    if (!EX_PTR.inWin || UI.mouse.inCanvas || UI.drag || typeof document === 'undefined' || !document.hasFocus()) return;
+    if (document.body.classList.contains('in-editor')) return;
+    const m = 4, sp = 900 * dt / R.cam.zoom; let dx = 0, dy = 0;
+    if (EX_PTR.y >= window.innerHeight - m) dy += sp; else if (EX_PTR.y <= m - 1) dy -= sp;
+    if (EX_PTR.x <= m - 1) dx -= sp; else if (EX_PTR.x >= window.innerWidth - m) dx += sp;
+    if (dx || dy) { R.cam.x += dx; R.cam.y += dy; clampCam(); }
+  };
+}
