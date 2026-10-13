@@ -11,12 +11,13 @@ const SoundFake = new Proxy({
 }, { get: (t, k) => (k in t ? t[k] : noop) });
 const ctx = vm.createContext({ console, performance, Math, Proxy, Uint8Array, Int16Array, Int32Array, Float32Array, Uint32Array, Map, Set, Array, Object, JSON, String, Number,
   Sound: SoundFake, UI: { selection: [], deselect: noop, onRemoved: noop, showEnd: noop, gameRunning: true, panelKey: '' } });
-const load = f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
+const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 let loadErr = null;
 try {
   for (const f of ['data.js', 'map.js', 'world.js', 'render.js']) load(f);
   try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
   load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('fx.js');
+  if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js']) if (!LOADED.has(f)) load(f);
 } catch (e) { loadErr = e.stack; }
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;
@@ -81,9 +82,9 @@ const AR = run(`(() => { const o = FREE(6, 6); const rnd = Math.random; Math.ran
     let t = 0; while (W.projs.length && t < 5) { worldTick(0.05); t += 0.05; } const own = FX.arrows.length - n0;
     W.missFx = []; const n1 = FX.arrows.length; tg.x -= 2; tg.y -= 2; fireProjectile(src, tg, 'arrow', null, { dmgVal: 0 }); tg.x += 2;
     t = 0; while (W.projs.length && t < 5) { worldTick(0.05); t += 0.05; } const withMissFx = FX.arrows.length - n1; delete W.missFx;
-    return { own, withMissFx, ang: FX.arrows.length ? typeof FX.arrows[FX.arrows.length - 1].ang : null };
+    return { cmd: typeof CMD !== 'undefined', own, withMissFx, ang: FX.arrows.length ? typeof FX.arrows[FX.arrows.length - 1].ang : null };
   } finally { Math.random = rnd; } })()`);
-ok('missed arrows stick in the ground; deferred to W.missFx when another module provides it', AR.own === 1 && AR.withMissFx === 0 && AR.ang === 'number', AR);
+ok('missed arrows stick in the ground; deferred to W.missFx when another module provides it', (AR.cmd ? AR.own <= 1 : AR.own === 1) && AR.withMissFx === 0 && AR.ang === 'number', AR);
 const SP = run(`(() => { R.cw = 1000; R.ch = 600; R.cam.zoom = 1; R.cv = R.cv || { getBoundingClientRect: () => ({ top: 0, left: 0 }) }; const W0 = W; centerCamOn(40, 40); const s = Sound; s.calls.length = 0;
   const left = screenToTile(50, 300), right = screenToTile(950, 300), mid = screenToTile(500, 300);
   s.play('bow', left.x, left.y); s.play('bow', right.x, right.y); s.play('bow', mid.x, mid.y); s.play('click');

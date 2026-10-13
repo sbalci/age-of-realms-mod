@@ -4,6 +4,10 @@ A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. Yo
 
 It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison experiment](https://github.com/Barty-Bart/opus-55-effort-comparison) and adds systems for mortality, water, terraforming and engineering. The six original builds are archived unchanged in [`legacy/`](legacy/).
 
+![A Castle Age town in Age of Realms](assets/screenshots/town.jpg)
+
+<p><img src="assets/screenshots/overview.jpg" width="49%" alt="AI vs AI overview"> <img src="assets/screenshots/battle.jpg" width="49%" alt="Janissaries and knights in battle"></p>
+
 ## Play
 
 ```sh
@@ -19,7 +23,7 @@ A local server is required. Opening `index.html` directly may not load the scrip
 ## What's in the game
 
 **Base game (Special Build)**
-- 9 civilizations with unique units.
+- 10 civilizations with unique units, including the **Turks** (Janissary hand cannoneers; their monks are Imams).
 - Four ages and a full economy.
 - Navy and transports, monks and relics, trade and the market.
 - Diplomacy and tribute.
@@ -28,7 +32,7 @@ A local server is required. Opening `index.html` directly may not load the scrip
 - Wildlife and weather.
 - Procedural music and unit speech.
 - Four AI difficulty levels.
-- A map editor, save and load of maps, and cheats (Enter).
+- A map editor, save and load of maps, and cheats (Enter; e.g. `marco`, `polo`, and `ibn battuta` to reveal the map and lift the fog at once).
 
 **Mortality and veterans** (`game/js/mod.js`)
 - People age:
@@ -59,7 +63,54 @@ A local server is required. Opening `index.html` directly may not load the scrip
   - units in a tunnel are hidden from enemies;
   - sappers dig 60% faster than villagers.
 
-The in-game **Help** describes every system.
+**Commands and battle** (`game/js/command.js`)
+- **Orders and formations:**
+  - Shift-queued orders with waypoints.
+  - Formations that face the march: melee in front, ranged behind, siege and monks at the rear.
+  - Combat stances: Aggressive, Defensive, Stand Ground, No Attack.
+- **Combat:**
+  - Ranged accuracy, so arrows can miss.
+  - Soldiers blocked by walls breach the nearest wall or gate.
+  - Units trapped by terrain changes are rescued.
+  - Villagers and monks flee from melee attackers.
+  - Scouts no longer kill sheep.
+- **Keys and controls:**
+  - `,` cycles idle soldiers.
+  - Home jumps to the last attack.
+  - `+`/`−` change game speed.
+  - `M` toggles music.
+  - A Resign button; beaten computer players resign too.
+
+**Victory, technology and score** (`game/js/victory.js`)
+- **Wonder** (Imperial Age) and **relic victory**: hold out for 5 minutes. Announcements and a countdown banner keep everyone informed.
+- **Imperial upgrades:**
+  - Units: Halberdier, Paladin, Heavy Cavalry Archer, Capped Ram, Onager.
+  - Technologies: Crop Rotation, Two-Man Saw, Gold and Stone Shaft Mining, and the full Blacksmith line.
+- **Fog-of-war memory:** buildings you saw earlier stay on the map as you last saw them.
+- **Scores:** a live score panel (F4) and a tabbed end screen with statistics and a score-over-time chart.
+
+**Watch AI vs AI** (`game/js/extras.js`)
+- Tick *Watch AI vs AI* in Game Setup.
+- Every player is computer-controlled and the map is revealed.
+- Keys 1–8 follow a player, `+`/`−` change speed up to 8×, and F4 shows scores.
+
+**Look** (`game/js/terrain.js`, `game/js/fx.js`)
+- **Terrain and buildings:**
+  - HD blended terrain: soft transitions, sunlit hills, rocky cliffs, depth-shaded water with surf and wet sand.
+  - Building materials change with the age: logs and thatch, then timber frame and clay tile, then stone and slate.
+- **Walls, shadows and sky:**
+  - Walls and palisades connect into continuous lines.
+  - Buildings cast projected shadows.
+  - Fog of war fades in and out smoothly.
+  - Cloud shadows drift across the map, and the screen edges have a vignette.
+- **Effects and battlefield marks:**
+  - Soft smoke and glowing fire, with more fire as a building takes damage.
+  - Missed arrows stay stuck in the ground, catapult stones leave craters, and corpses stay on the field for a while.
+  - Birds circle overhead.
+  - A dashed line leads to a waving rally flag.
+  - Positional sounds are panned left and right.
+
+The in-game **Help** (F1) describes every system.
 
 ### URL switches
 
@@ -74,6 +125,10 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 | `?fishregen=off` | fish do not regrow |
 | `?thirst=off` | no water capacity |
 | `?terra=off` | no terraforming |
+| `?hd=off` | classic flat terrain and buildings |
+| `?fx=off` | no visual effects (or one at a time: `walls`, `shadows`, `fogfade`, `clouds`, `vignette`, `particles`, `decals`, `birds`, `rally`, `flash`, `glints`, `pan`) |
+| `?queue=off` `?formation=off` `?accuracy=off` `?rescue=off` `?breach=off` `?stances=off` `?flee=off` `?hotkeys=off` `?resign=off` | command features |
+| `?wonder=off` `?relicwin=off` `?imperial=off` `?fogmem=off` `?score=off` `?aiwonder=off` | victory/tech features; `?wondertime=N`, `?relictime=N` set the countdowns |
 
 ## Repository layout
 
@@ -94,6 +149,11 @@ game/             the game (all development happens here)
   js/water.js     water types, rivers, fish
   js/wells.js     wells and clean water
   js/terra.js     terraforming, bridges, sappers, tunnels
+  js/command.js   queued orders, formations, stances, accuracy, breaching, hotkeys, resign
+  js/victory.js   wonders, relic victory, Imperial upgrades, fog memory, score and statistics
+  js/terrain.js   HD terrain texture and building materials
+  js/fx.js        walls, shadows, fog fade, clouds, particles, decals, birds, rally flag
+  js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat
   js/main.js      boot and game loop
 tests/            headless tests (Node, no dependencies)
 legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)
@@ -103,7 +163,7 @@ legacy/           the six original experiment builds, prompts and metrics (archi
 
 - All scripts are classic scripts that share globals. They load in the order given in `game/index.html`.
 - The mod files come after the engine and extend it by wrapping its global functions, for example `const _f = f; f = function (...) { ... _f(...) ... }`. New systems should follow the same pattern, in a new file loaded before `main.js`.
-- Run the tests with `node tests/run-all.js`, or run one suite, e.g. `node tests/terraform.test.js`. Each suite loads the engine in a Node `vm` context and simulates games headlessly.
+- Run the tests with `node tests/run-all.js` (add `--full` to load every module into every suite), or run one suite, e.g. `node tests/terraform.test.js`. Each suite loads the engine in a Node `vm` context and simulates games headlessly.
 - There is a single branch: `main`.
 
 ## Credits
