@@ -75,3 +75,19 @@ Only selected game source, prompts and summarized metrics were exported. Local p
 ## Scope
 
 This is an independent experiment inspired by Age of Empires II, not the original game or an official Microsoft/World's Edge release. The prompt describes intended features; it does not certify that every feature works. This is a comparison of these individual runs, not a controlled statistical benchmark. Desktop launch smoke checks are not full campaign playtests.
+
+## Age of Realms mod (this fork)
+
+This fork extends the **Special Build** into a moddable base. The original build stays untouched in `games/special/`; the working copy is `games/realms/`. All new game logic lives in `games/realms/js/mod.js`, which wraps the engine's functions, so upstream changes stay easy to compare.
+
+Play it: run the local server described above and open `http://127.0.0.1:8000/games/realms/`.
+
+**Batch 1 (done)**
+- Lifespans for people (about 20 minutes for soldiers, 25 for villagers, 30 for monks, with per-unit variation); machines, ships and animals do not age.
+- Elder villagers take monastic vows and become monks (about 15 minutes).
+- Veterans: soldiers who survive a battle earn XP and are promoted to Veteran, Elite and Champion (attack, hit points, armor), with chevron badges and age/rank in the selection panel.
+- Switches in the page address: `?aging=off`, `?veterans=off`, `?life=0.5`.
+
+**Planned:** river/lake/sea water types and regenerating fish; wells and clean water for population; digging canals and trenches, raising and lowering terrain, planting trees.
+
+Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-comparison experiment (see the upstream repository linked at the top). This fork is an independent project and is not affiliated with the makers of Age of Empires II.
