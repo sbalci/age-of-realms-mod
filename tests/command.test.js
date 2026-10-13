@@ -9,7 +9,7 @@ const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContex
 for (const f of ['data.js', 'map.js', 'world.js']) load(f);
 try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
 load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('command.js');
-if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js']) if (!LOADED.has(f)) load(f);
+if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js']) if (!LOADED.has(f)) load(f);
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x !== undefined ? '  ' + JSON.stringify(x) : '')); };

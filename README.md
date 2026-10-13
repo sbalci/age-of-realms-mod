@@ -109,6 +109,14 @@ A local server is required. Opening `index.html` directly may not load the scrip
   - Birds circle overhead.
   - A dashed line leads to a waving rally flag.
   - Positional sounds are panned left and right.
+- **Sharper units** (`game/js/units_hd.js`):
+  - Cached 2× sprites with outlines, shading and a rim light.
+  - Smooth motion between simulation ticks.
+  - Back views when units walk away.
+  - Team-coloured silhouettes for units hidden behind buildings and trees.
+  - Drawn SVG resource icons and framed unit portraits.
+
+**Idle buttons:** on the minimap corner, one for idle villagers and one for idle soldiers, each with a count. Click selects the next one; shift-click selects all.
 
 The in-game **Help** (F1) describes every system.
 
@@ -126,6 +134,7 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 | `?thirst=off` | no water capacity |
 | `?terra=off` | no terraforming |
 | `?hd=off` | classic flat terrain and buildings |
+| `?unitshd=off` | classic live-drawn units and emoji icons (finer: `unitsprites`, `unitsmooth`, `facings`, `unitsil`, `hdicons`) |
 | `?fx=off` | no visual effects (or one at a time: `walls`, `shadows`, `fogfade`, `clouds`, `vignette`, `particles`, `decals`, `birds`, `rally`, `flash`, `glints`, `pan`) |
 | `?queue=off` `?formation=off` `?accuracy=off` `?rescue=off` `?breach=off` `?stances=off` `?flee=off` `?hotkeys=off` `?resign=off` | command features |
 | `?wonder=off` `?relicwin=off` `?imperial=off` `?fogmem=off` `?score=off` `?aiwonder=off` | victory/tech features; `?wondertime=N`, `?relictime=N` set the countdowns |
@@ -153,7 +162,8 @@ game/             the game (all development happens here)
   js/victory.js   wonders, relic victory, Imperial upgrades, fog memory, score and statistics
   js/terrain.js   HD terrain texture and building materials
   js/fx.js        walls, shadows, fog fade, clouds, particles, decals, birds, rally flag
-  js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat
+  js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat, idle buttons
+  js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
   js/main.js      boot and game loop
 tests/            headless tests (Node, no dependencies)
 legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)

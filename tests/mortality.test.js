@@ -10,7 +10,7 @@ let aiLoaded = true;
 for (const f of ['data.js', 'map.js', 'world.js']) load(f);
 try { load('ai.js'); } catch (e) { aiLoaded = false; console.log('ai.js not loadable headless:', e.message); }
 load('mod.js');
-if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js']) if (!LOADED.has(f)) load(f);
+if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js']) if (!LOADED.has(f)) load(f);
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra !== undefined ? '  ' + JSON.stringify(extra) : '')); };

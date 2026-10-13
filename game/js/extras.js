@@ -244,3 +244,62 @@ if (typeof window !== 'undefined') {
     e.stopImmediatePropagation(); e.preventDefault();
   }, true);
 }
+
+// ---------------------------------------------------------------- idle villager / idle soldier buttons (on the minimap corner)
+// Click: select the next idle one and centre on it. Shift-click: select all of them. The top-bar 💤 counter is clickable too.
+function exIdleList(kind) {
+  if (!W || !W.list) return [];
+  const mil = u => typeof cmdMilitary === 'function' ? cmdMilitary(u) : (UNITS[u.type].atk > 0 && u.type !== 'villager' && !hasTag(u.type, 'animal'));
+  return W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length) && (kind === 'vil' ? u.type === 'villager' : mil(u)));
+}
+function exSelectIdle(kind, all) {
+  const list = exIdleList(kind);
+  if (!list.length) { msg(kind === 'vil' ? 'No idle villagers.' : 'No idle military units.', '#ccc'); return; }
+  if (all) { selectEnts(list, false); const c = list.reduce((a, u) => ({ x: a.x + u.x / list.length, y: a.y + u.y / list.length }), { x: 0, y: 0 }); centerCamOn(c.x, c.y); }
+  else {
+    const key = kind === 'vil' ? 'idleIdx' : 'idleMilIdx';
+    UI[key] = ((UI[key] === undefined ? -1 : UI[key]) + 1) % list.length;
+    const u = list[UI[key]]; selectEnts([u], false); centerCamOn(u.x, u.y);
+  }
+  Sound.play('click');
+}
+function exIdleButtons() {
+  const wrap = document.querySelector('#mm-wrap'); if (!wrap || document.querySelector('#b-idlevil')) return;
+  wrap.style.position = 'relative';
+  if (!document.querySelector('#ex-idle-css')) {
+    const st = document.createElement('style'); st.id = 'ex-idle-css';
+    st.textContent = `.ex-idle{position:absolute;left:4px;width:42px;height:42px;padding:0;border:2px solid #b08a48;border-radius:6px;background:radial-gradient(circle at 35% 30%,#6a4c2a,#2a1c0e);cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,230,170,.25);z-index:3}
+.ex-idle img{width:36px;height:36px;display:block;margin:1px auto 0;image-rendering:auto}
+.ex-idle b{position:absolute;right:-6px;top:-7px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#c0392b;color:#fff;font:bold 11px/18px sans-serif;text-align:center;box-shadow:0 1px 2px #000}
+.ex-idle.none{opacity:.45;filter:grayscale(.7)} .ex-idle.none b{display:none}
+.ex-idle:hover{border-color:#ffd77a} #b-idlevil{top:4px} #b-idlemil{top:52px}
+#r-vil{cursor:pointer}`;
+    document.head.appendChild(st);
+  }
+  const mk = (id, kind, unit, title) => {
+    const b = document.createElement('button'); b.id = id; b.className = 'ex-idle none'; b.title = title;
+    let src = ''; try { src = iconFor('unit:' + unit); } catch (e) { }
+    b.innerHTML = `<img alt="" src="${src}"><b>0</b>`;
+    b.onclick = e => { e.stopPropagation(); exSelectIdle(kind, e.shiftKey); };
+    b.onmousedown = e => e.stopPropagation();
+    wrap.appendChild(b);
+  };
+  mk('b-idlevil', 'vil', 'villager', 'Idle villagers — click: next one (.), shift-click: select all');
+  mk('b-idlemil', 'mil', 'militia', 'Idle soldiers — click: next one (,), shift-click: select all');
+  const rv = document.querySelector('#r-vil'); if (rv) { rv.title = 'Idle villagers — click or press . to select (shift-click: all)'; rv.onclick = e => exSelectIdle('vil', e.shiftKey); }
+}
+if (typeof updateTopbar === 'function') {
+  const _utb = updateTopbar;
+  updateTopbar = function () {
+    _utb();
+    if (typeof document === 'undefined' || !W || !W.players || W.menu) return;
+    exIdleButtons();
+    for (const [id, kind] of [['#b-idlevil', 'vil'], ['#b-idlemil', 'mil']]) {
+      const b = document.querySelector(id); if (!b) continue;
+      const n = W.spectate ? 0 : exIdleList(kind).length;
+      b.style.display = W.spectate ? 'none' : '';
+      b.classList.toggle('none', !n); b.querySelector('b').textContent = n;
+      const img = b.querySelector('img'); if (img && !img.getAttribute('src')) { try { img.src = iconFor('unit:' + (kind === 'vil' ? 'villager' : 'militia')); } catch (e) { } }
+    }
+  };
+}
