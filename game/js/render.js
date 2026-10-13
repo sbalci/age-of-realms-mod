@@ -82,6 +82,7 @@ function buildChunk(cx, cy) {
   return { cv, minX, minY, S };
 }
 function drawTile(g, map, x, y) {
+  if (R.hd && R.hd(g, map, x, y)) return; // HD terrain hook (terrain.js)
   const n = map.n, N = n + 1, i = y * n + x, t = map.ter[i];
   const h0 = map.vh[y * N + x], h1 = map.vh[y * N + x + 1], h2 = map.vh[(y + 1) * N + x + 1], h3 = map.vh[(y + 1) * N + x];
   const water = isWaterT(t);

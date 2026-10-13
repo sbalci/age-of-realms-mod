@@ -5,11 +5,12 @@ const noop = () => {};
 const stub = new Proxy({}, { get: (t, k) => (k in t ? t[k] : noop) });
 const ctx = vm.createContext({ console, performance, Math, Proxy, Uint8Array, Int32Array, Float32Array, Uint32Array, Map, Set, Array, Object, JSON, String, Number,
   Sound: stub, UI: { selection: [], deselect: noop, onRemoved: noop, showEnd: noop, gameRunning: true, panelKey: '' } });
-const load = f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
+const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 let aiLoaded = true;
 for (const f of ['data.js', 'map.js', 'world.js']) load(f);
 try { load('ai.js'); } catch (e) { aiLoaded = false; console.log('ai.js not loadable headless:', e.message); }
 load('mod.js');
+if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js']) if (!LOADED.has(f)) load(f);
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra !== undefined ? '  ' + JSON.stringify(extra) : '')); };
