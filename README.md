@@ -1,130 +1,111 @@
-# Opus 5.5: five reasoning levels, one game prompt
+# Age of Realms
 
-Play the six browser strategy games from the video, inspect their source, and copy the prompts used to generate them.
+A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. You grow a settlement, advance through four ages, build an economy and an army, and defeat computer rivals. It has no build step, no dependencies and no network calls.
 
-**Download or fork this repository and run it on your own computer.** GitHub Pages is disabled; there is no hosted playable site.
+It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison experiment](https://github.com/Barty-Bart/opus-55-effort-comparison) and adds systems for mortality, water, terraforming and engineering. The six original builds are archived unchanged in [`legacy/`](legacy/).
 
-[Original prompt](prompts/original.txt) · [Special Build prompt](prompts/special-build.txt)
-
-The first five runs used the same prompt in separate, fresh Claude Code projects with Low, Medium, High, X High and Max effort. The sixth used **Low** with a more detailed prompt based on observations from the earlier builds. These are experimental AI-generated games with the strengths and bugs shown in the video.
-
-## Play on your own computer
-
-After starting the local server below, choose a build from the local index. Desktop keyboard and mouse recommended. No login, AI account, API key or paid service is needed to play. These are static HTML/CSS/JavaScript games; no AI calls run during gameplay. Audio activates after a click. Some builds use browser storage for settings/maps; the Special Build also uses browser speech synthesis, whose voices depend on your browser and OS.
-
-Install Python 3 if needed. Download **Code → Download ZIP** and extract it, or fork this repository and clone your fork. Open a terminal in the extracted/cloned repository folder and run:
+## Play
 
 ```sh
-python3 -m http.server 8000 --bind 127.0.0.1
-```
-
-On Windows, use `py -m http.server 8000 --bind 127.0.0.1` if needed. Open `http://127.0.0.1:8000` in your browser. This address belongs to your own computer; the server is bound to loopback only. Stop it with Ctrl+C when finished. No npm install or build step is required. Use a web server rather than double-clicking game files because several builds use JavaScript modules.
-
-## Recorded results
-
-| Build | Recorded elapsed time | Total tokens | Estimated token cost |
-|---|---:|---:|---:|
-| [Low](games/low/) | 19m 10s | 3,140,950 | $3.79 |
-| [Medium](games/medium/) | 36m 35s | 11,131,202 | $9.25 |
-| [High](games/high/) | 1h 00m 33s | 30,665,190 | $16.11 |
-| [X High](games/xhigh/) | 1h 45m 51s | 79,623,100 | $35.26 |
-| [Max](games/max/) | 2h 58m 27s | 173,338,200 | $69.14 |
-| [Special Build (Low)](games/special/) | 1h 23m 06s | 21,005,436 | $13.57 |
-
-Costs are API-equivalent estimates reported during the runs, not subscription charges. Total tokens include input, output, cache reads and cache writes; the underlying displayed token categories were rounded, so totals are approximate. Elapsed time is the recorded prompt-to-completion/session measurement, not pure model execution speed. Permission waits and interruptions can affect it; the Special Build includes a sleep interruption. [results.json](results.json) includes API time separately.
-
-## Original prompt
-
-> Build a complete, polished, playable browser clone of Age of Empires II. Capture the experience of growing a medieval settlement, developing its economy, advancing through ages, building an army and defeating a computer-controlled rival. Make the implementation decisions yourself. Prioritize an enjoyable game, strong visual presentation and systems that work together. Test it yourself before finishing, and leave it running so I can play it.
-
-## How the comparison was set up
-
-1. Install and sign in to Claude Code using your own account. The recorded run used CLI **2.1.281**, model identifier `claude-opus-5-5`, and included subscription allowance. Availability and CLI options may differ in your installation; these are the commands recorded for this experiment.
-2. Make a separate empty project folder for each effort level. Start a fresh session inside each folder. Do not put previous builds into these folders.
-3. Launch the CLI with the model and effort explicitly selected. Example for Low:
-
-```sh
-mkdir -p experiment/low
-cd experiment/low
-claude --safe-mode --model claude-opus-5-5 --effort low
-```
-
-4. Before submitting the prompt, check `/status`, `/effort status` and `/usage`. Confirm the selected model/effort and your own account limits. The recorded setup cleared API-key/base-URL overrides and used subscription login with paid overage credits disabled. Safe mode was used to avoid inherited memories, instructions, hooks and plugins; it is not a guarantee of OS-level isolation.
-5. Paste the [original prompt](prompts/original.txt) unchanged. Allow the normal local tool permissions needed to implement and test the game. Let the run finish before reviewing the output. No external corrective implementation prompts were added to the first five runs; the model could still self-test, fix its own work, and use its own agent workflow.
-6. Repeat from fresh folders/sessions using `--effort medium`, `--effort high`, `--effort xhigh`, then `--effort max`. Record the prompt start and completion times, plus usage after completion. Avoid counting later idle review time as build time.
-
-The published `games/` folders contain finished outputs for playing and inspection. To repeat the experiment, generate into **new empty folders**, not into these finished games.
-
-## Special Build: detailed prompt, Low effort
-
-After reviewing the five builds, the extra brief combined what worked, what did not, and missing features: wildlife, naval gameplay, unit speech, richer setup options, a map editor, a larger economy/technology tree, animation, cheats, garrisoning, monks/relics, diplomacy/trade, elevation and connected-system testing.
-
-**[Read/copy the complete special prompt](prompts/special-build.txt)**. Its original opening is unchanged; fourteen sections of requirements follow it. Run it in a sixth fresh folder with `--effort low`. No earlier game source or reference images were provided to that run. The same session was resumed after a computer-sleep interruption without changing the requirements.
-
-## What is in this repository
-
-- `games/low`, `medium`, `high`, `xhigh`, `max`, `special`: six static playable builds.
-- `prompts/`: the exact original prompt and the final submitted special prompt.
-- `results.json`: the comparison metrics.
-- `export-manifest.json`: hashes and export changes for the game files.
-
-Gameplay source is preserved. The only changes inside the exported games remove external Google Fonts links so the pages use their existing system-font fallbacks. The visual font may therefore differ slightly from the recording. Original local server helpers were unnecessary and are excluded.
-
-Only selected game source, prompts and summarized metrics were exported. Local paths, session/configuration files, credentials, personal logs, screenshots and prior Git history are not included. Publication uses a fresh history and a GitHub no-reply author email.
-
-## Scope
-
-This is an independent experiment inspired by Age of Empires II, not the original game or an official Microsoft/World's Edge release. The prompt describes intended features; it does not certify that every feature works. This is a comparison of these individual runs, not a controlled statistical benchmark. Desktop launch smoke checks are not full campaign playtests.
-
-## Age of Realms mod (this fork)
-
-This fork extends the **Special Build** into a moddable base. The original build stays untouched in `games/special/`; the working copy is `games/realms/`. All new game logic lives in `games/realms/js/mod.js`, which wraps the engine's functions, so upstream changes stay easy to compare.
-
-Play it: run the local server described above and open `http://127.0.0.1:8000/games/realms/`.
-
-**Batch 1 (done)**
-- Lifespans for people (about 20 minutes for soldiers, 25 for villagers, 30 for monks, with per-unit variation); machines, ships and animals do not age.
-- Elder villagers take monastic vows and become monks (about 15 minutes).
-- Veterans: soldiers who survive a battle earn XP and are promoted to Veteran, Elite and Champion (attack, hit points, armor), with chevron badges and age/rank in the selection panel.
-- Switches in the page address: `?aging=off`, `?veterans=off`, `?life=0.5`.
-
-**Planned:** river/lake/sea water types and regenerating fish; wells and clean water for population; digging canals and trenches, raising and lowering terrain, planting trees.
-
-Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-comparison experiment (see the upstream repository linked at the top). This fork is an independent project and is not affiliated with the makers of Age of Empires II.
-
-### Running the mod
-
-```
 git clone https://github.com/sbalci/age-of-realms-mod
-cd age-of-realms-mod/games/realms
-python -m http.server 8000      # or: py -m http.server 8000 / npx http-server -p 8000
+cd age-of-realms-mod
+python3 -m http.server 8000 --bind 127.0.0.1     # Windows: py -m http.server 8000 --bind 127.0.0.1
 ```
 
-Open http://localhost:8000. A local server is required; opening `index.html` directly may not load the scripts. Work happens on `main`.
+Open http://127.0.0.1:8000 and press **Play**, or go straight to http://127.0.0.1:8000/game/.
 
-To try the newest features, start a game, select a villager and press **N** (Terraform: bridges B/U). Build a Mining Camp, train a Sapper, select it and press N for Dig Tunnel (K).
+A local server is required. Opening `index.html` directly may not load the scripts. Use a desktop keyboard and mouse. Audio starts after the first click.
 
-Switches (add to the URL): `?aging=off`, `?veterans=off`, `?life=0.5`, `?rivers=off`, `?fishregen=off`, `?thirst=off`, `?terra=off`.
+## What's in the game
 
-### Batch 2: water types and fish stocks (`games/realms/js/water.js`)
-- Rivers are now generated (Highlands and Coastal maps) with 2-3 wadeable fords each; they never pass within 10 tiles of a start and starts stay connected.
-- Every water body is classified per tile as river, lake or sea. Fresh water (river, lake) is drinkable, the sea is not; this is the hook for wells and thirst in batch 3.
-- Rivers and lakes are stocked with fish. Fish regrow at a rate per water type; a shoal fished below 20% never recovers; understocked bodies restock slowly while two or more healthy shoals remain.
-- Fresh water is tinted slightly green; select a fish or ship to see its water type.
-- Switches: `?rivers=off`, `?fishregen=off`.
+**Base game (Special Build)**
+- 9 civilizations with unique units.
+- Four ages and a full economy.
+- Navy and transports, monks and relics, trade and the market.
+- Diplomacy and tribute.
+- Elevation and cliffs.
+- Garrisoning and the town bell.
+- Wildlife and weather.
+- Procedural music and unit speech.
+- Four AI difficulty levels.
+- A map editor, save and load of maps, and cheats (Enter).
 
-### Batch 3: wells, clean water, thirst (`games/realms/js/wells.js`)
-- New Well building (Economic, hotkey C, 40 wood + 10 stone). Water capacity = 8 free + 10 per Town Center cistern (+15 near fresh water) + 12 per well (x1.5 near a river or lake, x0.6 if only the sea is near).
-- Population above capacity: gathering slows (down to 50%) and units wear down toward 1 hp but never die of thirst. The top bar shows capacity next to population.
-- Computer players dig wells ahead of their population. Switch: `?thirst=off`.
+**Mortality and veterans** (`game/js/mod.js`)
+- People age:
+  - soldiers live about 20 minutes, villagers about 25 and monks about 30, each with ±15% variation;
+  - machines, ships and animals don't age;
+  - deaths from old age don't count as battle losses.
+- One villager in five takes monastic vows at about 15 minutes and becomes a monk.
+- Soldiers who survive a battle earn experience and are promoted to Veteran, Elite and Champion. Each rank adds attack, hit points and armor, shown as chevrons above the unit.
 
-### Batch 4: terraforming (`games/realms/js/terra.js`)
-- Select villagers, press **N**, pick a tool, click two tiles (shift keeps the tool). Several villagers share one job.
-- **Canal**: dug from the water's edge inland; joins the water body so ships can sail it. **Trench**: units inside are slower (-45%) and get +2 pierce armor; cavalry, siege and carts cannot cross.
-- **Raise** ground (10 stone/level), **Lower** and **Dig Mountain** (recover 15 stone/level); steps of 2+ levels are cliffs. **Plant Trees**: saplings mature in 2.5 minutes.
-- Terrain edits are applied in place; region maps and render chunks are refreshed once per tick. Switch: `?terra=off`.
+**Waters** (`game/js/water.js`)
+- Rivers with fords, plus lakes and seas, are classified per tile.
+- Rivers and lakes are fresh water; the sea is salt.
+- Fish regrow, but a shoal fished below 20% never recovers.
 
-### Batch 5: monk vows, bridges, sappers and tunnels (`mod.js`, `terra.js`)
-- Only one villager in five (`MOD.vowShare`) takes monastic vows at ~15 minutes; the rest work on to ~25 minutes.
-- **Bridge** (Terraform page, B): drag across a river, canal or lake, 15 wood per tile, built from the bank outward. Land units cross, ships sail under it, land regions join. **Remove Bridge** (U) refunds 8 wood and moves anyone on the span to the bank. No buildings on bridges.
-- **Sapper** (Mining Camp, Feudal Age, 40 food + 40 gold): digs **tunnels** (K, up to 12 tiles, 5 stone each) through hills and mountains; tunnel tiles ignore cliffs, units inside are hidden from enemies. Sappers also dig, lower, trench and canal 60% faster than villagers.
+**Clean water and wells** (`game/js/wells.js`)
+- Water capacity comes from Town Center cisterns and Wells (hotkey C). Both serve more people near fresh water.
+- Above capacity, gathering slows and people wear down, but thirst never kills.
+- The 💧 in the top bar shows capacity. The AI digs wells ahead of its needs.
+
+**Terraforming and engineering** (`game/js/terra.js`): select villagers and press **N**.
+- **Canals:** ships can sail them.
+- **Trenches:** units inside move slower and take less pierce damage; cavalry, siege and carts cannot cross.
+- **Raise, lower and dig mountains:** raising costs stone, lowering and digging refund it.
+- **Plant trees:** saplings mature into trees.
+- **Bridges** (15 wood per tile): land units cross and ships sail under. Removing a bridge refunds 8 wood.
+- **Sappers** (Mining Camp, Feudal Age):
+  - dig tunnels through hills and mountains, 5 stone per tile, up to 12 tiles;
+  - units in a tunnel are hidden from enemies;
+  - sappers dig 60% faster than villagers.
+
+The in-game **Help** describes every system.
+
+### URL switches
+
+Add these to the game address, e.g. `game/?aging=off&thirst=off`:
+
+| Switch | Effect |
+|---|---|
+| `?aging=off` | no lifespans |
+| `?veterans=off` | no ranks |
+| `?life=0.5` | multiply all lifespans |
+| `?rivers=off` | no generated rivers |
+| `?fishregen=off` | fish do not regrow |
+| `?thirst=off` | no water capacity |
+| `?terra=off` | no terraforming |
+
+## Repository layout
+
+```
+index.html        landing page
+game/             the game (all development happens here)
+  index.html      loads the scripts in order
+  style.css
+  js/data.js      units, buildings, techs, civs, help text
+  js/map.js       map, elevation, regions, pathfinding, map generation
+  js/world.js     simulation: units, combat, economy, orders
+  js/render.js    isometric canvas renderer (chunk-cached terrain, vector art)
+  js/audio.js     procedural sound, music and speech
+  js/ai.js        computer players
+  js/ui.js        HUD, input, menus
+  js/editor.js    map editor
+  js/mod.js       mortality, monks, veterans
+  js/water.js     water types, rivers, fish
+  js/wells.js     wells and clean water
+  js/terra.js     terraforming, bridges, sappers, tunnels
+  js/main.js      boot and game loop
+tests/            headless tests (Node, no dependencies)
+legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)
+```
+
+## Development
+
+- All scripts are classic scripts that share globals. They load in the order given in `game/index.html`.
+- The mod files come after the engine and extend it by wrapping its global functions, for example `const _f = f; f = function (...) { ... _f(...) ... }`. New systems should follow the same pattern, in a new file loaded before `main.js`.
+- Run the tests with `node tests/run-all.js`, or run one suite, e.g. `node tests/terraform.test.js`. Each suite loads the engine in a Node `vm` context and simulates games headlessly.
+- There is a single branch: `main`.
+
+## Credits
+
+The base game is the Special Build from [Barty-Bart/opus-55-effort-comparison](https://github.com/Barty-Bart/opus-55-effort-comparison), generated by Claude Opus 5.5. This is an independent project and is not affiliated with the makers of Age of Empires II.
