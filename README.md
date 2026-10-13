@@ -109,3 +109,8 @@ Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-com
 - **Canal**: dug from the water's edge inland; joins the water body so ships can sail it. **Trench**: units inside are slower (-45%) and get +2 pierce armor; cavalry, siege and carts cannot cross.
 - **Raise** ground (10 stone/level), **Lower** and **Dig Mountain** (recover 15 stone/level); steps of 2+ levels are cliffs. **Plant Trees**: saplings mature in 2.5 minutes.
 - Terrain edits are applied in place; region maps and render chunks are refreshed once per tick. Switch: `?terra=off`.
+
+### Batch 5: monk vows, bridges, sappers and tunnels (`mod.js`, `terra.js`)
+- Only one villager in five (`MOD.vowShare`) takes monastic vows at ~15 minutes; the rest work on to ~25 minutes.
+- **Bridge** (Terraform page, B): drag across a river, canal or lake, 15 wood per tile, built from the bank outward. Land units cross, ships sail under it, land regions join. **Remove Bridge** (U) refunds 8 wood and moves anyone on the span to the bank. No buildings on bridges.
+- **Sapper** (Mining Camp, Feudal Age, 40 food + 40 gold): digs **tunnels** (K, up to 12 tiles, 5 stone each) through hills and mountains; tunnel tiles ignore cliffs, units inside are hidden from enemies. Sappers also dig, lower, trench and canal 60% faster than villagers.

@@ -6,6 +6,7 @@ const MOD = {
   aging: true,
   veterans: true,
   lifeScale: 1,
+  vowShare: 0.2,       // one villager in five is destined for the cloister; the rest work until they drop
   // Lifespans in game seconds at normal speed (a 20 minute infantryman, etc.). Each unit gets a +-15% personal variance.
   life: { villagerVows: 900, villager: 1500, monk: 1800, infantry: 1200, ranged: 1200, mounted: 1400, trade: 1500 },
   // Veteran ranks. Promotion needs the unit to survive a battle with enough accumulated XP.
@@ -38,9 +39,9 @@ function modLifeSpec(type) {
 function modAge(u) { return W.t - (u.bornT || 0); }
 function modLimits(u) {
   const s = modLifeSpec(u.type); if (!s) return null;
-  if (u.lifeK === undefined) u.lifeK = 0.85 + Math.random() * 0.3;
+  if (u.lifeK === undefined) { u.lifeK = 0.85 + Math.random() * 0.3; u.vows = Math.random() < MOD.vowShare; }
   const k = u.lifeK * MOD.lifeScale;
-  return { vows: s.vows ? s.vows * k : 0, max: s.max * k };
+  return { vows: s.vows && u.vows ? s.vows * k : 0, max: s.max * k };
 }
 function modEligible(u) {
   if (!u || u.kind !== 'unit') return false;
