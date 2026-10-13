@@ -91,3 +91,10 @@ Play it: run the local server described above and open `http://127.0.0.1:8000/ga
 **Planned:** river/lake/sea water types and regenerating fish; wells and clean water for population; digging canals and trenches, raising and lowering terrain, planting trees.
 
 Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-comparison experiment (see the upstream repository linked at the top). This fork is an independent project and is not affiliated with the makers of Age of Empires II.
+
+### Batch 2: water types and fish stocks (`games/realms/js/water.js`)
+- Rivers are now generated (Highlands and Coastal maps) with 2-3 wadeable fords each; they never pass within 10 tiles of a start and starts stay connected.
+- Every water body is classified per tile as river, lake or sea. Fresh water (river, lake) is drinkable, the sea is not; this is the hook for wells and thirst in batch 3.
+- Rivers and lakes are stocked with fish. Fish regrow at a rate per water type; a shoal fished below 20% never recovers; understocked bodies restock slowly while two or more healthy shoals remain.
+- Fresh water is tinted slightly green; select a fish or ship to see its water type.
+- Switches: `?rivers=off`, `?fishregen=off`.

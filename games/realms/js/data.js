@@ -290,6 +290,7 @@ Players at <i>peace</i> (neutral) still block victory — declare war on them or
 <h3>Mortality &amp; Veterans (mod)</h3>
 <p>Nobody lives forever. Select a unit to see its age and expected lifespan (about 20 minutes for soldiers, 25 for villagers, with some variation per person). <b>Elder villagers take monastic vows</b> after about 15 minutes and become monks. Units that die of old age do not count as battle losses.</p>
 <p>Soldiers who <b>survive a battle</b> earn experience and are promoted to Veteran, Elite and Champion (chevrons above their heads): stronger attack, more hit points, and better armor at higher ranks. Add <code>?aging=off</code>, <code>?veterans=off</code> or <code>?life=0.5</code> (halves all lifespans) to the page address to change this.</p>
+<h3>Waters (mod)</h3><p>Water now comes in three kinds: <b>rivers</b> (narrow, flowing, fresh, with fords where you can wade across), <b>lakes</b> (fresh, big shoals) and the <b>sea</b> (salt, undrinkable). Fresh water is tinted slightly green. Fish regrow slowly, but a shoal fished below 20% never recovers, and new shoals only appear while at least two healthy ones remain. Select a fish or ship to see its water. URL: ?rivers=off, ?fishregen=off.</p>
 <h3>Cheat codes</h3>
 <p>Enable "Allow cheats" in game setup, then press Enter and type (case-insensitive):</p>
 <ul>
