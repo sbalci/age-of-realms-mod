@@ -882,6 +882,7 @@ function updateUnit(u, dt) {
       break;
     }
     case 'build': buildLogic(u, dt); break;
+    case 'terra': if (typeof terraLogic === 'function') terraLogic(u, dt); else setOrder(u, null); break;
     case 'repair': repairLogic(u, dt); break;
     case 'garrison': {
       const b = ent(o.id); if (!b || b.dead || !canGarrisonIn(u, b)) { setOrder(u, null); if (o.bell) u.bellWait = true; break; }

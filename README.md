@@ -103,3 +103,9 @@ Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-com
 - New Well building (Economic, hotkey C, 40 wood + 10 stone). Water capacity = 8 free + 10 per Town Center cistern (+15 near fresh water) + 12 per well (x1.5 near a river or lake, x0.6 if only the sea is near).
 - Population above capacity: gathering slows (down to 50%) and units wear down toward 1 hp but never die of thirst. The top bar shows capacity next to population.
 - Computer players dig wells ahead of their population. Switch: `?thirst=off`.
+
+### Batch 4: terraforming (`games/realms/js/terra.js`)
+- Select villagers, press **N**, pick a tool, click two tiles (shift keeps the tool). Several villagers share one job.
+- **Canal**: dug from the water's edge inland; joins the water body so ships can sail it. **Trench**: units inside are slower (-45%) and get +2 pierce armor; cavalry, siege and carts cannot cross.
+- **Raise** ground (10 stone/level), **Lower** and **Dig Mountain** (recover 15 stone/level); steps of 2+ levels are cliffs. **Plant Trees**: saplings mature in 2.5 minutes.
+- Terrain edits are applied in place; region maps and render chunks are refreshed once per tick. Switch: `?terra=off`.
