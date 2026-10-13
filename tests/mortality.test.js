@@ -10,7 +10,7 @@ let aiLoaded = true;
 for (const f of ['data.js', 'map.js', 'world.js']) load(f);
 try { load('ai.js'); } catch (e) { aiLoaded = false; console.log('ai.js not loadable headless:', e.message); }
 load('mod.js');
-if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js']) if (!LOADED.has(f)) load(f);
+if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js','movement.js']) if (!LOADED.has(f)) load(f);
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra !== undefined ? '  ' + JSON.stringify(extra) : '')); };
@@ -121,7 +121,7 @@ ok('veteran hp bonus survives unit-line upgrade and tech hp refresh', i.afterTyp
 
 const j = run(`(() => {
   const u = spawnUnit('militia', 1, 13.5, 5.5), vic = spawnUnit('militia', 2, 41.5, 41.5);
-  u.lifeK = 1; vic.hp = vic.maxhp = 1e6; u.xp = 1000;
+  u.lifeK = 1; vic.hp = vic.maxhp = 1e6; u.xp = 1000; vic.stance = 'noattack'; u.stance = 'ground';
   const ranks = [];
   for (let battle = 0; battle < 5; battle++) { applyDamage(vic, 1, u); for (let k = 0; k < 250; k++) worldTick(0.05); ranks.push(u.rank || 0); }
   return ranks;

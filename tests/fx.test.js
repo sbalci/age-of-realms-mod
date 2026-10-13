@@ -17,7 +17,7 @@ try {
   for (const f of ['data.js', 'map.js', 'world.js', 'render.js']) load(f);
   try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
   load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('fx.js');
-  if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js']) if (!LOADED.has(f)) load(f);
+  if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js','movement.js']) if (!LOADED.has(f)) load(f);
 } catch (e) { loadErr = e.stack; }
 const run = s => vm.runInContext(s, ctx);
 let pass = 0, fail = 0;

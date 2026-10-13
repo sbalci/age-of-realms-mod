@@ -74,6 +74,8 @@ A local server is required. Opening `index.html` directly may not load the scrip
   - Units trapped by terrain changes are rescued.
   - Villagers and monks flee from melee attackers.
   - Scouts no longer kill sheep.
+  - No friendly fire: catapult splash spares your own and allied units, and soldiers earn experience only from fighting enemies.
+- **Movement** (`game/js/movement.js`): units slide around corners, respect cliff edges in crowds, sidestep oncoming units and recover when wedged. In AI test games this cut units stuck for 5 s or more from about 50 to about 3 per 8 minutes (`?move=off` restores the old movement).
 - **Keys and controls:**
   - `,` cycles idle soldiers.
   - Home jumps to the last attack.
@@ -164,6 +166,7 @@ game/             the game (all development happens here)
   js/fx.js        walls, shadows, fog fade, clouds, particles, decals, birds, rally flag
   js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat, idle buttons
   js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
+  js/movement.js  corner sliding, cliff-safe separation, sidestepping, unstick
   js/main.js      boot and game loop
 tests/            headless tests (Node, no dependencies)
 legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)

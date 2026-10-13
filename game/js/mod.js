@@ -122,16 +122,19 @@ if (typeof updateUnit === 'function') {
 if (typeof applyDamage === 'function') {
   const _applyDamage = applyDamage;
   applyDamage = function (t, dmg, src) {
+    // no friendly fire: catapult splash and stray hits never hurt your own or allied units and buildings
+    if (t && src && src.owner > 0 && t.owner > 0 && isFriend(src.owner, t.owner) && !(t.kind === 'unit' && UNITS[t.type] && UNITS[t.type].animal)) return;
     const live = t && !t.dead && !t.dying && t.kind === 'unit' && !UNITS[t.type].animal;
     const r = _applyDamage(t, dmg, src);
-    if (MOD.veterans && live && src && src.kind === 'unit' && !src.dead) { modMark(src, 1); modMark(t, 1.5); }
+    // experience only from fighting an enemy player
+    if (MOD.veterans && live && src && src.kind === 'unit' && !src.dead && src.owner > 0 && t.owner > 0 && isEnemy(src.owner, t.owner)) { modMark(src, 1); modMark(t, 1.5); }
     return r;
   };
 }
 if (typeof killEnt === 'function') {
   const _killEnt = killEnt;
   killEnt = function (e, src) {
-    if (MOD.veterans && e && e.kind === 'unit' && !e.dead && !e.dying && !UNITS[e.type].animal && src && src.kind === 'unit') modMark(src, 4);
+    if (MOD.veterans && e && e.kind === 'unit' && !e.dead && !e.dying && !UNITS[e.type].animal && src && src.kind === 'unit' && src.owner > 0 && e.owner > 0 && isEnemy(src.owner, e.owner)) modMark(src, 4);
     return _killEnt(e, src);
   };
 }
