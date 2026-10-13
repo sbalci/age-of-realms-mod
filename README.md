@@ -92,6 +92,20 @@ Play it: run the local server described above and open `http://127.0.0.1:8000/ga
 
 Credit: the base game is the Special Build from Barty-Bart's Opus 5.5 effort-comparison experiment (see the upstream repository linked at the top). This fork is an independent project and is not affiliated with the makers of Age of Empires II.
 
+### Running the mod
+
+```
+git clone https://github.com/sbalci/age-of-realms-mod
+cd age-of-realms-mod/games/realms
+python -m http.server 8000      # or: py -m http.server 8000 / npx http-server -p 8000
+```
+
+Open http://localhost:8000. A local server is required; opening `index.html` directly may not load the scripts. Work happens on `main`.
+
+To try the newest features, start a game, select a villager and press **N** (Terraform: bridges B/U). Build a Mining Camp, train a Sapper, select it and press N for Dig Tunnel (K).
+
+Switches (add to the URL): `?aging=off`, `?veterans=off`, `?life=0.5`, `?rivers=off`, `?fishregen=off`, `?thirst=off`, `?terra=off`.
+
 ### Batch 2: water types and fish stocks (`games/realms/js/water.js`)
 - Rivers are now generated (Highlands and Coastal maps) with 2-3 wadeable fords each; they never pass within 10 tiles of a start and starts stay connected.
 - Every water body is classified per tile as river, lake or sea. Fresh water (river, lake) is drinkable, the sea is not; this is the hook for wells and thirst in batch 3.
