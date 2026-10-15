@@ -240,6 +240,7 @@ if (typeof window !== 'undefined') {
     const k = +e.key; if (!(k >= 1 && k <= 8) || !W.players[k]) return;
     const p = W.players[k];
     const t = W.list.find(b => b.kind === 'bld' && b.owner === k && b.type === 'tc') || W.list.find(u => u.owner === k && u.kind === 'unit' && !u.dying);
+    W.watchId = k; UI.panelKey = '';   // the top bar and the hint follow the watched player (polish.js)
     if (t) { const c = t.kind === 'bld' ? center(t) : t; centerCamOn(c.x, c.y); msg(`Watching ${p.name} (${CIVS[p.civ].name})`, p.color.l); }
     e.stopImmediatePropagation(); e.preventDefault();
   }, true);

@@ -598,10 +598,11 @@ if (typeof drawOverlays === 'function') {
       const p0 = cmdOrderPoint(u.order) || { x: u.x, y: u.y }; pts.push(p0);
       for (const o of u.queue) { const p = cmdOrderPoint(o); if (p) pts.push(p); }
       const sp = pts.map(p => iso(p.x, p.y, W.map.h(p.x, p.y)));
-      ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(200,255,200,0.55)';
-      ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-      ctx.setLineDash([]);
-      sp.forEach((p, i) => { const o = i ? u.queue[i - 1] : u.order; ctx.fillStyle = o && (o.t === 'attack' || o.t === 'attackmove') ? '#ff6a5a' : '#9f9'; ctx.beginPath(); ctx.arc(p.x, p.y, i ? 2.6 : 2, 0, 6.3); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke(); });
+      const line = () => { ctx.beginPath(); sp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+      ctx.setLineDash([]); ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,0.45)'; line();          // dark outline so it reads on any ground
+      ctx.setLineDash([5, 4]); ctx.lineDashOffset = -R.time * 12; ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(200,255,200,0.9)'; line();
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      sp.forEach((p, i) => { const o = i ? u.queue[i - 1] : u.order; ctx.fillStyle = o && (o.t === 'attack' || o.t === 'attackmove') ? '#ff6a5a' : '#9f9'; ctx.beginPath(); ctx.arc(p.x, p.y, i ? 3.6 : 2.6, 0, 6.3); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.stroke(); });
     }
     ctx.restore();
     ctx.setTransform(1, 0, 0, 1, 0, 0);

@@ -186,6 +186,7 @@ game/             the game (all development happens here)
   js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat, idle buttons
   js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
   js/movement.js  corner sliding, cliff-safe separation, sidestepping, unstick
+  js/polish.js    path-finding budget, spectator HUD, panel layout fixes
   js/session.js   versioned saves, autosaves and restore
   js/onboarding.js rule presets, remappable shortcuts and interactive lessons
   js/engineering.js bounded AI bridge, tunnel and trench planning

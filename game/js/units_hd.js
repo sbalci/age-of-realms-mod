@@ -529,10 +529,11 @@ if (UHD.on.any && UHD.on.hdicons && typeof updateTopbar === 'function') {
   };
 }
 // framed, lit unit portraits rendered through the sprite pipeline
-function uhdUnitIcon(id) {
+function uhdUnitIcon(id, owner) {
+  if (owner === undefined) owner = W ? W.humanId : 1;
   const d = UNITS[id], cat = uhdCategory(d) || 'h';
   const Z = 128, cv = uhdCanvas(Z, Z), g = cv.getContext('2d');
-  const pc = W && W.players[W.humanId] ? W.players[W.humanId].color : PLAYER_COLORS[0];
+  const pc = W && W.players[owner] ? W.players[owner].color : PLAYER_COLORS[0];
   const bg = g.createRadialGradient(Z * 0.45, Z * 0.35, 4, Z * 0.5, Z * 0.55, Z * 0.78);
   bg.addColorStop(0, '#7a6448'); bg.addColorStop(0.6, '#3e3122'); bg.addColorStop(1, '#17110a'); g.fillStyle = bg; g.fillRect(0, 0, Z, Z);
   const glow = g.createRadialGradient(Z / 2, Z * 0.9, 2, Z / 2, Z * 0.9, Z * 0.5); glow.addColorStop(0, pc.c + 'aa'); glow.addColorStop(1, pc.c + '00');
@@ -540,7 +541,7 @@ function uhdUnitIcon(id) {
   g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(Z / 2, Z * 0.86, Z * 0.3, Z * 0.07, 0, 0, 6.3); g.fill();
   const sc = d.naval ? 0.95 : d.tags.includes('mounted') || d.tags.includes('siege') ? 1.25 : d.animal ? 1.8 : 1.7;
   const S = sc * 2; // icon canvas is 128 px for a 64 px layout
-  const fake = { id: 7, type: id, owner: W ? W.humanId : 1, anim: 'idle', animT: 0.5, face: 1, cargo: [], x: 0, y: 0, carry: null, work: null };
+  const fake = { id: 7, type: id, owner: owner, anim: 'idle', animT: 0.5, face: 1, cargo: [], x: 0, y: 0, carry: null, work: null };
   const s = uhdBuild(fake, d, d.naval ? 's' : cat, 0.5, 9, 1, 0, S, UHD.drawFig || drawUnitFigure, 1.4);
   const px = Z / 2 + (d.naval ? 0 : -4), py = d.naval ? Z * 0.75 : Z * 0.875;
   g.drawImage(s.cv, px - s.ax, py - s.ay);
@@ -554,10 +555,11 @@ function uhdUnitIcon(id) {
 if (UHD.on.any && UHD.on.hdicons && UHD.on.unitsprites && typeof iconFor === 'function' && typeof document !== 'undefined') {
   const _if = iconFor;
   iconFor = function (key) {
-    if (typeof key !== 'string' || !key.startsWith('unit:') || !UNITS[key.slice(5)]) return _if.apply(this, arguments);
+    const at = typeof key === 'string' ? key.indexOf('@') : -1, type = typeof key === 'string' ? key.slice(5, at > 0 ? at : undefined) : '';
+    if (typeof key !== 'string' || !key.startsWith('unit:') || !UNITS[type]) return _if.apply(this, arguments);
     if (ICONS.has(key)) return ICONS.get(key);
     let url;
-    try { url = uhdUnitIcon(key.slice(5)); } catch (e) { return _if.apply(this, arguments); }
+    try { url = uhdUnitIcon(type, at > 0 ? +key.slice(at + 1) : undefined); } catch (e) { return _if.apply(this, arguments); }
     ICONS.set(key, url); return url;
   };
 }

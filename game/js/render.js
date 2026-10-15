@@ -1329,12 +1329,14 @@ function iconFor(key) {
   const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
   const g = cv.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, 64); grd.addColorStop(0, '#5a4a36'); grd.addColorStop(1, '#2a2218'); g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
-  const pc = W && W.players[W.humanId] ? W.players[W.humanId].color : PLAYER_COLORS[0];
-  const [kind, id] = key.includes(':') ? key.split(':') : ['tech', key];
+  // 'unit:<type>@<owner>' draws the icon in that player's colour (portraits of enemy and spectated units)
+  const atI = key.indexOf('@'), iconOwner = atI > 0 ? +key.slice(atI + 1) : (W ? W.humanId : 1), baseKey = atI > 0 ? key.slice(0, atI) : key;
+  const pc = W && W.players[iconOwner] ? W.players[iconOwner].color : PLAYER_COLORS[0];
+  const [kind, id] = baseKey.includes(':') ? baseKey.split(':') : ['tech', baseKey];
   const savedTime = R.time;
   if (kind === 'unit') {
     const d = UNITS[id];
-    const fake = { id: 7, type: id, owner: W ? W.humanId : 1, anim: 'idle', animT: 0.5, face: 1, cargo: [], x: 0, y: 0, carry: null, work: null };
+    const fake = { id: 7, type: id, owner: iconOwner, anim: 'idle', animT: 0.5, face: 1, cargo: [], x: 0, y: 0, carry: null, work: null };
     g.save(); const sc = d.naval ? 0.95 : d.tags.includes('mounted') || d.tags.includes('siege') ? 1.25 : d.animal ? 1.8 : 1.7;
     g.translate(32 + (d.naval ? 0 : -2), d.naval ? 48 : 56); g.scale(sc, sc);
     drawUnitFigure(g, fake, 0.5); g.restore();

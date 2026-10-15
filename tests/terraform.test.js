@@ -28,7 +28,8 @@ function site(len){ const m=W.map, P=W.players[1]; const starts=W.list.filter(e=
 function vill(x,y){ return spawnUnit('villager',1,x+0.5,y+0.5); }
 function runUntil(fn,secs){ let t=0; while(t<secs && !fn()){ worldTick(0.05); t+=0.05; } return t; }
 mk('land','small',11,2); for(let i=0;i<60;i++) worldTick(0.05);`);
-const A = run(`(() => { const s=site(5); if(!s) return {nosite:true}; const m=W.map; const p=W.players[1];
+const A = run(`(() => { for (const e of W.list.slice()) if (e.kind === 'unit' && (e.type === 'wolf' || e.type === 'boar')) removeEnt(e);   // a long detour past wolves is not what this checks
+  const s=site(5); if(!s) return {nosite:true}; const m=W.map; const p=W.players[1];
   const a=s.tiles[0], b=s.tiles[4]; const plan=terraPlan('canal',a,b); const v=vill(a.x-(a.x-s.shore.x), a.y-(a.y-s.shore.y));
   v.x=s.shore.x+0.5; v.y=s.shore.y+0.5; // never mind: shore is water; stand beside the first tile instead
   v.x=a.x+0.5; v.y=a.y+1.5; terraOrder([v],'canal',plan.keep);

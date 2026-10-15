@@ -62,4 +62,13 @@ const S = run(`(() => { mk(3); for(let i=1;i<W.players.length;i++) W.players[i].
       if(i-r.t>=100&&!r.rep){ r.rep=true; stuck++; } } } } catch(e){ err=e.stack; }
   return {stuck, err, units: W.list.filter(u=>u.kind==='unit').length}; })()`);
 ok('5-minute AI soak: almost no units stand stuck for 5 s', !S.err && S.stuck <= 3, S);
+// chasing units must not ask for a new route every tick (pathTo used to reset the caller's repath timer)
+const P = run(`(() => { mk(6); const o=open(16,8); const us=[];
+  for(let k=0;k<20;k++){ us.push(spawnUnit('militia',1,o.x+0.5+(k%4),o.y+0.5+(k/4|0))); us.push(spawnUnit('militia',2,o.x+15.5-(k%4),o.y+0.5+(k/4|0))); }
+  let calls=0; const _fp=findPath; findPath=function(){ calls++; return _fp.apply(this,arguments); };
+  for(let i=0;i<20*5;i++) worldTick(0.05); findPath=_fp; us.forEach(u=>{ if(!u.dead) removeEnt(u); });
+  return {calls}; })()`);
+ok('chasing units repath on a timer, not every tick', P.calls < 900, P);
+const Q = run(`(() => { const p=W.players[1]; p.res.wood=10; p.res.gold=0; return shortfallMsg(p,{wood:60,gold:20,food:0}); })()`);
+ok('missing resources are named', Q === 'Need 50 more wood and 20 more gold', Q);
 console.log(`\n${pass} passed, ${fail} failed`);

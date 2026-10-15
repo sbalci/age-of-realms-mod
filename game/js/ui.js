@@ -285,7 +285,7 @@ function updateTopbar() {
   const idle = W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && (e.type === 'villager' || e.type === 'sapper') && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)).length;
   $('#r-vil span').textContent = idle;
   $('#age-label').textContent = AGES[p.age] + (p.researching.has('feudal') || p.researching.has('castleage') || p.researching.has('imperial') ? ' (advancing…)' : '');
-  $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' ⚡' : '') + (W.speed !== 1 ? ` ×${W.speed}` : '');
+  $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' ⚡' : '') + (W.speed !== 1 && !document.querySelector('#r-speed') ? ` ×${W.speed}` : '');
   // messages
   const box = $('#msgs'); const now = performance.now();
   const html = W.msgs.filter(m => now - m.t < 9000).map(m => `<div style="color:${m.color}">${escapeHtml(m.text)}</div>`).join('');
@@ -318,7 +318,7 @@ function commandsFor(sel) {
       return cmds;
     }
     if (types.has('villager')) {
-      cmds.push({ key: 'B', icon: 'ecobuild', name: 'Build Economic Building', desc: 'Houses, Mill, Lumber/Mining Camps, Farms, Dock, Market, Blacksmith, University, Monastery, Town Center', fn: () => { UI.page = 'eco'; } });
+      cmds.push({ key: 'B', icon: 'ecobuild', name: 'Build Economic Building', desc: 'Houses, Mill, Lumber/Mining Camps, Farms, Wells, Dock, Market, Blacksmith, University, Monastery, Town Center, Wonder', fn: () => { UI.page = 'eco'; } });
       cmds.push({ key: 'V', icon: 'milbuild', name: 'Build Military Building', desc: 'Barracks, Archery Range, Stable, Siege Workshop, Towers, Walls, Gates, Castle', fn: () => { UI.page = 'mil'; } });
     }
     if (sel.some(u => UNITS[u.type].atk > 0 && u.type !== 'villager')) cmds.push({ key: 'A', icon: 'attackmove', name: 'Attack Move', desc: 'Move to a point, attacking any enemy encountered on the way.', fn: () => { UI.mode = { t: 'attackmove' }; } });
@@ -403,15 +403,29 @@ function renderSelInfo() {
   const box = $('#selinfo'); const sel = UI.selection;
   if (!sel.length) { box.innerHTML = `<div class="small dim">Select units or buildings. Right-click to command.<br>Enter: chat/cheats · F1: help</div>`; return; }
   if (sel.length > 1) {
-    box.innerHTML = `<div class="multi">${sel.slice(0, 40).map(u => `<div class="mini" data-id="${u.id}" style="background-image:url(${iconFor((u.kind === 'bld' ? 'bld:' : 'unit:') + u.type)})"><i style="width:${(u.hp / u.maxhp * 100) | 0}%"></i></div>`).join('')}</div><div class="small">${sel.length} selected</div>`;
-    box.querySelectorAll('.mini').forEach(m => m.onclick = () => { const e = ent(+m.dataset.id); if (e) { UI.selection = [e]; UI.panelKey = ''; } });
+    // grouped by type, AoE-style: one tile per type with a count and the group's average health.
+    // Rebuilt only when the group make-up or a health bucket changes (big selections used to cost ~16 ms every refresh).
+    const groups = new Map();
+    for (const u of sel) { const k = (u.kind === 'bld' ? 'bld:' : 'unit:') + u.type; let g = groups.get(k); if (!g) groups.set(k, g = { k, list: [], hp: 0, max: 0 }); g.list.push(u); g.hp += u.hp; g.max += u.maxhp; }
+    const gs = [...groups.values()];
+    const key = gs.map(g => g.k + 'x' + g.list.length + ':' + ((g.hp / g.max * 20) | 0)).join('|');
+    if (box.dataset.multiKey !== key) {
+      box.dataset.multiKey = key;
+      box.innerHTML = `<div class="multi">${gs.map((g, gi) => `<div class="mini grp" data-g="${gi}" title="${typeof civUnitName === 'function' && g.list[0].kind === 'unit' ? civUnitName(g.list[0].type, g.list[0].owner) : (g.list[0].kind === 'bld' ? BUILDINGS : UNITS)[g.list[0].type].name} × ${g.list.length} — click: select only these, shift-click: remove them" style="background-image:url(${iconFor(g.k)})">${g.list.length > 1 ? `<b>${g.list.length}</b>` : ''}<i style="width:${(g.hp / g.max * 100) | 0}%"></i></div>`).join('')}</div><div class="small">${sel.length} selected · ${gs.length} type${gs.length > 1 ? 's' : ''}</div>`;
+      box.querySelectorAll('.mini').forEach(m => m.onclick = ev => {
+        const g = gs[+m.dataset.g]; if (!g) return;
+        UI.selection = ev.shiftKey ? UI.selection.filter(e => !g.list.includes(e)) : g.list.filter(e => !e.dead && !e.dying);
+        UI.panelKey = ''; box.dataset.multiKey = '';
+      });
+    }
     if (typeof GameHooks === 'object') GameHooks.emit('selInfo', sel, box);
     return;
   }
+  box.dataset.multiKey = '';
   const e = sel[0]; const p = W.players[e.owner];
   let name, icon, lines = [];
   if (e.kind === 'unit') {
-    const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner) : d.name; icon = 'unit:' + e.type;
+    const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner) : d.name; icon = 'unit:' + e.type + (e.owner !== W.humanId && e.owner > 0 ? '@' + e.owner : '');
     if (!d.animal || e.owner) {
       const rng = statU(e, 'range'); lines.push(`⚔ ${statU(e, 'atk')}${d.range ? ` 🎯 ${d.range + rng}` : ''} 🛡 ${statU(e, 'ma')}/${statU(e, 'pa')}`);
     }
@@ -571,6 +585,8 @@ function onKey(e) {
   if (k === ' ') { const f = UI.selection[0]; if (f) { const c = center(f); centerCamOn(c.x, c.y); } e.preventDefault(); return; }
   if (k.startsWith('Arrow')) { e.preventDefault(); return; }
   // command hotkeys
+  // rebuild the card first: a selection made a moment ago (idle buttons, H, groups) must not run the previous card's commands
+  if (UI.gameRunning && typeof renderCommands === 'function') renderCommands();
   if (UI.cmds) {
     const kk = k.length === 1 ? k.toUpperCase() : k;
     const c = UI.cmds.find(c => c.key === kk);

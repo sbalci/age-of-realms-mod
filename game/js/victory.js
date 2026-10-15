@@ -769,7 +769,7 @@ function vicEndHtml(win) {
   else if (v && v.kind === 'relic') sub = isFriend(v.pid, W.humanId) ? `${v.pid === W.humanId ? 'You' : W.players[v.pid].name} held every relic for ${vicMarkText(VIC.relicTime)}.` : `${W.players[v.pid].name} held every relic for ${vicMarkText(VIC.relicTime)}.`;
   else sub = win ? 'All rival players have been defeated or are your allies.' : 'Your civilization has fallen.';
   const at = t => t === null || t === undefined ? '—' : t === 0 ? 'start' : vicFmt(t);
-  const status = p => { const s = vicStats(p); if (v && v.winners && v.winners.includes(p.id)) return 'Winner'; if (!p.alive) return 'Defeated' + (s.defeatT !== null ? ' ' + vicFmt(s.defeatT) : ''); return isFriend(p.id, W.humanId) ? 'Allied' : 'Alive'; };
+  const status = p => { const s = vicStats(p); if (v && v.winners && v.winners.includes(p.id)) return 'Winner'; if (!p.alive) return 'Defeated' + (s.defeatT !== null ? ' ' + vicFmt(s.defeatT) : ''); if (p.id === W.humanId && !W.spectate) return W.won ? 'Winner' : 'Alive'; return isFriend(p.id, W.humanId) ? 'Allied' : 'Alive'; };
   const head = `<tr><th></th>${players.map(p => `<th><span class="sw" style="background:${p.color.c}"></span>${escapeHtml(p.name)}</th>`).join('')}</tr>`;
   const table = rows => `<table class="stats">${head}${rows.map(([label, f, cls]) => `<tr class="${cls || ''}"><td>${label}</td>${players.map(p => `<td>${f(p)}</td>`).join('')}</tr>`).join('')}</table>`;
   const S = p => vicStats(p), G = p => S(p).gathered, SC = p => vicScore(p);

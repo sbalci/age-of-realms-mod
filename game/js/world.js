@@ -201,7 +201,7 @@ function tilePassFor(u, x, y) { if (!W.map.inb(x | 0, y | 0)) return false; retu
 // ---------- movement ----------
 function pathTo(u, rect, r) {
   const res = findPath(W.map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u));
-  u.path = res.pts; u.pi = 0; u.pathOk = res.ok; u.goalRect = rect; u.goalR = r; u.repathT = 0;
+  u.path = res.pts; u.pi = 0; u.pathOk = res.ok; u.goalRect = rect; u.goalR = r;   // callers set u.repathT just before calling; resetting it here made every chasing unit repath every tick
   return res.ok;
 }
 function moveToPoint(u, x, y) {
@@ -656,7 +656,7 @@ function queueUnit(b, type) {
   const lock = unitLocked(p, type); if (lock) return lock;
   if (b.queue.length >= 10) return 'Queue full';
   const cost = effCost(p, type);
-  if (!canPay(p, cost)) return 'Not enough resources';
+  if (!canPay(p, cost)) return shortfallMsg(p, cost);
   pay(p, cost);
   b.queue.push({ kind: 'unit', id: type, t: 0, cost });
   return null;
@@ -667,7 +667,7 @@ function queueTech(b, id) {
   const lock = techLocked(p, id, b); if (lock) return lock;
   if (b.queue.length >= 10) return 'Queue full';
   const cost = effCost(p, id, true);
-  if (!canPay(p, cost)) return 'Not enough resources';
+  if (!canPay(p, cost)) return shortfallMsg(p, cost);
   pay(p, cost); p.researching.add(id);
   b.queue.push({ kind: 'tech', id, t: 0, cost });
   return null;
@@ -720,7 +720,7 @@ function updateBuilding(b, dt) {
   if (b.queue.length) {
     const q = b.queue[0];
     if (q.kind === 'unit') {
-      if (p.pop >= p.popCap && !W.instantFor(p)) { b.popBlocked = true; if (p.id === W.humanId && W.t - (W.lastHouseMsg || -99) > 12) { W.lastHouseMsg = W.t; msg('You need to build more houses.', '#fc8'); } }
+      if (p.pop >= p.popCap) { b.popBlocked = true; if (p.id === W.humanId && W.t - (W.lastHouseMsg || -99) > 12) { W.lastHouseMsg = W.t; msg('You need to build more houses.', '#fc8'); } }
       else {
         b.popBlocked = false;
         q.t += dt * (W.instantFor(p) ? 1000 : 1);
@@ -1524,10 +1524,15 @@ function canPlace(p, type, x, y, ignoreExplored) {
   for (const r of W.list) if (r.kind === 'relic' && !r.carrier && !r.inBld && r.x >= x && r.x < x + s && r.y >= y && r.y < y + s) return 'Blocked by relic';
   return null;
 }
+// 'Need 30 more wood and 15 more gold' instead of a bare 'Not enough resources'
+function shortfallMsg(p, cost) {
+  const short = Object.keys(cost).filter(r => cost[r] > 0 && (p.res[r] || 0) < cost[r]).map(r => `${Math.ceil(cost[r] - (p.res[r] || 0))} more ${r}`);
+  return short.length ? 'Need ' + short.join(' and ') : 'Not enough resources';
+}
 function placeBuilding(p, type, x, y, builders, queued) {
   const err = canPlace(p, type, x, y); if (err) return err;
   const lock = bldLocked(p, type); if (lock) return lock;
-  const cost = effCost(p, type); if (!canPay(p, cost)) return 'Not enough resources';
+  const cost = effCost(p, type); if (!canPay(p, cost)) return shortfallMsg(p, cost);
   pay(p, cost);
   const b = spawnBuilding(type, p.id, x, y, false);
   if (W.instantFor(p)) { b.progress = 1; completeBuilding(b); }

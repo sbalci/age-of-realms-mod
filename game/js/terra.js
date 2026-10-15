@@ -42,6 +42,7 @@ function terraCheck(op, x, y, sim) {
   const m = W.map;
   if (!m.inb(x, y) || x < 1 || y < 1 || x >= m.n - 1 || y >= m.n - 1) return 'Edge of the map';
   const i = m.idx(x, y), t = m.ter[i];
+  if (op === 'bridge' && !isWaterT(t)) return 'Bridges span water';
   if (m.blk[i]) { if (W.ents.get(m.blk[i])) return 'Something is in the way'; m.blk[i] = 0; }
   for (const f of terraFarms()) if (x >= f.x && x < f.x + 3 && y >= f.y && y < f.y + 3) return 'A farm is in the way';
   if (op === 'canal') {
@@ -357,7 +358,8 @@ function terraClick(t) {
   terraOrder(vs, m.op, plan.keep);
   Sound.speak(vs[0], 'build');
   UI.flash = { x: q.x + 0.5, y: q.y + 0.5, t: performance.now(), col: '#4f4' };
-  msg(`${TERRA_OPS[m.op].name}: ${plan.keep.length} tile${plan.keep.length > 1 ? 's' : ''}${plan.keep.length < plan.tiles.length ? ` (${plan.tiles.length - plan.keep.length} skipped)` : ''}.`, '#cfc');
+  const skipped = plan.ev.filter(c => c && !(m.op === 'bridge' && c === 'Bridges span water')).length;   // the banks of a bridge drag are not 'skipped'
+  msg(`${TERRA_OPS[m.op].name}: ${plan.keep.length} tile${plan.keep.length > 1 ? 's' : ''}${skipped ? ` (${skipped} skipped)` : ''}.`, '#cfc');
 }
 if (typeof handleModeClick === 'function') {
   const _hmc = handleModeClick;
@@ -402,7 +404,7 @@ if (typeof renderSelInfo === 'function') {
 
 // ---------- batch 5: bridges, tunnels and the sapper ----------
 if (typeof UNITS === 'object' && !UNITS.sapper) {
-  UNITS.sapper = { name: 'Sapper', tags: ['sapper', 'land'], hp: 40, atk: 3, ma: 0, pa: 1, range: 0, rof: 2, speed: 0.9, los: 4, cost: { food: 40, gold: 40 }, time: 30, age: 1, from: 'miningcamp', hk: 'Q', desc: 'Digs tunnels through mountains and ground, and digs, lowers and trenches 60% faster than a villager. Weak in combat.', draw: 'villager' };
+  UNITS.sapper = { name: 'Sapper', tags: ['sapper', 'land'], hp: 40, atk: 3, ma: 0, pa: 1, range: 0, rof: 2, speed: 0.9, los: 4, cost: { food: 40, gold: 40 }, time: 30, age: 1, from: 'miningcamp', hk: 'A', desc: 'Digs tunnels through mountains and ground, and digs, lowers and trenches 60% faster than a villager. Weak in combat.', draw: 'villager' };
 }
 if (typeof TRAIN === 'object' && !TRAIN.miningcamp) TRAIN.miningcamp = ['sapper'];
 // walking: a bridge tile or tunnel tile can be stepped onto whatever the height difference

@@ -180,7 +180,7 @@ if (typeof renderSelInfo === 'function') {
     if (lim) {
       const a = modAge(u);
       let s = `Age ${modFmt(a)}`;
-      if (u.type === 'villager' && lim.vows) s += ` · takes vows ~${modFmt(lim.vows)}`;
+      if (u.type === 'villager' && lim.vows) s += ` · becomes a Monk at ~${modFmt(lim.vows)}`;
       else s += ` · lifespan ~${modFmt(lim.max)}`;
       parts.push(s);
     }
