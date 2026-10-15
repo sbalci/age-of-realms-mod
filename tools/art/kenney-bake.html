@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kenney sprite baker</title>
+<script type="importmap">
+{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
+</script>
+<style>body{margin:0;background:#3a4a30;color:#eee;font:12px sans-serif}canvas{display:block}img{background:#3a4a30;margin:4px;vertical-align:bottom}</style>
+</head>
+<body>
+<script type="module">
+// Renders Kenney CC0 kits into isometric sprites that match game/js/render.js:
+//   iso(x, y, h) = ((x - y) * TW/2, (x + y) * TH/2)  with TW = 64, TH = 32
+// Game x -> three X, game y -> three Z, up -> three Y. An orthographic camera at 45 degrees azimuth and
+// 30 degrees elevation gives exactly 32 px right / 16 px down per tile step; one world unit up is 39.2 px.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RECIPES, STYLES } from './kenney-recipes.js';
+
+const SC = 2;                                // output pixel density (render.js sprites use SC = 2)
+const PPU = 32 * Math.SQRT2;                 // screen px per world unit
+const EL = Math.PI / 6;
+const DIR = new THREE.Vector3(Math.cos(EL) / Math.SQRT2, Math.sin(EL), Math.cos(EL) / Math.SQRT2);
+const KITS = { town: '/assets/thirdparty/kenney/fantasy-town-kit/', castle: '/assets/thirdparty/kenney/castle-kit/', nature: '/assets/thirdparty/kenney/nature-kit/' };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x000000, 0);
+document.body.appendChild(renderer.domElement);
+
+const loader = new GLTFLoader();
+const cache = new Map();
+async function model(kit, name) {
+  const key = kit + '/' + name;
+  if (!cache.has(key)) cache.set(key, loader.loadAsync(KITS[kit] + name + '.glb').then(g => g.scene));
+  return (await cache.get(key)).clone(true);
+}
+
+// ---- per-style recolouring of the shared colour map (roofs) ----
+const texCache = new Map();
+async function baseImage(kit) {
+  const key = 'img/' + kit;
+  if (!texCache.has(key)) texCache.set(key, new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = KITS[kit] + 'Textures/colormap.png'; }));
+  return texCache.get(key);
+}
+function uvTexels(mesh, img) {
+  const uv = mesh.geometry.attributes.uv, set = new Set();
+  if (!uv) return set;
+  for (let i = 0; i < uv.count; i++) set.add(Math.min(img.width - 1, Math.floor(uv.getX(i) * img.width)) + ',' + Math.min(img.height - 1, Math.floor(uv.getY(i) * img.height)));
+  return set;
+}
+const roofTexels = new Map();
+async function roofSet(kit) {
+  if (roofTexels.has(kit)) return roofTexels.get(kit);
+  const img = await baseImage(kit), set = new Set();
+  if (kit === 'town') for (const n of ['roof', 'roof-gable', 'roof-high', 'roof-point', 'roof-high-point', 'roof-corner', 'roof-gable-end', 'roof-high-gable']) (await model('town', n)).traverse(o => { if (o.isMesh) for (const t of uvTexels(o, img)) set.add(t); });
+  roofTexels.set(kit, set);
+  return set;
+}
+async function styledTexture(kit, styleIdx) {
+  const key = kit + '#' + styleIdx;
+  if (texCache.has(key)) return texCache.get(key);
+  const p = (async () => {
+    const img = await baseImage(kit), st = STYLES[styleIdx];
+    const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+    if (st && st.roof && kit === 'town') {
+      const seeds = await roofSet(kit), d = g.getImageData(0, 0, cv.width, cv.height), px = d.data, W = cv.width, H = cv.height;
+      const [tr, tg, tb] = hex(st.roof);
+      // flood-fill the teal roof patches of the colour map from the texels the roof meshes sample
+      // roof texels are the saturated ones (teal roofs, red steep roofs); grey gables and wood trim stay
+      const sat = i => (px[i + 1] > px[i] + 50) || (px[i] > px[i + 1] + 90 && px[i + 2] >= px[i + 1]);   // teal or pink-red roof texels; wood has blue < green
+      const seen = new Uint8Array(W * H), stack = [];
+      for (const t of seeds) { const [x, y] = t.split(',').map(Number), q = y * W + x; if (sat(q * 4)) stack.push([q, q]); }
+      const close = (a, b) => Math.abs(px[a] - px[b]) + Math.abs(px[a + 1] - px[b + 1]) + Math.abs(px[a + 2] - px[b + 2]) < 45;
+      const hit = [];
+      while (stack.length) {
+        const [q, s0] = stack.pop(); if (seen[q]) continue;
+        if (!close(q * 4, s0 * 4) || !sat(q * 4)) continue; seen[q] = 1; hit.push(q);
+        const x = q % W, y = (q / W) | 0;
+        if (x > 0) stack.push([q - 1, s0]); if (x < W - 1) stack.push([q + 1, s0]); if (y > 0) stack.push([q - W, s0]); if (y < H - 1) stack.push([q + W, s0]);
+      }
+      let maxL = 1; for (const q of hit) maxL = Math.max(maxL, lum(px[q * 4], px[q * 4 + 1], px[q * 4 + 2]));
+      for (const q of hit) { const i = q * 4, k = 0.55 + 0.5 * lum(px[i], px[i + 1], px[i + 2]) / maxL; px[i] = Math.min(255, tr * k); px[i + 1] = Math.min(255, tg * k); px[i + 2] = Math.min(255, tb * k); }
+      g.putImageData(d, 0, 0);
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false;
+    return tex;
+  })();
+  texCache.set(key, p);
+  return p;
+}
+function hex(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function lum(r, g, b) { return 0.3 * r + 0.59 * g + 0.11 * b; }
+
+// ---- scene assembly ----
+async function assemble(recipe, styleIdx) {
+  const root = new THREE.Group(), jobs = [];
+  const k = {
+    style: styleIdx, S: STYLES[styleIdx],
+    // place a model with its origin at game tile coords (x, y) and height z (world units), rotated rot degrees about up
+    add(kit, name, x, y, z = 0, rot = 0, s = 1, opts = {}) {
+      jobs.push((async () => {
+        const m = await model(kit, name);
+        m.position.set(x, z, y); m.rotation.y = rot * Math.PI / 180;
+        if (Array.isArray(s)) m.scale.set(s[0], s[1], s[2]); else m.scale.setScalar(s);
+        if (kit === 'town' || kit === 'castle') { const tex = await styledTexture(kit, kit === 'town' ? styleIdx : -1); m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.map = tex; } }); }
+        if (opts.leaf) m.traverse(o => { if (o.isMesh && /leaf|leav/i.test(o.material.name)) { o.material = o.material.clone(); o.material.color = new THREE.Color(opts.leaf); } });
+        if (opts.tint) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(opts.tint); } });
+        if (opts.color) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.map = null; o.material.color = new THREE.Color(opts.color); } });
+        m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material.metalness > 0) { o.material = o.material.clone(); o.material.metalness = 0; } } });
+        root.add(m);
+      })());
+    },
+  };
+  recipe.build(k);
+  await Promise.all(jobs);
+  // buildings are squashed vertically so a Kenney storey matches the game's unit scale (resources are not)
+  const sq = recipe.res ? 1 : 0.78, sc = recipe.scale || 1, c = (recipe.size || 1) / 2;
+  const g = new THREE.Group(); g.add(root); root.position.set(-c, 0, -c); g.position.set(c, 0, c); g.scale.set(sc, sc * sq, sc);
+  return g;
+}
+
+async function render(recipe, styleIdx) {
+  const obj = await assemble(recipe, styleIdx);
+  const size = recipe.size || 1;
+  const scene = new THREE.Scene();
+  scene.add(obj);
+  scene.add(new THREE.HemisphereLight(0xfff6e0, 0x5a6a48, 1.35));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.1);
+  sun.position.set(-3 + size / 2, 9, 7 + size / 2); sun.target.position.set(size / 2, 0, size / 2);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+  const sc = sun.shadow.camera; sc.left = -size * 2 - 3; sc.right = size * 2 + 3; sc.top = size * 2 + 3; sc.bottom = -size * 2 - 3; sc.near = 0.1; sc.far = 40;
+  scene.add(sun, sun.target);
+  // shadow catcher on the ground
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(size * 4 + 6, size * 4 + 6), new THREE.ShadowMaterial({ opacity: 0.28 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(size / 2, 0.001, size / 2); ground.receiveShadow = true; scene.add(ground);
+
+  // fit the camera: project the bounding box plus the footprint to screen space
+  const box = new THREE.Box3().setFromObject(obj);
+  box.expandByPoint(new THREE.Vector3(0, 0, 0)); box.expandByPoint(new THREE.Vector3(size, 0, size));
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -100, 100);
+  const target = new THREE.Vector3(size / 2, 0, size / 2);
+  cam.position.copy(target).addScaledVector(DIR, 20); cam.up.set(0, 1, 0); cam.lookAt(target); cam.updateMatrixWorld();
+  const inv = cam.matrixWorldInverse;
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+    const p = new THREE.Vector3(x, y, z).applyMatrix4(inv); minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const pad = 6 / PPU; minX -= pad; maxX += pad; minY -= pad + 8 / PPU; maxY += pad;
+  const w = Math.ceil((maxX - minX) * PPU), h = Math.ceil((maxY - minY) * PPU);
+  maxX = minX + w / PPU; minY = maxY - h / PPU;
+  cam.left = minX; cam.right = maxX; cam.top = maxY; cam.bottom = minY; cam.updateProjectionMatrix();
+  renderer.setPixelRatio(1); renderer.setSize(w * SC, h * SC, false);
+  renderer.render(scene, cam);
+  // anchor = footprint centre on the ground
+  const a = target.clone().applyMatrix4(inv);
+  const out = { png: renderer.domElement.toDataURL('image/png'), w, h, ax: +((a.x - minX) * PPU).toFixed(2), ay: +((maxY - a.y) * PPU).toFixed(2), SC };
+  scene.traverse(o => { if (o.isMesh && o.geometry !== undefined && o === ground) o.geometry.dispose(); });
+  return out;
+}
+
+window.bakeAll = async (only) => {
+  const res = {};
+  for (const [name, r] of Object.entries(RECIPES)) {
+    if (only && !only.includes(name)) continue;
+    const styles = r.styles || [0];
+    for (const s of styles) res[r.styles ? name + '_' + s : name] = await render(r, s);
+  }
+  return res;
+};
+window.preview = async (only) => {
+  const res = await window.bakeAll(only);
+  for (const [k, v] of Object.entries(res)) { const im = new Image(); im.src = v.png; im.width = v.w; im.height = v.h; im.title = k; document.body.appendChild(im); }
+  return Object.keys(res).length;
+};
+window.ready = true;
+</script>
+</body>
+</html>
