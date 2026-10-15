@@ -19,12 +19,14 @@ class AIPlayer {
   tc() { return W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc' && e.built) || W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc'); }
   home() { const tc = this.tc(); if (tc) return center(tc); const any = W.list.find(e => e.owner === this.id && e.kind === 'bld'); if (any) return center(any); return { x: this.p.startX, y: this.p.startY }; }
   update(dt) {
+    if (this.paused) return;
     this.acc += dt; this.t += dt;
     if (this.acc < 1) return;
     const step = this.acc; this.acc = 0;
     if (!this.p.alive) return;
     try {
       this.economy(step);
+      if (typeof this.engineer === 'function') this.engineer(step);
       this.military(step);
       this.diplomacy(step);
     } catch (e) { console.warn('AI error', e); }
@@ -47,7 +49,7 @@ class AIPlayer {
     // scouting early for sheep
     this.scouting();
     // herd owned sheep home
-    for (const s of W.list) if (s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.order && Math.hypot(s.x - home.x, s.y - home.y) > 7) setOrder(s, { t: 'move', x: home.x + 3 + Math.random() * 2, y: home.y + 3 + Math.random() * 2 });
+    for (const s of W.list) if (s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.order && Math.hypot(s.x - home.x, s.y - home.y) > 7) setOrder(s, { t: 'move', x: home.x + 3 + simRandom() * 2, y: home.y + 3 + simRandom() * 2 });
     // assign idle villagers
     const counts = { food: 0, wood: 0, gold: 0, stone: 0, build: 0 };
     for (const v of vills) { const k = this.vTask(v); if (k) counts[k]++; }
@@ -340,7 +342,7 @@ class AIPlayer {
     const enemyArch = W.list.filter(e => e.kind === 'unit' && isEnemy(this.id, e.owner) && hasTag(e.type, 'archer')).length;
     const trainAt = (btype, types) => {
       for (const b of this.mine(e => e.kind === 'bld' && e.type === btype && e.built && e.queue.length < 2)) {
-        let base = types[(Math.random() * types.length) | 0]; if (base === '__uu') base = CIVS[p.civ].uu;
+        let base = types[(simRandom() * types.length) | 0]; if (base === '__uu') base = CIVS[p.civ].uu;
         const t = currentType(p, base);
         if (unitLocked(p, t)) continue;
         const c = effCost(p, t);
@@ -373,7 +375,7 @@ class AIPlayer {
     if (dock && age >= 1) {
       const navy = this.navy();
       const want = naval ? 6 + age * 2 : 2 + age;
-      if (navy.length < want && dock.queue.length < 2 && p.res.wood > 150 && p.res.gold > 40) queueUnit(dock, currentType(p, age >= 2 && Math.random() < 0.25 ? 'fireship' : 'galley'));
+      if (navy.length < want && dock.queue.length < 2 && p.res.wood > 150 && p.res.gold > 40) queueUnit(dock, currentType(p, age >= 2 && simRandom() < 0.25 ? 'fireship' : 'galley'));
       // send navy to hunt enemy ships/docks
       if (navy.length >= 3 && this.t % 10 < 1) {
         const tgt = this.navalTarget(navy[0]);
@@ -430,7 +432,7 @@ class AIPlayer {
       if (u.order && (u.order.t === 'attack' || u.order.t === 'board')) continue;
       if (u.order && u.order.t === 'attackmove' && Math.hypot(u.order.x - tc.x, u.order.y - tc.y) < 3) continue;
       if (UNITS[u.type].onlyBld && tgt.kind === 'bld') setOrder(u, { t: 'attack', id: tgt.id });
-      else setOrder(u, { t: 'attackmove', x: tc.x + (Math.random() - 0.5) * 2, y: tc.y + (Math.random() - 0.5) * 2 });
+      else setOrder(u, { t: 'attackmove', x: tc.x + (simRandom() - 0.5) * 2, y: tc.y + (simRandom() - 0.5) * 2 });
     }
   }
   // Transport the army across water to the target

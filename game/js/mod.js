@@ -22,7 +22,7 @@ if (typeof location !== 'undefined' && location.search) {
   const q = new URLSearchParams(location.search);
   if (q.get('aging') === 'off') MOD.aging = false;
   if (q.get('veterans') === 'off') MOD.veterans = false;
-  if (q.get('life') > 0) MOD.lifeScale = +q.get('life');
+  const scale = +q.get('life'); if (Number.isFinite(scale) && scale > 0 && scale <= 100) MOD.lifeScale = scale;
 }
 
 // ---------- helpers ----------
@@ -39,7 +39,7 @@ function modLifeSpec(type) {
 function modAge(u) { return W.t - (u.bornT || 0); }
 function modLimits(u) {
   const s = modLifeSpec(u.type); if (!s) return null;
-  if (u.lifeK === undefined) { u.lifeK = 0.85 + Math.random() * 0.3; u.vows = Math.random() < MOD.vowShare; }
+  if (u.lifeK === undefined) { u.lifeK = 0.85 + simRandom() * 0.3; u.vows = simRandom() < MOD.vowShare; }
   const k = u.lifeK * MOD.lifeScale;
   return { vows: s.vows && u.vows ? s.vows * k : 0, max: s.max * k };
 }
@@ -55,6 +55,9 @@ function modNote(key, gap, text, color, owner) {
   W['mod_' + key] = W.t; msg(text, color);
 }
 function modFmt(s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+// Assign life rolls when a unit enters the world; inspecting it cannot change RNG order.
+GameHooks.on('entityAdded', e => { if (e.kind === 'unit') modLimits(e); });
 
 // ---------- aging ----------
 function modBecomeMonk(u) {

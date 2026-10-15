@@ -1,12 +1,19 @@
-// Runs every headless suite: node tests/run-all.js
-const { execFileSync } = require('child_process'), fs = require('fs'), path = require('path');
-let bad = 0;
-for (const f of fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js')).sort()) {
-  let out = '';
-  try { out = execFileSync(process.execPath, [path.join(__dirname, f)], { encoding: 'utf8', timeout: 900000, env: Object.assign({}, process.env, process.argv.includes('--full') ? { AOR_FULL: '1' } : {}) }); } catch (e) { out = (e.stdout || '') + (e.stderr || ''); bad++; }
-  const sum = (out.match(/\d+ passed, \d+ failed/) || ['no summary'])[0];
-  if (!/ 0 failed/.test(sum)) bad++;
-  console.log(`${f.padEnd(28)} ${sum}`);
-  for (const l of out.split('\n')) if (l.startsWith('FAIL')) console.log('   ' + l.slice(0, 200));
+// --quick runs focused regressions; --full loads the existing module integration suites.
+const { spawnSync } = require('child_process'), fs = require('fs'), path = require('path');
+const quick = new Set(['reliability.test.js', 'timing.test.js', 'engineering.test.js', 'extras.test.js', 'terrain.test.js', 'fx.test.js', 'units_hd.test.js']);
+let failed = 0, passed = 0;
+for (const file of fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js') && (!process.argv.includes('--quick') || quick.has(f))).sort()) {
+  const result = spawnSync(process.execPath, [path.join(__dirname, file)], { encoding: 'utf8', timeout: 900000, maxBuffer: 4e6, env: { ...process.env, ...(process.argv.includes('--full') ? { AOR_FULL: '1' } : {}) } });
+  const output = (result.stdout || '') + (result.stderr || '');
+  const summary = output.match(/(\d+) passed, (\d+) failed/);
+  const ok = !result.error && result.status === 0 && summary && Number(summary[2]) === 0;
+  console.log(`${file.padEnd(28)} ${summary ? summary[0] : 'no summary'}`);
+  if (ok) { passed += Number(summary[1]); continue; }
+  failed++;
+  if (result.error) console.error(`   ${result.error.code || 'ERROR'}: ${result.error.message}`);
+  if (result.signal) console.error(`   Terminated by ${result.signal}`);
+  if (result.status !== null && result.status !== 0) console.error(`   Exit status ${result.status}`);
+  console.error(output || '   Test produced no output.');
 }
-process.exit(bad ? 1 : 0);
+console.log(`Total: ${passed} checks passed; ${failed} suites failed.`);
+process.exitCode = failed ? 1 : 0;

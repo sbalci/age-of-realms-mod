@@ -390,11 +390,9 @@ if (UHD.on.any && typeof drawUnit === 'function') {
 
 // ---------- smooth motion ----------
 if (UHD.on.any && UHD.on.unitsmooth && typeof worldTick === 'function') {
-  const _wt = worldTick;
-  worldTick = function (dt) {
+  GameHooks.on('beforeTick', dt => {
     if (typeof W !== 'undefined' && W && W.list) for (const e of W.list) if (e.kind === 'unit') { e._uhx = e.x; e._uhy = e.y; e._uha = e.animT; }
-    return _wt.apply(this, arguments);
-  };
+  });
 }
 function uhdAlpha() {
   if (!UHD.on.unitsmooth || typeof simAcc === 'undefined' || typeof SIM_DT === 'undefined') return 1;

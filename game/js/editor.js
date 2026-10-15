@@ -6,12 +6,13 @@ const ED_OBJECTS = [
   { k: 'fish', v: 0, label: 'Shore fish', icon: 'fish' }, { k: 'fish', v: 1, label: 'Deep fish', icon: 'fish' }, { k: 'relic', label: 'Relic', icon: 'relicicon' },
   { k: 'unit', t: 'sheep', label: 'Sheep' }, { k: 'unit', t: 'deer', label: 'Deer' }, { k: 'unit', t: 'boar', label: 'Wild Boar' }, { k: 'unit', t: 'wolf', label: 'Wolf' },
 ];
-const ED_UNITS = ['villager', 'scout', 'militia', 'spearman', 'archer', 'skirmisher', 'knight', 'cavarcher', 'monk', 'ram', 'mangonel', 'trebuchet', 'fishingship', 'transport', 'galley', 'fireship', 'demoship', 'tradecart'];
+const ED_UNITS = ['villager', 'sapper', 'scout', 'militia', 'spearman', 'halberdier', 'archer', 'skirmisher', 'knight', 'paladin', 'cavarcher', 'hcavarcher', 'monk', 'ram', 'cappedram', 'mangonel', 'onager', 'trebuchet', 'fishingship', 'transport', 'galley', 'fireship', 'demoship', 'tradecart'];
 const Editor = {
   active: false, tool: 'terrain', terrain: T.GRASS, obj: null, owner: 1, brush: 2, undo: [], redo: [], players: [], name: 'My Map', sel: null, painting: false,
-  savedList() { try { return Object.keys(JSON.parse(localStorage.getItem('aoe_maps') || '{}')); } catch (e) { return []; } },
-  load(name) { try { const m = JSON.parse(localStorage.getItem('aoe_maps') || '{}'); return m[name] ? JSON.parse(JSON.stringify(m[name])) : null; } catch (e) { return null; } },
-  store(name, spec) { const m = JSON.parse(localStorage.getItem('aoe_maps') || '{}'); m[name] = spec; localStorage.setItem('aoe_maps', JSON.stringify(m)); },
+  savedMaps() { const m = JSON.parse(localStorage.getItem('aoe_maps') || '{}'); if (!m || typeof m !== 'object' || Array.isArray(m)) throw new Error('Map storage is invalid. Export your maps before resetting storage.'); return m; },
+  savedList() { try { return Object.keys(this.savedMaps()); } catch (e) { return []; } },
+  load(name) { try { const m = this.savedMaps(); if (!Object.prototype.hasOwnProperty.call(m, name) || validateMapSpec(m[name]).length) return null; return JSON.parse(JSON.stringify(m[name])); } catch (e) { return null; } },
+  store(name, spec) { const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n')); const m = this.savedMaps(); Object.defineProperty(m, name, { value: spec, enumerable: true, configurable: true, writable: true }); localStorage.setItem('aoe_maps', JSON.stringify(m)); },
   open(name) {
     UI.gameRunning = false; this.active = true;
     showScreen('editor'); resize();
@@ -25,7 +26,8 @@ const Editor = {
   close() { this.active = false; showScreen('menu'); },
   newGenerated(type, size, seed, np) {
     const spec = generateMapSpec({ size, seed, mapType: type, numPlayers: np });
-    spec.players = spec.players.map((p, i) => ({ start: p.start, civ: Object.keys(CIVS)[i % 9], color: i, team: 0 }));
+    const civKeys = Object.keys(CIVS);
+    spec.players = spec.players.map((p, i) => ({ start: p.start, civ: civKeys[i % civKeys.length], color: i, team: 0 }));
     this.loadSpec(spec); this.undo = []; this.redo = [];
   },
   newBlank(size) {
@@ -34,7 +36,9 @@ const Editor = {
     this.loadSpec(spec); this.undo = []; this.redo = [];
   },
   loadSpec(spec) {
-    this.players = spec.players.map((p, i) => ({ start: p.start ? { x: p.start.x, y: p.start.y } : null, civ: p.civ || Object.keys(CIVS)[i % 9], color: p.color !== undefined ? p.color : i, team: p.team || 0 }));
+    const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n'));
+    const civKeys = Object.keys(CIVS);
+    this.players = spec.players.map((p, i) => ({ start: p.start ? { x: p.start.x, y: p.start.y } : null, civ: p.civ || civKeys[i % civKeys.length], color: p.color !== undefined ? p.color : i, team: p.team || 0 }));
     const players = this.players.map((p, i) => ({ name: i === 0 ? 'You (human)' : 'Computer ' + i, civ: p.civ, color: PLAYER_COLORS[p.color % 8], human: i === 0, team: p.team }));
     // players array for createWorld must exist; strip starts so no TCs get auto-created
     const s2 = Object.assign({}, spec, { players: spec.players.map(() => ({ start: null })) });
@@ -52,12 +56,13 @@ const Editor = {
       else if (e.kind === 'unit') objects.push({ k: 'unit', t: e.type, x: Math.floor(e.x), y: Math.floor(e.y), o: e.owner });
       else if (e.kind === 'bld') objects.push({ k: 'bld', t: e.type, x: e.x, y: e.y, o: e.owner });
     }
-    return { name: this.name, n: W.n, ter: Array.from(map.ter), elev: Array.from(map.elev), objects, players: this.players.map(p => ({ start: p.start, civ: p.civ, color: p.color, team: p.team })) };
+    return { version: 1, name: this.name, n: W.n, ...mapLayers(map), objects, players: this.players.map(p => ({ start: p.start, civ: p.civ, color: p.color, team: p.team })) };
   },
   snapshot() { this.undo.push(JSON.stringify(this.toSpec())); if (this.undo.length > 60) this.undo.shift(); this.redo = []; },
   doUndo() { if (!this.undo.length) return; this.redo.push(JSON.stringify(this.toSpec())); const s = JSON.parse(this.undo.pop()); const cam = Object.assign({}, R.cam); this.loadSpec(s); Object.assign(R.cam, cam); this.refreshUI(); },
   doRedo() { if (!this.redo.length) return; this.undo.push(JSON.stringify(this.toSpec())); const s = JSON.parse(this.redo.pop()); const cam = Object.assign({}, R.cam); this.loadSpec(s); Object.assign(R.cam, cam); this.refreshUI(); },
   validate(spec) {
+    const structural = validateMapSpec(spec); if (structural.length) return structural;
     const errs = [], n = spec.n;
     if (!spec.players || spec.players.length < 2) errs.push('At least 2 players are required (you + one computer).');
     const tcs = spec.objects.filter(o => o.k === 'bld' && o.t === 'tc');
@@ -76,7 +81,7 @@ const Editor = {
         if (o.k === 'bld' && (!!BUILDINGS[o.t].water) !== water) errs.push(`${BUILDINGS[o.t].name} at (${o.x},${o.y}) is on invalid terrain.`);
       }
     }
-    for (const o of spec.objects) if (o.k === 'unit') { const water = isWaterT(spec.ter[o.y * n + o.x]); if (UNITS[o.t].naval && !water) errs.push(`Ship (${UNITS[o.t].name}) placed on land at (${o.x},${o.y}).`); if (!UNITS[o.t].naval && water) errs.push(`${UNITS[o.t].name} placed on water at (${o.x},${o.y}).`); if (o.o > spec.players.length) errs.push(`${UNITS[o.t].name} owned by missing player ${o.o}.`); }
+    for (const o of spec.objects) if (o.k === 'unit') { const idx = o.y * n + o.x, water = isWaterT(spec.ter[idx]), bridged = !!(spec.bridge && spec.bridge[idx]); if (UNITS[o.t].naval && !water) errs.push(`Ship (${UNITS[o.t].name}) placed on land at (${o.x},${o.y}).`); if (!UNITS[o.t].naval && water && !bridged) errs.push(`${UNITS[o.t].name} placed on water at (${o.x},${o.y}).`); if (o.o > spec.players.length) errs.push(`${UNITS[o.t].name} owned by missing player ${o.o}.`); }
     for (const o of spec.objects) if (o.k === 'bld' && o.o > spec.players.length) errs.push(`Building owned by missing player ${o.o}.`);
     return [...new Set(errs)].slice(0, 12);
   },
@@ -95,11 +100,14 @@ const Editor = {
       </div>
       <div class="ed-sec"><b>Tools</b><div class="row tools">
         <button class="tool" data-tool="select" title="Select / move (drag) — Delete key removes">✥ Select</button>
-        <button class="tool" data-tool="erase" title="Erase objects in brush">⌫ Erase</button>
+        <button class="tool" data-tool="erase" title="Erase objects and engineering layers in brush">⌫ Erase</button>
         <button class="tool" data-tool="start" title="Set the owner's starting location">⚑ Start</button>
         <button class="tool" data-tool="raise" title="Raise elevation">⛰ Raise</button>
         <button class="tool" data-tool="lower" title="Lower elevation">⬇ Lower</button>
         <button class="tool" data-tool="flatten" title="Flatten to level of first tile">▭ Flatten</button>
+        <button class="tool" data-tool="bridge" title="Paint wooden bridge over water">🌉 Bridge</button>
+        <button class="tool" data-tool="tunnel" title="Paint underground tunnel through land/cliffs">⛏ Tunnel</button>
+        <button class="tool" data-tool="trench" title="Paint defensive trench on land">塹 Trench</button>
       </div>
       <div class="row">Brush <input type="range" id="ed-brush" min="1" max="8" value="2"><span id="ed-bv">2</span>
       <button class="btn small" id="ed-undo" title="Ctrl+Z">↶ Undo</button><button class="btn small" id="ed-redo" title="Ctrl+Y">↷ Redo</button></div></div>
@@ -116,22 +124,23 @@ const Editor = {
     [T.GRASS, T.DIRT, T.SAND, T.FOREST, T.ROCK, T.SHALLOW, T.WATER, T.DEEP].forEach(t => { const b = el('button', 'sw-btn', ''); b.style.background = TER_COL[t]; b.title = TER_NAMES[t]; b.dataset.ter = t; b.onclick = () => { this.tool = 'terrain'; this.terrain = t; this.refreshUI(); }; ter.appendChild(b); });
     const mk = (box, item, iconKey, label) => { const b = el('button', 'pal-btn'); b.style.backgroundImage = `url(${iconFor(iconKey)})`; b.title = label; b.onclick = () => { this.tool = 'object'; this.obj = item; this.refreshUI(); }; item.el = b; box.appendChild(b); };
     ED_OBJECTS.forEach(o => mk($('#ed-obj'), o, o.k === 'unit' ? 'unit:' + o.t : o.icon, o.label));
-    ED_UNITS.forEach(t => mk($('#ed-units'), { k: 'unit', t, label: UNITS[t].name }, 'unit:' + t, UNITS[t].name));
+    for (const u of Object.values(CIVS).map(c => c.uu)) if (u && !ED_UNITS.includes(u)) ED_UNITS.push(u);
+    ED_UNITS.filter(t => UNITS[t]).forEach(t => mk($('#ed-units'), { k: 'unit', t, label: UNITS[t].name }, 'unit:' + t, UNITS[t].name));
     Object.keys(BUILDINGS).forEach(t => mk($('#ed-blds'), { k: 'bld', t, label: BUILDINGS[t].name }, 'bld:' + t, BUILDINGS[t].name));
     for (const b of document.querySelectorAll('#ed-side .tool')) b.onclick = () => { this.tool = b.dataset.tool; this.refreshUI(); };
     $('#ed-brush').oninput = e => { this.brush = +e.target.value; $('#ed-bv').textContent = this.brush; };
     $('#ed-undo').onclick = () => this.doUndo(); $('#ed-redo').onclick = () => this.doRedo();
     $('#ed-gen').onclick = () => { this.snapshot(); this.newGenerated($('#ed-gtype').value, $('#ed-gsize').value, (Math.random() * 1e6) | 0, Math.max(2, this.players.length || 3)); this.refreshUI(); };
     $('#ed-blank').onclick = () => { this.snapshot(); this.newBlank($('#ed-gsize').value); this.refreshUI(); };
-    $('#ed-save').onclick = () => { this.name = $('#ed-name').value.trim() || 'My Map'; this.store(this.name, this.toSpec()); this.status(`Saved "${this.name}".`); this.refreshUI(); };
-    $('#ed-load').onclick = () => { const n = $('#ed-list').value; if (!n) return; const s = this.load(n); if (s) { this.name = n; this.loadSpec(s); this.undo = []; this.redo = []; this.refreshUI(); this.status(`Loaded "${n}".`); } };
-    $('#ed-del').onclick = () => { const n = $('#ed-list').value; if (!n || !confirm(`Delete saved map "${n}"?`)) return; const m = JSON.parse(localStorage.getItem('aoe_maps') || '{}'); delete m[n]; localStorage.setItem('aoe_maps', JSON.stringify(m)); this.refreshUI(); };
-    $('#ed-export').onclick = () => { const s = this.toSpec(); const blob = new Blob([JSON.stringify(s)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (this.name || 'map').replace(/[^\w-]+/g, '_') + '.aoemap.json'; a.click(); this.status('Exported ' + a.download); };
-    $('#ed-import').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(t => { try { const s = JSON.parse(t); if (!s.n || !s.ter || !s.objects) throw new Error('Not a map file'); this.snapshot(); this.name = s.name || f.name; this.loadSpec(s); this.refreshUI(); this.status('Imported ' + f.name); } catch (err) { alert('Import failed: ' + err.message); } }); e.target.value = ''; };
-    $('#ed-validate').onclick = () => { const errs = this.validate(this.toSpec()); this.status(errs.length ? '<span class="warn">' + errs.join('<br>') + '</span>' : '✔ Map is valid and playable.'); };
+    $('#ed-save').onclick = () => { try { const name = $('#ed-name').value.trim() || 'My Map'; this.store(name, { ...this.toSpec(), name }); this.name = name; this.status(`Saved "${name}".`); this.refreshUI(); } catch (e) { this.status('Save failed: ' + e.message); } };
+    $('#ed-load').onclick = () => { const n = $('#ed-list').value; if (!n) return; const s = this.load(n); if (!s) { this.status('Map could not be loaded: invalid data or storage is unavailable.'); return; } this.loadSpec(s); this.name = n; this.undo = []; this.redo = []; this.refreshUI(); this.status(`Loaded "${n}".`); };
+    $('#ed-del').onclick = () => { const n = $('#ed-list').value; if (!n || !confirm(`Delete saved map "${n}"?`)) return; try { const m = this.savedMaps(); delete m[n]; localStorage.setItem('aoe_maps', JSON.stringify(m)); this.refreshUI(); } catch (e) { this.status('Delete failed: ' + e.message); } };
+    $('#ed-export').onclick = () => { const s = this.toSpec(); const blob = new Blob([JSON.stringify(s)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (this.name || 'map').replace(/[^\w-]+/g, '_') + '.aoemap.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); this.status('Exported ' + a.download); };
+    $('#ed-import').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { if (f.size > 8e6) throw new Error('Map file is too large (maximum 8 MB).'); const s = JSON.parse(await f.text()); const errors = validateMapSpec(s); if (errors.length) throw new Error(errors.join('\n')); this.snapshot(); this.loadSpec(s); this.name = s.name || f.name.slice(0, 120); this.undo = this.undo.slice(-60); this.redo = []; this.refreshUI(); this.status('Imported ' + f.name); } catch (err) { this.status('Import failed: ' + err.message); } };
+    $('#ed-validate').onclick = () => { const errs = this.validate(this.toSpec()); this.status(errs.length ? errs.join('\n') : '✔ Map is valid and playable.'); };
     $('#ed-play').onclick = () => this.play();
     $('#ed-exit').onclick = () => this.close();
-    $('#ed-addp').onclick = () => { if (this.players.length >= 8) return; this.snapshot(); const used = new Set(this.players.map(p => p.color)); let c = 0; while (used.has(c)) c++; this.players.push({ start: null, civ: Object.keys(CIVS)[this.players.length % 9], color: c, team: 0 }); this.reloadKeep(); };
+    $('#ed-addp').onclick = () => { if (this.players.length >= 8) return; this.snapshot(); const used = new Set(this.players.map(p => p.color)); let c = 0; while (used.has(c)) c++; const civKeys = Object.keys(CIVS); this.players.push({ start: null, civ: civKeys[this.players.length % civKeys.length], color: c, team: 0 }); this.reloadKeep(); };
     const cv = $('#game');
     cv.addEventListener('mousedown', e => this.mouseDown(e));
     cv.addEventListener('mousemove', e => this.mouseMove(e));
@@ -147,10 +156,10 @@ const Editor = {
     window.addEventListener('keyup', e => UI.keys.delete(e.key));
   },
   reloadKeep() { const cam = Object.assign({}, R.cam); this.loadSpec(this.toSpec()); Object.assign(R.cam, cam); this.refreshUI(); },
-  status(h) { $('#ed-status').innerHTML = h; },
+  status(h) { $('#ed-status').textContent = h; },
   refreshUI() {
     $('#ed-name').value = this.name;
-    $('#ed-list').innerHTML = this.savedList().map(n => `<option ${n === this.name ? 'selected' : ''}>${n}</option>`).join('');
+    $('#ed-list').replaceChildren(...this.savedList().map(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; o.selected = n === this.name; return o; }));
     for (const b of document.querySelectorAll('#ed-side .tool')) b.classList.toggle('on', b.dataset.tool === this.tool);
     for (const b of document.querySelectorAll('#ed-ter .sw-btn')) b.classList.toggle('on', this.tool === 'terrain' && +b.dataset.ter === this.terrain);
     for (const b of document.querySelectorAll('.pal-btn')) b.classList.remove('on');
@@ -195,7 +204,7 @@ const Editor = {
     if (this.pan) { R.cam.x = this.pan.cx - (e.clientX - this.pan.x) / R.cam.zoom; R.cam.y = this.pan.cy - (e.clientY - this.pan.y) / R.cam.zoom; return; }
     const t = screenToTile(e.offsetX, e.offsetY);
     if (this.moving) { this.moveEnt(this.moving.ent, t); return; }
-    if (this.painting && (this.tool === 'terrain' || this.tool === 'erase' || this.tool === 'flatten' || (this.tool === 'object' && this.obj && this.obj.k !== 'bld' && this.obj.k !== 'unit'))) this.apply(t);
+    if (this.painting && (this.tool === 'terrain' || this.tool === 'erase' || this.tool === 'flatten' || this.tool === 'bridge' || this.tool === 'tunnel' || this.tool === 'trench' || (this.tool === 'object' && this.obj && this.obj.k !== 'bld' && this.obj.k !== 'unit'))) this.apply(t);
   },
   mouseUp(e) { if (!this.active) return; this.painting = false; this.pan = null; this.moving = null; },
   moveEnt(e, t) {
@@ -230,17 +239,37 @@ const Editor = {
         if (this.tool === 'terrain') {
           const was = isWaterT(map.ter[i]), now = isWaterT(this.terrain);
           map.ter[i] = this.terrain;
-          if (now) map.elev[i] = 0;
+          if (now) { map.elev[i] = 0; if (map.tun) map.tun[i] = 0; if (map.trench) map.trench[i] = 0; }
+          else if (map.bridge) map.bridge[i] = 0;
           if (was !== now) this.clearIncompatible(x, y, now);
         } else if (this.tool === 'raise') { if (!isWaterT(map.ter[i])) map.elev[i] = Math.min(4, map.elev[i] + 1); }
         else if (this.tool === 'lower') map.elev[i] = Math.max(0, map.elev[i] - 1);
         else if (!isWaterT(map.ter[i])) map.elev[i] = this.flatLevel;
       }
+      map.computeRegions();
       this.terrainChanged(tiles);
+      return;
+    }
+    if (this.tool === 'bridge' || this.tool === 'tunnel' || this.tool === 'trench') {
+      const prop = this.tool === 'tunnel' ? 'tun' : this.tool, needWater = this.tool === 'bridge';
+      if (!map[prop]) map[prop] = new Uint8Array(map.n * map.n);
+      let changed = false;
+      for (const { x, y } of tiles) {
+        const i = map.idx(x, y);
+        if (isWaterT(map.ter[i]) !== needWater || map.blk[i]) continue;
+        map[prop][i] = 1; changed = true;
+      }
+      if (changed) { map.computeRegions(); this.terrainChanged(tiles); }
       return;
     }
     if (this.tool === 'erase') {
       for (const e of W.list.slice()) { const c = center(e); if (tiles.some(q => Math.floor(c.x) === q.x && Math.floor(c.y) === q.y) || (e.kind === 'bld' && tiles.some(q => q.x >= e.x && q.x < e.x + bsize(e) && q.y >= e.y && q.y < e.y + bsize(e)))) removeEnt(e); }
+      let layerChanged = false;
+      for (const { x, y } of tiles) {
+        const i = map.idx(x, y);
+        for (const k of ['bridge', 'tun', 'trench']) if (map[k] && map[k][i]) { map[k][i] = 0; layerChanged = true; }
+      }
+      if (layerChanged) { map.computeRegions(); this.terrainChanged(tiles); }
       return;
     }
     if (this.tool === 'start') {
@@ -250,25 +279,25 @@ const Editor = {
       const o = this.obj;
       if (o.k === 'bld') {
         const s = BUILDINGS[o.t].size; const x = Math.floor(t.x - s / 2 + 0.5), y = Math.floor(t.y - s / 2 + 0.5);
-        if (!this.owner) { this.status('<span class="warn">Choose a player (not Gaia) as the owner for buildings.</span>'); return; }
-        const err = canPlace(null, o.t, x, y, true); if (err) { this.status('<span class="warn">' + err + '</span>'); return; }
+        if (!this.owner) { this.status('Choose a player (not Gaia) as the owner for buildings.'); return; }
+        const err = canPlace(null, o.t, x, y, true); if (err) { this.status('' + err + ''); return; }
         spawnBuilding(o.t, this.owner, x, y, true); this.status(`Placed ${BUILDINGS[o.t].name} for P${this.owner}.`);
         return;
       }
       const list = o.k === 'unit' ? [{ x: Math.floor(t.x), y: Math.floor(t.y) }] : tiles.filter(() => this.brush === 1 || Math.random() < 0.55);
       for (const { x, y } of list) {
-        const i = map.idx(x, y); const water = isWaterT(map.ter[i]);
+        const i = map.idx(x, y); const water = isWaterT(map.ter[i]), bridged = !!(map.bridge && map.bridge[i]);
         if (o.k === 'unit') {
           const d = UNITS[o.t];
-          if (!!d.naval !== water) { this.status(`<span class="warn">${d.name} cannot be placed on ${water ? 'water' : 'land'}.</span>`); continue; }
-          if (map.blk[i]) { this.status('<span class="warn">Tile is occupied.</span>'); continue; }
+          if (d.naval ? !water : (water && !bridged)) { this.status(`${d.name} cannot be placed on ${water ? 'water' : 'land'}.`); continue; }
+          if (map.blk[i]) { this.status('Tile is occupied.'); continue; }
           const owner = d.animal ? 0 : this.owner;
-          if (!d.animal && !owner) { this.status('<span class="warn">Choose a player owner for units.</span>'); continue; }
+          if (!d.animal && !owner) { this.status('Choose a player owner for units.'); continue; }
           spawnUnit(o.t, owner, x + 0.5, y + 0.5);
           continue;
         }
         if (map.blk[i]) continue;
-        if (o.k === 'fish' ? !water : water) { if (list.length === 1) this.status(`<span class="warn">${o.label} must be placed on ${o.k === 'fish' ? 'water' : 'land'}.</span>`); continue; }
+        if (o.k === 'fish' ? !water : water) { if (list.length === 1) this.status(`${o.label} must be placed on ${o.k === 'fish' ? 'water' : 'land'}.`); continue; }
         if (W.list.some(e => (e.kind === 'relic' || (e.kind === 'res' && e.type === 'shrub')) && e.x === x && e.y === y)) continue;
         if (o.k !== 'shrub' && W.list.some(e => e.kind === 'unit' && Math.floor(e.x) === x && Math.floor(e.y) === y)) continue;
         spawnRes(o.k, x, y, o.v || 0);
@@ -295,8 +324,8 @@ const Editor = {
     this.name = $('#ed-name').value.trim() || this.name || 'My Map';
     const spec = this.toSpec();
     const errs = this.validate(spec);
-    if (errs.length) { this.status('<span class="warn">Cannot launch:<br>' + errs.join('<br>') + '</span>'); Sound.play('error'); return; }
-    this.store(this.name, spec);
+    if (errs.length) { this.status('Cannot launch:\n' + errs.join('\n')); Sound.play('error'); return; }
+    try { this.store(this.name, spec); } catch (e) { this.status('Save failed: ' + e.message); return; }
     UI.fromEditorName = this.name;
     this.active = false;
     const cfg = Object.assign(loadSetup(), { mapType: 'custom', customMap: this.name, civ: this.players[0].civ, color: this.players[0].color % 8, opponents: this.players.length - 1, teams: 'ffa' });

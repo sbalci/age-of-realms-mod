@@ -43,20 +43,23 @@ function initMenus() {
 }
 function openModal(title, html, buttons) {
   const m = $('#modal'); m.classList.remove('hidden');
-  m.innerHTML = `<div class="modal-box"><h2>${title}</h2><div class="modal-body">${html}</div><div class="modal-btns"></div></div>`;
+  if (!UI.modalFocus || !UI.modalFocus.isConnected) UI.modalFocus = document.activeElement;
+  m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title"><h2 id="modal-title">${escapeHtml(title)}</h2><div class="modal-body">${html}</div><div class="modal-btns"></div></div>`;
   const bb = m.querySelector('.modal-btns');
   for (const [label, fn] of (buttons || [['Close', null]])) { const b = el('button', 'btn', label); b.onclick = () => { if (fn && fn() === false) return; closeModal(); }; bb.appendChild(b); }
+  const first = m.querySelector('button, input, select, a[href]'); if (first) first.focus();
+  m.onkeydown = e => { if (e.key !== 'Tab') return; const controls = Array.from(m.querySelectorAll('button, input, select, a[href], [tabindex="0"]')).filter(x => !x.disabled); const first = controls[0], last = controls[controls.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } };
   return m;
 }
-function closeModal() { $('#modal').classList.add('hidden'); $('#modal').innerHTML = ''; }
+function closeModal() { $('#modal').classList.add('hidden'); $('#modal').innerHTML = ''; $('#modal').onkeydown = null; if (UI.modalFocus && UI.modalFocus.isConnected) UI.modalFocus.focus(); UI.modalFocus = null; }
 function openHelp() {
   let extra = '';
   if (UI.gameRunning && W) {
     const others = W.players.filter((p, i) => p && i !== W.humanId);
-    extra = `<h3>This match</h3><p>Map: ${W.settings.mapLabel || W.settings.mapType}. ${W.settings.cheats ? 'Cheats allowed.' : 'Cheats disabled.'}</p><ul>${others.map(p => `<li><span class="sw" style="background:${p.color.c}"></span>${p.name} (${CIVS[p.civ].name}) — ${p.alive ? stanceLabel(W.players[W.humanId].stance[p.id]) : 'defeated'}</li>`).join('')}</ul>
+    extra = `<h3>This match</h3><p>Map: ${escapeHtml(W.settings.mapLabel || W.settings.mapType)}. ${W.settings.cheats ? 'Cheats allowed.' : 'Cheats disabled.'}</p><ul>${others.map(p => `<li><span class="sw" style="background:${p.color.c}"></span>${escapeHtml(p.name)} (${CIVS[p.civ].name}) — ${p.alive ? stanceLabel(W.players[W.humanId].stance[p.id]) : 'defeated'}</li>`).join('')}</ul>
     <p><b>Win condition:</b> you win when every surviving player is your <i>ally</i>. Neutral (peace) players must be allied or defeated.</p>`;
   }
-  openModal('Help & Rules', extra + HELP_TEXT);
+  openModal('Help & Rules', '<p><b>New to the game?</b> Learn to Play on the main menu guides you through selection, gathering, building, training and advancing an age. Game Setup offers Beginner and Classic economy rule presets.</p><p><b>Saving:</b> use Save Match or Export Match in the game menu. Load Match resumes a manual save, autosave or exported file. Autosaves run every 60 game seconds. Controls in the main and game menus let you remap common shortcuts.</p>' + extra + HELP_TEXT);
 }
 function openAudio() {
   const v = Sound.vol;
@@ -92,7 +95,7 @@ function buildSetup() {
     <div class="setup-grid">
       <div class="col">
         <h3>You</h3>
-        <label>Name <input id="s-name" maxlength="16" value="${s.name}"></label>
+        <label>Name <input id="s-name" maxlength="16" value="${escapeHtml(s.name)}"></label>
         <label>Color <div id="s-colors" class="colors">${PLAYER_COLORS.map((c, i) => `<span class="swatch ${i === s.color ? 'on' : ''}" data-i="${i}" style="background:${c.c}" title="${c.name}"></span>`).join('')}</div></label>
         <label>Civilization <select id="s-civ">${civOpts}</select></label>
         <div id="civ-info" class="civ-info"></div>
@@ -114,7 +117,7 @@ function buildSetup() {
           <option value="islands" ${s.mapType === 'islands' ? 'selected' : ''}>Islands (naval, transports needed)</option>
           <option value="custom" ${s.mapType === 'custom' ? 'selected' : ''} ${maps.length ? '' : 'disabled'}>Custom map (from Map Editor)</option>
         </select></label>
-        <label id="lab-custom" class="${s.mapType === 'custom' ? '' : 'hidden'}">Custom map <select id="s-custom">${maps.map(m => `<option ${m === s.customMap ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+        <label id="lab-custom" class="${s.mapType === 'custom' ? '' : 'hidden'}">Custom map <select id="s-custom">${maps.map(m => `<option ${m === s.customMap ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select></label>
         <label>Map size <select id="s-size">${Object.keys(MAP_SIZES).map(k => `<option value="${k}" ${s.size === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)} (${MAP_SIZES[k]}×${MAP_SIZES[k]})</option>`).join('')}</select></label>
         <label>Map seed <span class="inline"><input id="s-seed" type="number" value="${s.seed}"><button class="btn small" id="s-reseed">🎲</button></span></label>
         <canvas id="s-preview" width="220" height="120"></canvas>
@@ -167,6 +170,7 @@ function buildSetup() {
       name: $('#s-name').value.trim() || 'Player', color, civ: $('#s-civ').value, mapType: $('#s-map').value, customMap: $('#s-custom') ? $('#s-custom').value : '',
       size: $('#s-size').value, opponents: +$('#s-opp').value, difficulty: $('#s-diff').value, teams: $('#s-teams').value, startAge: +$('#s-age').value,
       startRes: $('#s-res').value, fog: $('#s-fog').value, speed: $('#s-speed').value, seed: +$('#s-seed').value || 1, cheats: $('#s-cheats').checked, tips: $('#s-tips').checked,
+      rules: typeof readSetupRules === 'function' ? readSetupRules() : undefined,
     };
     try { localStorage.setItem('aoe_setup', JSON.stringify(cfg)); } catch (e) { }
     launchFromSetup(cfg);
@@ -181,6 +185,7 @@ function teamOf(mode, idx, total) {
 }
 const AI_NAMES = ['Charlemagne', 'Frederick', 'Isabella', 'Doge Enrico', 'Minamoto', 'Wu Zetian', 'Basil II', 'Harald', 'Saladin', 'Joan', 'Otto', 'El Cid'];
 function launchFromSetup(cfg) {
+  if (typeof applyRules === 'function') applyRules(cfg.rules || RULE_DEFAULTS);
   let spec;
   const players = [];
   const usedColors = new Set([cfg.color]);
@@ -209,11 +214,15 @@ function launchFromSetup(cfg) {
   startGame(spec, settings, cfg.mapType === 'custom' && UI.fromEditorName === cfg.customMap);
 }
 function startGame(spec, settings, fromEditor) {
+  if (typeof applyRules === 'function') { applyRules(settings.rules || RULE_DEFAULTS); settings.rules = currentRules(); }
   UI.lastSpec = JSON.parse(JSON.stringify(spec)); UI.lastSettings = settings; UI.fromEditor = !!fromEditor;
   createWorld(spec, settings);
   for (let i = 1; i < W.players.length; i++) { const p = W.players[i]; if (!p.human) p.ai = new AIPlayer(p, settings.difficulty); }
   W.speed = +settings.speed || 1;
   UI.selection = []; UI.groups = {}; UI.mode = null; UI.page = 'main'; UI.paused = false; UI.gameRunning = true; UI.panelKey = ''; UI.tipIdx = 0; UI.tipT = 5;
+  UI.keys.clear(); UI.place = UI.drag = null; UI.mmDrag = UI.chatOpen = UI.focusPaused = false;
+  $('#chatbox').classList.add('hidden');
+  if (typeof resetGameClock === 'function') resetGameClock();
   const h = W.players[W.humanId];
   centerCamOn(h.startX, h.startY); R.cam.zoom = 1; invalidateTerrain(); R.spriteCache.clear(); ICONS.clear();
   showScreen('hud');
@@ -273,7 +282,7 @@ function updateTopbar() {
   for (const r of RES) $('#r-' + r + ' span').textContent = Math.floor(p.res[r]);
   $('#r-pop span').textContent = `${p.pop}/${p.popCap}`;
   $('#r-pop').classList.toggle('warn', p.pop >= p.popCap);
-  const idle = W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && e.type === 'villager' && !e.order && !e.inside && !e.dying).length;
+  const idle = W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && (e.type === 'villager' || e.type === 'sapper') && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)).length;
   $('#r-vil span').textContent = idle;
   $('#age-label').textContent = AGES[p.age] + (p.researching.has('feudal') || p.researching.has('castleage') || p.researching.has('imperial') ? ' (advancing…)' : '');
   $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' ⚡' : '') + (W.speed !== 1 ? ` ×${W.speed}` : '');
@@ -286,6 +295,7 @@ function updateTopbar() {
     UI.tipT -= 0.25;
     if (UI.tipT <= 0 && UI.tipIdx < TIPS.length) { const tb = $('#tipbox'); tb.innerHTML = `<b>Tip:</b> ${TIPS[UI.tipIdx++]} <button class="btn small" onclick="this.parentNode.classList.add('hidden')">OK</button>`; tb.classList.remove('hidden'); UI.tipT = 55; setTimeout(() => tb.classList.add('hidden'), 20000); }
   }
+  if (typeof GameHooks === 'object') GameHooks.emit('topbar');
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -360,6 +370,7 @@ function renderCommands() {
   if (key !== UI.panelKey) {
     UI.panelKey = key;
     UI.cmds = commandsFor(sel);
+    if (typeof GameHooks === 'object') GameHooks.emit('commands', sel, UI.cmds);
     box.innerHTML = '';
     for (const c of UI.cmds) {
       const b = el('div', 'cmd');
@@ -394,18 +405,19 @@ function renderSelInfo() {
   if (sel.length > 1) {
     box.innerHTML = `<div class="multi">${sel.slice(0, 40).map(u => `<div class="mini" data-id="${u.id}" style="background-image:url(${iconFor((u.kind === 'bld' ? 'bld:' : 'unit:') + u.type)})"><i style="width:${(u.hp / u.maxhp * 100) | 0}%"></i></div>`).join('')}</div><div class="small">${sel.length} selected</div>`;
     box.querySelectorAll('.mini').forEach(m => m.onclick = () => { const e = ent(+m.dataset.id); if (e) { UI.selection = [e]; UI.panelKey = ''; } });
+    if (typeof GameHooks === 'object') GameHooks.emit('selInfo', sel, box);
     return;
   }
   const e = sel[0]; const p = W.players[e.owner];
   let name, icon, lines = [];
   if (e.kind === 'unit') {
-    const d = UNITS[e.type]; name = d.name; icon = 'unit:' + e.type;
+    const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner) : d.name; icon = 'unit:' + e.type;
     if (!d.animal || e.owner) {
       const rng = statU(e, 'range'); lines.push(`⚔ ${statU(e, 'atk')}${d.range ? ` 🎯 ${d.range + rng}` : ''} 🛡 ${statU(e, 'ma')}/${statU(e, 'pa')}`);
     }
     if (e.carry && e.carry.amt > 0) lines.push(`Carrying ${Math.floor(e.carry.amt)} ${e.carry.res}`);
     if (e.order) lines.push(`<span class="dim">${orderLabel(e)}</span>`);
-    if (e.type === 'sheep') lines.push(e.owner ? `Owned by <b style="color:${p.color.c}">${p.name}</b>` : 'Neutral — walk a unit within 4 tiles to claim');
+    if (e.type === 'sheep') lines.push(e.owner ? `Owned by <b style="color:${p.color.c}">${escapeHtml(p.name)}</b>` : 'Neutral — walk a unit within 4 tiles to claim');
     if (d.animal && d.food) lines.push(`Food: ${d.food}`);
     if (e.cargo && e.cargo.length) lines.push(`Passengers: ${e.cargo.length}/${UNITS.transport.cap + W.players[e.owner].transportCap}`);
     if (e.type === 'transport' && !e.cargo.length) lines.push('Empty. Right-click it with land units to board.');
@@ -427,10 +439,11 @@ function renderSelInfo() {
   if (e.kind === 'bld' && e.garrison.length) extra += `<div class="gar">${e.garrison.map(id => { const u = ent(id); return u ? `<div class="mini" data-g="${id}" title="Click to release" style="background-image:url(${iconFor('unit:' + u.type)})"></div>` : ''; }).join('')}</div>`;
   if (e.kind === 'unit' && e.cargo && e.cargo.length) extra += `<div class="gar">${e.cargo.map(id => { const u = ent(id); return u ? `<div class="mini" style="background-image:url(${iconFor('unit:' + u.type)})"></div>` : ''; }).join('')}</div>`;
   if (e.kind === 'bld' && e.queue.length) extra += `<div class="queue">${e.queue.map((q, i) => `<div class="mini q" data-q="${i}" title="Click to cancel" style="background-image:url(${iconFor(q.kind === 'unit' ? 'unit:' + q.id : q.id)})">${i === 0 ? `<i style="width:${Math.min(100, q.t / (q.kind === 'unit' ? UNITS[q.id].time : TECHS[q.id].time) * 100)}%"></i>` : ''}</div>`).join('')}${e.popBlocked ? '<span class="warn">Need houses!</span>' : ''}</div>`;
-  const owner = p ? `<span style="color:${p.color.c}">${p.name}</span>` : '<span class="dim">Nature</span>';
+  const owner = p ? `<span style="color:${p.color.c}">${escapeHtml(p.name)}</span>` : '<span class="dim">Nature</span>';
   box.innerHTML = `<div class="single"><div class="portrait" style="background-image:url(${iconFor(icon)})"></div><div class="info"><div class="nm">${name}</div><div class="small">${owner}</div>${hp}${lines.map(l => `<div class="small">${l}</div>`).join('')}</div></div>${extra}`;
   box.querySelectorAll('[data-g]').forEach(m => m.onclick = () => { if (e.owner === W.humanId) { ungarrisonOne(e, +m.dataset.g); } });
   box.querySelectorAll('[data-q]').forEach(m => m.onclick = () => { if (e.owner === W.humanId) cancelQueue(e, +m.dataset.q); });
+  if (typeof GameHooks === 'object') GameHooks.emit('selInfo', sel, box);
 }
 function orderLabel(u) {
   const o = u.order; const t = o.t;
@@ -554,7 +567,7 @@ function onKey(e) {
     return;
   }
   if (k === 'h' || k === 'H') { if (!UI.cmds || !UI.cmds.some(c => c.key === 'H')) { const tc = W.list.find(b => b.kind === 'bld' && b.type === 'tc' && b.owner === W.humanId); if (tc) { selectEnts([tc], false); centerCamOn(center(tc).x, center(tc).y); } return; } }
-  if (k === '.') { const idle = W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && u.type === 'villager' && !u.order && !u.inside && !u.dying); if (idle.length) { UI.idleIdx = ((UI.idleIdx || 0) + 1) % idle.length; const u = idle[UI.idleIdx]; selectEnts([u], false); centerCamOn(u.x, u.y); } return; }
+  if (k === '.') { const idle = W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && (u.type === 'villager' || u.type === 'sapper') && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length)); if (idle.length) { UI.idleIdx = ((UI.idleIdx || 0) + 1) % idle.length; const u = idle[UI.idleIdx]; selectEnts([u], false); centerCamOn(u.x, u.y); } return; }
   if (k === ' ') { const f = UI.selection[0]; if (f) { const c = center(f); centerCamOn(c.x, c.y); } e.preventDefault(); return; }
   if (k.startsWith('Arrow')) { e.preventDefault(); return; }
   // command hotkeys
@@ -729,7 +742,7 @@ function scrollCamera(dt) {
 }
 // ---------- end screen ----------
 UI.showEnd = function (win) {
-  const rows = W.players.slice(1).map(p => `<tr><td><span class="sw" style="background:${p.color.c}"></span>${p.name}</td><td>${CIVS[p.civ].name}</td><td>${AGES[p.age]}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${Math.floor(p.stats.gathered)}</td><td>${p.stats.relicGold}</td><td>${p.stats.tradeGold}</td><td>${p.alive ? (isFriend(p.id, W.humanId) ? 'Allied' : 'Alive') : 'Defeated'}</td></tr>`).join('');
+  const rows = W.players.slice(1).map(p => `<tr><td><span class="sw" style="background:${p.color.c}"></span>${escapeHtml(p.name)}</td><td>${CIVS[p.civ].name}</td><td>${AGES[p.age]}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${Math.floor(p.stats.gathered)}</td><td>${p.stats.relicGold}</td><td>${p.stats.tradeGold}</td><td>${p.alive ? (isFriend(p.id, W.humanId) ? 'Allied' : 'Alive') : 'Defeated'}</td></tr>`).join('');
   const btns = [['Restart', () => restartGame()]];
   if (UI.fromEditor) btns.push(['Return to Editor', () => { UI.gameRunning = false; Editor.open(UI.fromEditorName); }]);
   btns.push(['Main Menu', () => { UI.gameRunning = false; showScreen('menu'); }]);
@@ -742,11 +755,11 @@ function openDiplomacy() {
   const others = W.players.filter((p, i) => p && i !== W.humanId);
   const fee = Math.round(h.tributeFee * 100);
   const html = `<table class="dip"><tr><th>Player</th><th>Civ</th><th>Their stance</th><th>Your stance</th><th>Actions</th></tr>
-  ${others.map(p => `<tr class="${p.alive ? '' : 'dead'}"><td><span class="sw" style="background:${p.color.c}"></span>${p.name}</td><td>${CIVS[p.civ].name}</td><td>${stanceLabel(p.stance[W.humanId])}</td><td>${stanceLabel(h.stance[p.id])}</td>
+  ${others.map(p => `<tr class="${p.alive ? '' : 'dead'}"><td><span class="sw" style="background:${p.color.c}"></span>${escapeHtml(p.name)}</td><td>${CIVS[p.civ].name}</td><td>${stanceLabel(p.stance[W.humanId])}</td><td>${stanceLabel(h.stance[p.id])}</td>
   <td>${p.alive ? `<button class="btn small" data-a="ally" data-p="${p.id}" ${h.stance[p.id] === 'ally' ? 'disabled' : ''}>Propose alliance</button>
   <button class="btn small" data-a="peace" data-p="${p.id}" ${h.stance[p.id] !== 'enemy' ? 'disabled' : ''}>Propose peace</button>
   <button class="btn small danger" data-a="war" data-p="${p.id}" ${h.stance[p.id] === 'enemy' ? 'disabled' : ''}>Declare war</button>` : 'Defeated'}</td></tr>`).join('')}</table>
-  <h3>Tribute</h3><div class="row">To <select id="t-to">${others.filter(p => p.alive).map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
+  <h3>Tribute</h3><div class="row">To <select id="t-to">${others.filter(p => p.alive).map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}</select>
   ${RES.map(r => `<button class="btn small" data-t="${r}" data-n="100">${RES_ICON[r]} 100</button><button class="btn small" data-t="${r}" data-n="500">${RES_ICON[r]} 500</button>`).join(' ')}</div>
   <p class="small">Tribute fee: <b>${fee}%</b> of the amount is lost (Coinage and some civilizations reduce it). Computer players remember gifts and are more willing to make peace or ally.</p>
   <p class="small"><b>Win condition:</b> you win when every surviving player is your ally. Allies never target each other; declaring war restores hostile targeting immediately. Peace (neutral) players will not attack but must eventually be allied or defeated.</p>
@@ -771,5 +784,5 @@ UI.aiProposal = function (aiId, kind) {
   const p = W.players[aiId];
   msg(`${p.name} proposes an alliance!`, '#ffd76a');
   UI.pendingProposal = { aiId, kind };
-  openModal('Diplomatic proposal', `<p><span class="sw" style="background:${p.color.c}"></span><b>${p.name}</b> (${CIVS[p.civ].name}) offers you an alliance.</p>`, [['Accept', () => { setStanceMutual(W.humanId, aiId, 'ally'); msg(`You are now allied with ${p.name}.`, '#dfd'); }], ['Decline', () => { p.ai.attitude[W.humanId] -= 10; msg(`You declined ${p.name}'s alliance.`, '#fc8'); }]]);
+  openModal('Diplomatic proposal', `<p><span class="sw" style="background:${p.color.c}"></span><b>${escapeHtml(p.name)}</b> (${CIVS[p.civ].name}) offers you an alliance.</p>`, [['Accept', () => { setStanceMutual(W.humanId, aiId, 'ally'); msg(`You are now allied with ${p.name}.`, '#dfd'); }], ['Decline', () => { p.ai.attitude[W.humanId] -= 10; msg(`You declined ${p.name}'s alliance.`, '#fc8'); }]]);
 };

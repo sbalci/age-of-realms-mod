@@ -110,3 +110,24 @@ tr.dead { opacity: 0.5; }
 #ed-status { margin-top: 8px; min-height: 40px; }
 #ed-side input#ed-name { width: 180px; }
 @media (max-width: 1100px) { #cmds { width: 330px; grid-template-columns: repeat(5, 60px); } #mm-wrap { width: 180px; } #minimap { width: 170px; } }
+.rules-panel { margin: 12px 0; border: 1px solid var(--gold); padding: 12px; }
+.rules-panel .check { display: inline-flex; margin: 6px 16px 6px 0; }
+#tutorial-panel { position: absolute; top: 70px; right: 14px; width: min(340px, 40vw); padding: 14px; pointer-events: auto; }
+#tutorial-panel p { margin: 0 0 8px; }
+#ed-status { white-space: pre-line; }
+.menu-box { max-height: 92vh; overflow-y: auto; }
+.setup-panel { max-height: 94vh; overflow-y: auto; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #fff3aa; outline-offset: 3px; }
+#match-slots { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.display-buttons { display: flex; justify-content: center; gap: 8px; margin: 12px 0; }
+#graphics-status { min-height: 18px; max-width: 340px; }
+#three25d { position: fixed; pointer-events: none; display: none; z-index: 0; }
+#topbar .tb-btns .display-control { padding: 4px 7px; font-size: 12px; }
+#age-label, #topbar .tb-btns { white-space: nowrap; }
+#topbar .tb-btns { flex-shrink: 0; }
+@media (max-width: 1400px) {
+  #topbar { gap: 8px; font-size: 14px; }
+  #topbar .res { min-width: 62px; }
+  #clock { min-width: 55px; }
+  #topbar .tb-btns .btn { font-size: 12px; padding: 4px 6px; }
+}

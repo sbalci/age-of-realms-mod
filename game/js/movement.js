@@ -116,7 +116,7 @@ if (typeof separate === 'function') {
       let ddx = u.x - o.x, ddy = u.y - o.y, dd = Math.hypot(ddx, ddy);
       const min = r + UNIT_R(o);
       if (dd >= min) continue;
-      if (dd <= 0.0001) { ddx = Math.random() - 0.5; ddy = Math.random() - 0.5; dd = Math.hypot(ddx, ddy) || 1; }
+      if (dd <= 0.0001) { ddx = simRandom() - 0.5; ddy = simRandom() - 0.5; dd = Math.hypot(ddx, ddy) || 1; }
       let push = (min - dd) * 0.5 * Math.min(1, dt * 6);
       let px = ddx / dd * push, py = ddy / dd * push;
       const oWalking = o.path && o.pi < o.path.length;

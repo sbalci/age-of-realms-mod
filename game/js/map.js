@@ -5,12 +5,53 @@ const TER_NAMES = ['Grass', 'Dirt', 'Sand', 'Shallows', 'Water', 'Deep Water', '
 const isWaterT = t => t === T.WATER || t === T.DEEP;
 
 function mulberry32(a) {
-  return function () {
+  const next = function () {
     a |= 0; a = a + 0x6D2B79F5 | 0;
     let t = Math.imul(a ^ a >>> 15, 1 | a);
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
+  next.state = () => a >>> 0;
+  next.restore = state => { a = state >>> 0; };
+  return next;
+}
+
+// Structural checks also apply to unfinished editor maps, which need not have starts yet.
+function validateMapSpec(spec) {
+  const errors = [], own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  if (!spec || typeof spec !== 'object') return ['Not a map file.'];
+  if (spec.version !== undefined && spec.version !== 1) errors.push('Unsupported map version.');
+  const n = spec.n;
+  if (!Number.isInteger(n) || n < 16 || n > 256) return ['Map size must be an integer from 16 to 256.'];
+  const layer = (key, max, optional = false) => {
+    const a = spec[key];
+    if (optional && a === undefined) return;
+    if ((!Array.isArray(a) && !ArrayBuffer.isView(a)) || a.length !== n * n || Array.from(a).some(v => !Number.isInteger(v) || v < 0 || v > max)) errors.push(`Invalid ${key} layer: expected ${n * n} values from 0 to ${max}.`);
+  };
+  layer('ter', 7); layer('elev', 4);
+  for (const k of ['bridge', 'tun', 'trench']) layer(k, 1, true);
+  if (spec.name !== undefined && (typeof spec.name !== 'string' || spec.name.length > 120)) errors.push('Invalid map name.');
+  if (!Array.isArray(spec.players) || spec.players.length < 2 || spec.players.length > 8) return errors.concat('Maps require 2 to 8 players.');
+  const point = p => p && Number.isInteger(p.x) && Number.isInteger(p.y) && p.x >= 0 && p.y >= 0 && p.x < n && p.y < n;
+  for (const p of spec.players) {
+    if (!p || typeof p !== 'object' || (p.start && !point(p.start)) || (p.civ !== undefined && !own(CIVS, p.civ)) || (p.color !== undefined && (!Number.isInteger(p.color) || p.color < 0 || p.color > 7)) || (p.team !== undefined && (!Number.isInteger(p.team) || p.team < 0 || p.team > 8))) errors.push('Invalid player, civilization, color, team, or starting position.');
+  }
+  if (!Array.isArray(spec.objects) || spec.objects.length > n * n * 4) return errors.concat('Invalid or oversized object list.');
+  for (const o of spec.objects) {
+    if (!point(o)) { errors.push('Object coordinates must be integers inside the map.'); break; }
+    if (o.k === 'unit' || o.k === 'bld') {
+      const defs = o.k === 'unit' ? UNITS : BUILDINGS;
+      if (!own(defs, o.t) || !Number.isInteger(o.o) || o.o < 0 || o.o > spec.players.length) { errors.push('Unknown object type or owner.'); break; }
+      if (o.k === 'bld' && (o.o === 0 || o.x + defs[o.t].size > n || o.y + defs[o.t].size > n)) { errors.push('Building has an invalid owner or extends beyond the map.'); break; }
+    } else if (!['tree', 'shrub', 'berry', 'gold', 'stone', 'fish', 'relic'].includes(o.k)) { errors.push('Unknown resource type.'); break; }
+  }
+  return errors;
+}
+
+function mapLayers(map) {
+  const out = {};
+  for (const k of ['ter', 'elev', 'bridge', 'tun', 'trench']) if (map[k]) out[k] = Array.from(map[k]);
+  return out;
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
@@ -194,7 +235,8 @@ function generateMapSpec(opts) {
       // central sea with bays; players on ring
       w = dc < n * 0.2 + (nz - 0.5) * n * 0.22 || (noise2(x / 9, y / 9) > 0.78 && dStart(x, y) > 13);
       // inlet channel to edge to make it a coastline
-      if (Math.abs((x - n / 2) * Math.cos(a0 + Math.PI / np) + (y - n / 2) * Math.sin(a0 + Math.PI / np)) < 0 ) w = true;
+      const ca = a0 + Math.PI / np, along = (x - n / 2) * Math.cos(ca) + (y - n / 2) * Math.sin(ca), perp = Math.abs(-(x - n / 2) * Math.sin(ca) + (y - n / 2) * Math.cos(ca));
+      if (along > 0 && perp < 3.2 + (nz - 0.5) * 1.5 && dStart(x, y) > 12) w = true;
     } else if (type === 'islands') {
       const d = dStart(x, y);
       const isl = d < n * 0.17 + (nz - 0.5) * 10;
@@ -206,6 +248,28 @@ function generateMapSpec(opts) {
     water[i] = w ? 1 : 0;
   }
   // coastal: guarantee each player has water within ~14 tiles by carving small bay toward sea
+  if (type === 'coastal') {
+    for (const s of starts) {
+      let hasNearWater = false;
+      for (let y = Math.max(0, s.y - 14); y <= Math.min(n - 1, s.y + 14) && !hasNearWater; y++) {
+        for (let x = Math.max(0, s.x - 14); x <= Math.min(n - 1, s.x + 14); x++) {
+          if (water[y * n + x] && Math.hypot(x - s.x, y - s.y) <= 14) { hasNearWater = true; break; }
+        }
+      }
+      if (!hasNearWater) {
+        const dx = n / 2 - s.x, dy = n / 2 - s.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+        for (let d = 12.5; d <= len; d += 1.5) {
+          const bx = s.x + ux * d, by = s.y + uy * d;
+          for (let y = Math.max(1, (by - 4) | 0); y <= Math.min(n - 2, (by + 4) | 0); y++) {
+            for (let x = Math.max(1, (bx - 4) | 0); x <= Math.min(n - 2, (bx + 4) | 0); x++) {
+              if (Math.hypot(x - bx, y - by) <= 3.2 && dStart(x, y) >= 9.5) water[y * n + x] = 1;
+            }
+          }
+          if (water[Math.round(by) * n + Math.round(bx)]) break;
+        }
+      }
+    }
+  }
   // distance to land / water
   const dW = bfsDist(n, i => water[i]), dL = bfsDist(n, i => !water[i]);
   for (let i = 0; i < n * n; i++) {
@@ -398,7 +462,7 @@ function ensureConnectivity(spec, requireLand) {
       for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
         const xx = x + ox, yy = y + oy; if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
         const j = yy * n + xx;
-        if (isWaterT(spec.ter[j])) spec.ter[j] = T.SHALLOW;
+        if (isWaterT(spec.ter[j])) { spec.ter[j] = T.SHALLOW; spec.objects = spec.objects.filter(o => !(o.x === xx && o.y === yy && o.k === 'fish')); }
         if (blocked[j]) { blocked[j] = 0; spec.objects = spec.objects.filter(o => !(o.x === xx && o.y === yy && (o.k === 'tree' || o.k === 'gold' || o.k === 'stone' || o.k === 'berry'))); }
         if (Math.abs(spec.elev[j] - prevE) >= 2) spec.elev[j] = prevE + Math.sign(spec.elev[j] - prevE);
       }

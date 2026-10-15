@@ -75,7 +75,8 @@ const CR = run(`(() => { const o = FREE(4, 4); const src = spawnUnit('villager',
   let t = 0; while (W.projs.length && t < 5) { worldTick(0.05); t += 0.05; } const c = FX.craters[FX.craters.length - 1];
   return { n0, n1: FX.craters.length, near: c ? Math.hypot(c.x - (o.x + 3.5), c.y - (o.y + 3.5)) < 1.5 : false }; })()`);
 ok('mangonel stones leave craters where they land', CR.n1 === CR.n0 + 1 && CR.near, CR);
-const AR = run(`(() => { const o = FREE(6, 6); const rnd = Math.random; Math.random = () => 0.01;
+const AR = run(`(() => { const o = FREE(6, 6); const rnd = Math.random, rng = W.rng; Math.random = () => 0.01; W.rng = () => 0.01;
+  delete W.missFx; if (typeof CMD !== 'undefined') CMD.flying = [];
   try {
     const src = spawnUnit('villager', 1, o.x + 0.5, o.y + 0.5), tg = spawnUnit('militia', 2, o.x + 4.5, o.y + 0.5);
     const n0 = FX.arrows.length; fireProjectile(src, tg, 'arrow', null, { dmgVal: 0 }); tg.x += 2; tg.y += 2; // dodge -> miss
@@ -83,7 +84,7 @@ const AR = run(`(() => { const o = FREE(6, 6); const rnd = Math.random; Math.ran
     W.missFx = []; const n1 = FX.arrows.length; tg.x -= 2; tg.y -= 2; fireProjectile(src, tg, 'arrow', null, { dmgVal: 0 }); tg.x += 2;
     t = 0; while (W.projs.length && t < 5) { worldTick(0.05); t += 0.05; } const withMissFx = FX.arrows.length - n1; delete W.missFx;
     return { cmd: typeof CMD !== 'undefined', own, withMissFx, ang: FX.arrows.length ? typeof FX.arrows[FX.arrows.length - 1].ang : null };
-  } finally { Math.random = rnd; } })()`);
+  } finally { Math.random = rnd; W.rng = rng; } })()`);
 ok('missed arrows stick in the ground; deferred to W.missFx when another module provides it', (AR.cmd ? AR.own <= 1 : AR.own === 1) && AR.withMissFx === 0 && AR.ang === 'number', AR);
 const SP = run(`(() => { R.cw = 1000; R.ch = 600; R.cam.zoom = 1; R.cv = R.cv || { getBoundingClientRect: () => ({ top: 0, left: 0 }) }; const W0 = W; centerCamOn(40, 40); const s = Sound; s.calls.length = 0;
   const left = screenToTile(50, 300), right = screenToTile(950, 300), mid = screenToTile(500, 300);

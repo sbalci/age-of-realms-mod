@@ -78,7 +78,7 @@ function buildChunk(cx, cy) {
   const cv = document.createElement('canvas'); cv.width = Math.ceil((maxX - minX) * S); cv.height = Math.ceil((maxY - minY) * S);
   const g = cv.getContext('2d');
   g.setTransform(S, 0, 0, S, -minX * S, -minY * S);
-  for (let y = y0; y < Math.min(n, y0 + CH); y++) for (let x = x0; x < Math.min(n, x0 + CH); x++) drawTile(g, map, x, y);
+  for (let y = y0; y < Math.min(n, y0 + CH); y++) for (let x = x0; x < Math.min(n, x0 + CH); x++) { drawTile(g, map, x, y); if (typeof GameHooks === 'object') GameHooks.emit('tileDrawn', g, map, x, y); }
   return { cv, minX, minY, S };
 }
 function drawTile(g, map, x, y) {

@@ -31,12 +31,14 @@ function vicAddTech(id, t) {
   TECHS[id] = t;
   (TECHS_AT[t.at] = TECHS_AT[t.at] || []).push(id);
 }
-if (typeof BUILDINGS === 'object' && VIC.wonder && !BUILDINGS.wonder) {
+const VIC_IMP_UNITS = new Set(['halberdier', 'paladin', 'hcavarcher', 'cappedram', 'onager']);
+const VIC_IMP_TECHS = new Set(['up_halberdier', 'up_paladin', 'up_hcavarcher', 'up_cappedram', 'up_onager', 'croprotation', 'twomansaw', 'goldshaft', 'stoneshaft', 'blastfurnace', 'platemail', 'chainbarding', 'platebarding', 'leatherarcher', 'ringarcher', 'bracer']);
+if (typeof BUILDINGS === 'object' && !BUILDINGS.wonder) {
   BUILDINGS.wonder = { name: 'Wonder', size: 5, hp: 4800, ma: 8, pa: 11, cost: { food: 1000, wood: 1000, stone: 1000, gold: 1000 }, time: 500, age: 3, cat: 'eco', hk: 'G', los: 8,
     desc: `A monument to your civilization. If it stands for ${VIC.wonderTime / 60} minutes after completion, you and your allies win.` };
 }
 if (typeof BLD_H === 'object') BLD_H.wonder = 170;
-if (typeof UNITS === 'object' && VIC.imperial) {
+if (typeof UNITS === 'object') {
   const U = (id, o) => { if (!UNITS[id]) UNITS[id] = o; };
   U('halberdier', { name: 'Halberdier', tags: ['infantry', 'spear', 'land'], hp: 60, atk: 6, ma: 0, pa: 0, rof: 3, speed: 1.0, los: 4, cost: { food: 35, wood: 25 }, time: 22, age: 3, from: 'barracks', hk: 'W', desc: 'Imperial pike infantry with a halberd. Devastating against cavalry.', bonus: { mounted: 32, building: 1 }, draw: 'spear' });
   U('paladin', { name: 'Paladin', tags: ['cavalry', 'mounted', 'land'], hp: 160, atk: 14, ma: 2, pa: 3, rof: 1.8, speed: 1.35, los: 5, cost: { food: 60, gold: 75 }, time: 30, age: 3, from: 'stable', hk: 'W', desc: 'The finest heavy cavalry: upgraded Cavalier.', draw: 'knight' });
@@ -44,7 +46,7 @@ if (typeof UNITS === 'object' && VIC.imperial) {
   U('cappedram', { name: 'Capped Ram', tags: ['siege', 'machine', 'land'], hp: 200, atk: 3, ma: 0, pa: 190, rof: 5, speed: 0.5, los: 3, cost: { wood: 160, gold: 75 }, time: 36, age: 3, from: 'siege', hk: 'Q', desc: 'Iron-capped battering ram. Wrecks buildings and siege.', bonus: { building: 150, siege: 50 }, onlyBld: true, draw: 'ram' });
   U('onager', { name: 'Onager', tags: ['siege', 'machine', 'land'], hp: 60, atk: 50, ma: 0, pa: 7, range: 8, minRange: 3, rof: 6, speed: 0.6, los: 10, cost: { wood: 160, gold: 135 }, time: 46, age: 3, from: 'siege', hk: 'W', proj: 'stone', blast: 1.4, desc: 'Heavy catapult: bigger blast and range than the Mangonel.', bonus: { building: 45 }, draw: 'mangonel' });
 }
-if (typeof TECHS === 'object' && VIC.imperial) {
+if (typeof TECHS === 'object') {
   const inf = (p, o) => addUp(p, 'infantry', o), cav = (p, o) => addUp(p, 'cavalry', o), arc = (p, o) => addUp(p, 'archer', o);
   // unit line upgrades
   vicAddTech('up_halberdier', { name: 'Halberdier', at: 'barracks', age: 3, cost: { food: 300, gold: 600 }, time: 50, hk: 'X', upg: ['pikeman', 'halberdier'], req: ['up_pikeman'], icon: 'unit:halberdier', desc: 'Upgrade Pikemen to Halberdiers.' });
@@ -65,6 +67,36 @@ if (typeof TECHS === 'object' && VIC.imperial) {
   vicAddTech('leatherarcher', { name: 'Leather Archer Armor', at: 'blacksmith', age: 2, cost: { food: 150, gold: 150 }, time: 55, hk: 'T', req: ['paddedarcher'], icon: 'armor', tier: 2, desc: 'Archers +1/+1 armor.', fx: p => arc(p, { ma: 1, pa: 1 }) });
   vicAddTech('ringarcher', { name: 'Ring Archer Armor', at: 'blacksmith', age: 3, cost: { food: 250, gold: 250 }, time: 70, hk: 'T', req: ['leatherarcher'], icon: 'armor2', tier: 3, desc: 'Archers +1 melee / +2 pierce armor.', fx: p => arc(p, { ma: 1, pa: 2 }) });
   vicAddTech('bracer', { name: 'Bracer', at: 'blacksmith', age: 3, cost: { food: 300, gold: 200 }, time: 75, hk: 'R', req: ['bodkin'], icon: 'arrow2', tier: 3, desc: 'Archers, towers, TCs and galleys +1 attack and +1 range.', fx: p => { arc(p, { atk: 1, range: 1 }); addUp(p, 'warship', { atk: 1, range: 1 }); p.bldAtk += 1; p.bldRange += 1; } });
+}
+if (typeof bldLocked === 'function') {
+  const _bl = bldLocked;
+  bldLocked = function (p, type) {
+    if (type === 'wonder' && !VIC.wonder) return 'Wonder rule is disabled';
+    return _bl(p, type);
+  };
+}
+if (typeof unitLocked === 'function') {
+  const _ul = unitLocked;
+  unitLocked = function (p, type) {
+    if (VIC_IMP_UNITS.has(type) && !VIC.imperial) return 'Imperial upgrades are disabled';
+    return _ul(p, type);
+  };
+}
+if (typeof techLocked === 'function') {
+  const _tl = techLocked;
+  techLocked = function (p, id, b) {
+    if (VIC_IMP_TECHS.has(id) && !VIC.imperial) return 'Imperial upgrades are disabled';
+    return _tl(p, id, b);
+  };
+}
+if (typeof commandsFor === 'function') {
+  const _cf = commandsFor;
+  commandsFor = function (sel) {
+    let cmds = _cf(sel);
+    if (!VIC.wonder) cmds = cmds.filter(c => c.icon !== 'bld:wonder');
+    if (!VIC.imperial) cmds = cmds.filter(c => !VIC_IMP_TECHS.has(c.icon) && !(c.icon && c.icon.startsWith('unit:') && VIC_IMP_UNITS.has(c.icon.slice(5))));
+    return cmds;
+  };
 }
 // Byzantine discount carries over to the new pike tier
 if (typeof applyCivBonus === 'function') {
@@ -299,15 +331,10 @@ function vicSample() {
   const last = W.vicHist[W.vicHist.length - 1];
   if (last && Math.abs(last.t - W.t) < 0.01) W.vicHist[W.vicHist.length - 1] = row; else W.vicHist.push(row);
 }
-if (typeof createWorld === 'function') {
-  const _cw = createWorld;
-  createWorld = function (spec, settings) {
-    const w = _cw(spec, settings);
+GameHooks.on('worldCreated', w => {
     w.vicHist = []; w.vicNext = 0; w.vicWonders = new Map(); w.vicRelic = null; w.victory = null;
     for (let i = 1; i < w.players.length; i++) { const p = w.players[i]; p.vs = null; vicStats(p); p.memory = new Map(); }
-    return w;
-  };
-}
+});
 if (typeof killEnt === 'function') {
   const _ke = killEnt;
   killEnt = function (e, src) {
@@ -454,14 +481,10 @@ function vicTick(dt) {
   if (!W.over && VIC.relic) vicRelicTick(dt);
   if (VIC.score && W.t >= (W.vicNext || 0)) { vicSample(); W.vicNext = (Math.floor(W.t / VIC.sampleEvery) + 1) * VIC.sampleEvery; }
 }
-if (typeof worldTick === 'function') {
-  const _wt = worldTick;
-  worldTick = function (dt) {
-    const r = _wt(dt);
+GameHooks.on('afterTick', dt => {
     vicTick(dt);
-    return r;
-  };
-}
+
+});
 if (typeof checkVictory === 'function') { // remember when each player fell
   const _cv = checkVictory;
   checkVictory = function () {
@@ -759,7 +782,7 @@ function vicEndHtml(win) {
     Timeline: `<div class="vic-series">${[['score', 'Score'], ['pop', 'Population'], ['vil', 'Villagers'], ['mil', 'Military']].map(([k, n], i) => `<button data-series="${k}" class="${i ? '' : 'on'}">${n}</button>`).join('')}</div><div class="vic-chartbox"><canvas id="vic-chart"></canvas></div><div class="small">Sampled every ${VIC.sampleEvery} s of game time. Hover the chart for exact values.</div>`,
   };
   const names = Object.keys(panes);
-  return `<div class="vic-end"><p class="vic-sub">${sub} Time: ${vicFmt(W.t)}</p><div class="vic-tabs">${names.map((n, i) => `<button data-tab="${n}" class="${i ? '' : 'on'}">${n}</button>`).join('')}</div>${names.map((n, i) => `<div class="vic-pane ${i ? '' : 'on'}" data-pane="${n}">${panes[n]}</div>`).join('')}</div>`;
+  return `<div class="vic-end"><p class="vic-sub">${escapeHtml(sub)} Time: ${vicFmt(W.t)}</p><div class="vic-tabs">${names.map((n, i) => `<button data-tab="${n}" class="${i ? '' : 'on'}">${n}</button>`).join('')}</div>${names.map((n, i) => `<div class="vic-pane ${i ? '' : 'on'}" data-pane="${n}">${panes[n]}</div>`).join('')}</div>`;
 }
 if (typeof UI === 'object' && typeof openModal === 'function' && VIC.score) {
   UI.showEnd = function (win) {

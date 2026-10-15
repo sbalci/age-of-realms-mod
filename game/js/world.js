@@ -1,6 +1,13 @@
 // ===== World simulation: entities, orders, combat, economy =====
 'use strict';
 let W = null;
+// New extensions subscribe here instead of replacing engine functions.
+const GameHooks = {
+  listeners: new Map(),
+  on(name, fn) { if (!this.listeners.has(name)) this.listeners.set(name, new Set()); this.listeners.get(name).add(fn); return () => this.listeners.get(name).delete(fn); },
+  emit(name, ...args) { for (const fn of this.listeners.get(name) || []) fn(...args); },
+};
+function simRandom() { return W.rng(); }
 const ent = id => W && W.ents.get(id);
 const UNIT_R = u => { const d = UNITS[u.type]; if (d.naval) return u.type === 'transport' || u.type === 'galleon' ? 0.8 : 0.65; if (d.tags.includes('siege')) return 0.45; if (d.tags.includes('mounted') || u.type === 'cobra') return 0.35; return 0.25; };
 const hasTag = (type, tag) => UNITS[type] && UNITS[type].tags.includes(tag);
@@ -44,8 +51,10 @@ class Player {
 
 // ---------- world creation ----------
 function createWorld(spec, settings) {
+  const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n'));
   const n = spec.n, map = new GameMap(n);
   map.ter.set(spec.ter); map.elev.set(spec.elev);
+  for (const k of ['bridge', 'tun', 'trench']) if (spec[k]) map[k] = new Uint8Array(spec[k]);
   const rng = mulberry32(settings.seed >>> 0 || 1);
   for (let i = 0; i < n * n; i++) map.deco[i] = (rng() * 256) | 0;
   map.computeVH(); map.computeRegions();
@@ -95,6 +104,7 @@ function createWorld(spec, settings) {
   if (settings.fog === 'explored') human.explored.fill(1);
   recalcPop();
   updateVisibility(true);
+  GameHooks.emit('worldCreated', W);
   return W;
 }
 function applyCivBonus(p) {
@@ -117,7 +127,7 @@ function spawnFromSpec(o) {
   return spawnRes(o.k, o.x, o.y, o.v | 0);
 }
 function newId() { return W.nextId++; }
-function addEnt(e) { W.ents.set(e.id, e); W.list.push(e); return e; }
+function addEnt(e) { W.ents.set(e.id, e); W.list.push(e); GameHooks.emit('entityAdded', e); return e; }
 function spawnRes(k, x, y, v = 0) {
   const map = W.map; if (!map.inb(x, y)) return null;
   const amounts = { tree: 100, gold: 800, stone: 350, berry: 125, fish: v ? 225 : 200, shrub: 0 };
@@ -505,7 +515,7 @@ function fireProjectile(src, t, type, dmgFn, extra = {}) {
   const c = t.kind === 'unit' ? { x: t.x, y: t.y } : center(t);
   let tx = c.x, ty = c.y;
   const p = W.players[src.owner];
-  if (t.kind === 'unit' && t.path && t.pi < (t.path ? t.path.length : 0) && !(p && p.ballistics) && !UNITS[t.type].animal) { tx += (Math.random() - 0.5) * 0.8; ty += (Math.random() - 0.5) * 0.8; }
+  if (t.kind === 'unit' && t.path && t.pi < (t.path ? t.path.length : 0) && !(p && p.ballistics) && !UNITS[t.type].animal) { tx += (simRandom() - 0.5) * 0.8; ty += (simRandom() - 0.5) * 0.8; }
   const dist = Math.hypot(tx - s.x, ty - s.y);
   const speed = { arrow: 9, javelin: 7, stone: 6, boulder: 5, bolt: 12, bullet: 20, fire: 6, axe: 7, jav: 7 }[type] || 8;
   W.projs.push(Object.assign({ type, sx: s.x, sy: s.y, sz: src.kind === 'bld' ? 1.8 : 0.6, x: s.x, y: s.y, tx, ty, t: 0, dur: Math.max(0.1, dist / speed), target: t.id, src: src.id, owner: src.owner, dmg: dmgFn, arc: type === 'stone' || type === 'boulder' ? 0.4 : type === 'bullet' || type === 'fire' ? 0.02 : 0.15, dist }, extra));
@@ -694,8 +704,8 @@ function freeTileNear(b, naval, fromX, fromY) {
       const i = map.idx(x, y);
       const ok = naval ? (isWaterT(map.ter[i]) && !map.blk[i]) : (!isWaterT(map.ter[i]) && (!map.blk[i] || (ent(map.blk[i]) || {}).type === 'gate'));
       if (!ok) continue;
-      const d = fromX !== undefined ? Math.hypot(x - fromX, y - fromY) : (y - r.y1) * -1 + Math.random() * 0.1 + (x + y) * -0.01;
-      const dd = fromX !== undefined ? d : -(x + y) + Math.random();
+      const d = fromX !== undefined ? Math.hypot(x - fromX, y - fromY) : (y - r.y1) * -1 + simRandom() * 0.1 + (x + y) * -0.01;
+      const dd = fromX !== undefined ? d : -(x + y) + simRandom();
       if (dd < bd) { bd = dd; best = { x: x + 0.5, y: y + 0.5 }; }
     }
   }
@@ -752,7 +762,7 @@ function updateBuilding(b, dt) {
       const tgt = findTarget({ x: c.x, y: c.y, owner: b.owner, kind: 'bld', type: b.type }, range + d.size / 2);
       if (tgt) {
         b.cd = 2;
-        for (let k = 0; k < nArrows; k++) setTimeoutSim(k * 0.08, () => { if (!b.dead && !tgt.dead) fireProjectile(b, tgt, 'arrow', null, { dmgVal: computeDamage(b, tgt) }); });
+        for (let k = 0; k < nArrows; k++) setTimeoutSim(k * 0.08, { type: 'buildingArrow', source: b.id, target: tgt.id });
         Sound.play('bow', c.x, c.y);
       } else b.cd = 0.5;
     }
@@ -762,7 +772,14 @@ function updateBuilding(b, dt) {
   // garrison heal
   for (const id of b.garrison) { const u = ent(id); if (u && u.hp < u.maxhp) u.hp = Math.min(u.maxhp, u.hp + dt * 0.5); }
 }
-function setTimeoutSim(delay, fn) { W.timers = W.timers || []; W.timers.push({ at: W.t + delay, fn }); }
+function setTimeoutSim(delay, action) { W.timers = W.timers || []; W.timers.push({ at: W.t + delay, ...(typeof action === 'function' ? { fn: action } : { action }) }); }
+function runSimTimer(timer) {
+  if (timer.fn) { timer.fn(); return; }
+  if (timer.action && timer.action.type === 'buildingArrow') {
+    const b = ent(timer.action.source), target = ent(timer.action.target);
+    if (b && target && !b.dead && !target.dead) fireProjectile(b, target, 'arrow', null, { dmgVal: computeDamage(b, target) });
+  }
+}
 function findTarget(src, range) {
   let best = null, bd = 1e9;
   const cands = unitsNear(src.x, src.y, range + 1, u => !u.inside);
@@ -816,7 +833,7 @@ function updateUnit(u, dt) {
     // auto behaviours
     u.scanT = (u.scanT || 0) - dt;
     if (u.scanT <= 0) {
-      u.scanT = 0.5 + Math.random() * 0.3;
+      u.scanT = 0.5 + simRandom() * 0.3;
       if (u.type === 'monk') autoMonk(u);
       else if (d.atk > 0 && u.type !== 'villager' && !d.animal) {
         const t = findTargetFor(u, d.los + (d.range ? 1 : 0));
@@ -954,7 +971,7 @@ function separate(u, dt) {
       const push = (min - dd) * 0.5 * Math.min(1, dt * 6);
       const nx = u.x + dx / dd * push, ny = u.y + dy / dd * push;
       if (tilePassFor(u, nx, ny)) { u.x = nx; u.y = ny; }
-    } else if (dd <= 0.0001) { u.x += (Math.random() - 0.5) * 0.05; u.y += (Math.random() - 0.5) * 0.05; }
+    } else if (dd <= 0.0001) { u.x += (simRandom() - 0.5) * 0.05; u.y += (simRandom() - 0.5) * 0.05; }
   }
 }
 
@@ -1142,10 +1159,11 @@ function convertLogic(u, dt) {
   let chance = 0;
   if (u.convT > 4) chance = dt * 0.28;
   if (hasTag(t.type, 'mounted')) chance *= 0.6;
-  if (Math.random() < chance || u.convT > 10) {
+  if (simRandom() < chance || u.convT > 10) {
     const old = t.owner;
     t.owner = u.owner; setOrder(t, null);
-    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) cu.owner = u.owner; }
+    t.queue = []; t.stance = undefined; t.defHome = null; t.buildQueue = null;
+    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) { cu.owner = u.owner; cu.queue = []; cu.stance = undefined; cu.defHome = null; } }
     recalcPop();
     emitFx('convert', t.x, t.y, 12); Sound.play('converted', t.x, t.y);
     if (u.owner === W.humanId) msg(`Converted an enemy ${UNITS[t.type].name}!`, '#dfb');
@@ -1195,7 +1213,7 @@ function ringBell(p) {
     u.bellCarry = u.carry ? Object.assign({}, u.carry) : null;
     u.bellRung = true;
     if (best) { load.set(best.id, load.get(best.id) + 1); setOrder(u, { t: 'garrison', id: best.id, bell: true }); }
-    else { u.bellWait = true; const tc = tcs[0]; if (tc) { const c = center(tc); setOrder(u, { t: 'move', x: c.x + (Math.random() - 0.5) * 3, y: c.y + 3 }); } }
+    else { u.bellWait = true; const tc = tcs[0]; if (tc) { const c = center(tc); setOrder(u, { t: 'move', x: c.x + (simRandom() - 0.5) * 3, y: c.y + 3 }); } }
   }
   if (p.id === W.humanId) { msg('Town Bell rung! Villagers take shelter.', '#fd8'); }
   Sound.bell();
@@ -1253,7 +1271,7 @@ function transportUnload(s, dt) {
     u.inside = 0; u.x = t.x + 0.5 + ((k % 3) - 1) * 0.3; u.y = t.y + 0.5 + (((k / 3) | 0) - 1) * 0.3; k++;
     if (!tilePassFor(u, u.x, u.y)) { u.x = t.x + 0.5; u.y = t.y + 0.5; }
     const land = !isWaterT(W.map.ter[W.map.idx(Math.max(0, o.x | 0), Math.max(0, o.y | 0))]);
-    if (o.then) setOrder(u, Object.assign({}, o.then)); else if (land) setOrder(u, { t: 'move', x: o.x + (Math.random() - 0.5) * 2, y: o.y + (Math.random() - 0.5) * 2 });
+    if (o.then) setOrder(u, Object.assign({}, o.then)); else if (land) setOrder(u, { t: 'move', x: o.x + (simRandom() - 0.5) * 2, y: o.y + (simRandom() - 0.5) * 2 });
   }
   Sound.play('garrison', s.x, s.y);
   setOrder(s, null);
@@ -1303,7 +1321,7 @@ function animalAI(u, dt) {
   if (u.type === 'sheep') {
     u.capT = (u.capT || 0) - dt;
     if (u.capT <= 0) { u.capT = 0.5; sheepCapture(u); }
-    if (!u.order) { if (u.path && u.pi < u.path.length) followPath(u, dt); else { u.anim = 'idle'; if (u.aiT <= 0) { u.aiT = 4 + Math.random() * 6; if (Math.random() < 0.4) { const nx = u.x + (Math.random() - 0.5) * 1.5, ny = u.y + (Math.random() - 0.5) * 1.5; if (tilePassFor(u, nx, ny)) moveToPoint(u, nx, ny); } } } separate(u, dt); }
+    if (!u.order) { if (u.path && u.pi < u.path.length) followPath(u, dt); else { u.anim = 'idle'; if (u.aiT <= 0) { u.aiT = 4 + simRandom() * 6; if (simRandom() < 0.4) { const nx = u.x + (simRandom() - 0.5) * 1.5, ny = u.y + (simRandom() - 0.5) * 1.5; if (tilePassFor(u, nx, ny)) moveToPoint(u, nx, ny); } } } separate(u, dt); }
     return;
   }
   if (u.order && u.order.t === 'attack') {
@@ -1328,10 +1346,10 @@ function animalAI(u, dt) {
   if (u.path && u.pi < u.path.length) { followPath(u, dt); return; }
   u.anim = 'idle';
   if (u.aiT <= 0) {
-    u.aiT = 3 + Math.random() * 8;
-    if (Math.random() < 0.5) {
+    u.aiT = 3 + simRandom() * 8;
+    if (simRandom() < 0.5) {
       const hx = u.homeX || u.x, hy = u.homeY || u.y;
-      const nx = hx + (Math.random() - 0.5) * 8, ny = hy + (Math.random() - 0.5) * 8;
+      const nx = hx + (simRandom() - 0.5) * 8, ny = hy + (simRandom() - 0.5) * 8;
       if (tilePassFor(u, nx, ny)) moveToPoint(u, nx, ny);
     }
   }
@@ -1427,8 +1445,9 @@ function msg(text, color) { W.msgs.push({ text, color: color || '#fff', t: perfo
 
 // ---------- main tick ----------
 function worldTick(dt) {
+  GameHooks.emit('beforeTick', dt);
   W.t += dt; W.tick++;
-  if (W.timers && W.timers.length) { for (let i = W.timers.length - 1; i >= 0; i--) if (W.timers[i].at <= W.t) { const f = W.timers[i].fn; W.timers.splice(i, 1); f(); } }
+  if (W.timers && W.timers.length) { for (let i = W.timers.length - 1; i >= 0; i--) if (W.timers[i].at <= W.t) { const timer = W.timers[i]; W.timers.splice(i, 1); runSimTimer(timer); } }
   rebuildGrid();
   const list = W.list.slice();
   for (const e of list) {
@@ -1446,6 +1465,7 @@ function worldTick(dt) {
   for (let i = 1; i < W.players.length; i++) { const p = W.players[i]; if (p.ai && p.alive) p.ai.update(dt); }
   if (W.tick % 40 === 0) checkVictory();
   if (W.tick % 10 === 0) W.market.food += (100 - W.market.food) * 0.01, W.market.wood += (100 - W.market.wood) * 0.01, W.market.stone += (130 - W.market.stone) * 0.01;
+  GameHooks.emit('afterTick', dt);
 }
 function isAlive(pid) {
   for (const e of W.list) {
@@ -1474,14 +1494,22 @@ function checkVictory() {
 function endGame(win) { W.over = true; W.won = win; UI.showEnd(win); if (win) Sound.fanfare(); else Sound.defeat(); }
 
 // ---------- commands used by UI & AI ----------
+let _farmsW = null, _farmsTick = -1, _farmsLen = -1, _farmsList = [];
+function worldFarms() {
+  if (_farmsW !== W || _farmsTick !== W.tick || _farmsLen !== W.list.length) {
+    _farmsW = W; _farmsTick = W.tick; _farmsLen = W.list.length;
+    _farmsList = W.list.filter(f => f.kind === 'bld' && BUILDINGS[f.type].farm);
+  }
+  return _farmsList;
+}
 function canPlace(p, type, x, y, ignoreExplored) {
-  const d = BUILDINGS[type], s = d.size, map = W.map;
+  const d = BUILDINGS[type], s = d.size, map = W.map, farms = worldFarms();
   if (x < 0 || y < 0 || x + s > W.n || y + s > W.n) return 'Out of bounds';
   let minE = 9, maxE = -1, landAdj = false;
   for (let yy = y; yy < y + s; yy++) for (let xx = x; xx < x + s; xx++) {
     const i = map.idx(xx, yy);
     if (map.blk[i]) { const b = ent(map.blk[i]); if (b) return 'Blocked'; map.blk[i] = 0; }
-    for (const f of W.list) if (f.kind === 'bld' && BUILDINGS[f.type].farm && xx >= f.x && xx < f.x + 3 && yy >= f.y && yy < f.y + 3) return 'Blocked by farm';
+    for (const f of farms) if (xx >= f.x && xx < f.x + 3 && yy >= f.y && yy < f.y + 3) return 'Blocked by farm';
     const water = isWaterT(map.ter[i]);
     if (d.water ? !water : water) return d.water ? 'Docks must be on water next to the shore' : 'Cannot build on water';
     if (!ignoreExplored && p && p.human && !p.explored[i]) return 'Unexplored area';

@@ -259,10 +259,7 @@ function terraOrder(units, op, tiles) {
 }
 
 // ---------- engine hooks ----------
-if (typeof worldTick === 'function') {
-  const _wt = worldTick;
-  worldTick = function (dt) {
-    _wt(dt);
+GameHooks.on('afterTick', dt => {
     if (!W.map) return;
     terraFlush();
     W.saplAcc = (W.saplAcc || 0) + dt;
@@ -270,8 +267,7 @@ if (typeof worldTick === 'function') {
       const d = W.saplAcc; W.saplAcc = 0;
       for (const e of W.list) if (e.kind === 'res' && e.sap) { e.amount = Math.min(e.max, e.amount + e.max * d / TERRA.saplingSecs); if (e.amount >= e.max) e.sap = 0; }
     }
-  };
-}
+});
 if (typeof unitPass === 'function') {
   const _up = unitPass;
   unitPass = function (u) {

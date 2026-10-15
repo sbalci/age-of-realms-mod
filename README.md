@@ -1,6 +1,6 @@
 # Age of Realms
 
-A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. You grow a settlement, advance through four ages, build an economy and an army, and defeat computer rivals. It has no build step, no dependencies and no network calls.
+A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. You grow a settlement, advance through four ages, build an economy and an army, and defeat computer rivals. Playing requires no build step or external network calls. An optional Three.js renderer is bundled locally; development dependencies support browser tests and updating that bundle.
 
 It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison experiment](https://github.com/Barty-Bart/opus-55-effort-comparison) and adds systems for mortality, water, terraforming and engineering. The six original builds are archived unchanged in [`legacy/`](legacy/).
 
@@ -19,6 +19,12 @@ python3 -m http.server 8000 --bind 127.0.0.1     # Windows: py -m http.server 80
 Open http://127.0.0.1:8000 and press **Play**, or go straight to http://127.0.0.1:8000/game/.
 
 A local server is required. Opening `index.html` directly may not load the scripts. Use a desktop keyboard and mouse. Audio starts after the first click.
+
+Press **Full Screen** in the menu or game HUD to fill the display. Press **Esc** or **Exit Full Screen** to return. The canvas follows the available window size.
+
+The optional **2.5D prototype** uses Three.js for elevated terrain, procedural building meshes, lighting and shadows. Units, resources and relics retain their existing sprite art, with the same simulation, commands and saves. Click **Try 2.5D Graphics**, or open `/game/?renderer=three`; the HUD button switches back to Canvas 2D. The choice is remembered locally, and `/game/?renderer=canvas` forces the original renderer. WebGL2 is required; initialization failures fall back to Canvas 2D.
+
+This prototype keeps the fixed isometric camera and uses terrain raycasting for commands. Engineering layers are visualized, and terrain edits rebuild the mesh. Projectiles, selection and placement indicators remain canvas overlays; some original cosmetic effects are exclusive to Canvas 2D. Buildings use procedural shapes rather than imported models. Renderer counters are available at `window.__game.T25D.stats`. Three.js and its MIT license live in `game/vendor/three`; after updating the pinned development dependency, run `npm run vendor:three` to refresh those files.
 
 ## What's in the game
 
@@ -122,6 +128,19 @@ A local server is required. Opening `index.html` directly may not load the scrip
 
 The in-game **Help** (F1) describes every system.
 
+### Learning, rules and saving
+
+- **Learn to Play** starts five interactive lessons: selection, gathering, houses, villager training and advancing an age. A peaceful practice opponent gives you time to learn.
+- Game Setup exposes individual rules and **Age of Realms**, **Beginner**, and **Classic economy** presets. Beginner removes aging and water pressure; Classic disables the added economy and engineering systems. Rules apply equally to human and computer players. URL switches supply the initial defaults; the setup controls can override them.
+- **Controls** lets you remap pause, menu, help, idle-unit, last-attack and music shortcuts. Visible unit command keys take precedence. Groups, camera arrows and chat keys remain reserved.
+- **Game Menu → Save Match** stores a manual save. **Export Match** downloads a portable JSON file. **Load Match** is available from the main menu and game menu, with separate manual and autosave slots.
+- Autosaves run every 60 **game seconds**, including spectator matches. The save retains resources, units, technologies, orders, shared engineering jobs, AI state, RNG position, fog memory, victory timers and tutorial progress. Cosmetic particles are regenerated. Local saves belong to the browser and site address; use Export Match to move them elsewhere. If storage is full or unavailable, the game reports it and keeps the match running.
+- Combat, movement and victory settings are saved too. Advanced URL switches that remove Wonder buildings or Imperial technologies must match the original match when loading; incompatible saves are rejected without replacing the current world.
+- Matches pause when the browser loses focus or is hidden. Held camera keys are cleared so scrolling cannot get stuck. Modal dialogs keep keyboard focus inside them.
+- Maps use a versioned format that retains bridge, tunnel and trench layers. Old maps without a version still load. Imports are validated before replacing the editor world; supported dimensions are 16–256 tiles per side.
+
+Computer players plan short bridges to reach disconnected enemy territory, train sappers for useful cliff tunnels, and place small defensive trenches during ranged raids. Decisions have a cooldown and reserve resources for the economy.
+
 ### URL switches
 
 Add these to the game address, e.g. `game/?aging=off&thirst=off`:
@@ -167,6 +186,9 @@ game/             the game (all development happens here)
   js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat, idle buttons
   js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
   js/movement.js  corner sliding, cliff-safe separation, sidestepping, unstick
+  js/session.js   versioned saves, autosaves and restore
+  js/onboarding.js rule presets, remappable shortcuts and interactive lessons
+  js/engineering.js bounded AI bridge, tunnel and trench planning
   js/main.js      boot and game loop
 tests/            headless tests (Node, no dependencies)
 legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)
@@ -175,8 +197,12 @@ legacy/           the six original experiment builds, prompts and metrics (archi
 ## Development
 
 - All scripts are classic scripts that share globals. They load in the order given in `game/index.html`.
-- The mod files come after the engine and extend it by wrapping its global functions, for example `const _f = f; f = function (...) { ... _f(...) ... }`. New systems should follow the same pattern, in a new file loaded before `main.js`.
-- Run the tests with `node tests/run-all.js` (add `--full` to load every module into every suite), or run one suite, e.g. `node tests/terraform.test.js`. Each suite loads the engine in a Node `vm` context and simulates games headlessly.
+- Existing mods wrap engine functions. New systems should prefer `GameHooks.on(name, callback)`, which returns an unsubscribe function. The events are `entityAdded`, `worldCreated`, `worldRestored`, `beforeTick`, and `afterTick`. Water, wells, terrain jobs, victory tracking and unit interpolation now use these hooks. `entityAdded` runs before final unit/building stats are assigned; `worldCreated` runs after base initialization. UI preparation follows `worldRestored`.
+- Gameplay randomness uses `simRandom()` / `W.rng`, with its state retained in saves. Cosmetic animation, audio and particles use a separate `Math.random()` stream. A seed and the same orders reproduce the simulation.
+- Run `node tests/run-all.js --quick` for focused checks, `node tests/run-all.js --full` for integration and long AI simulations, or a single suite such as `node tests/terraform.test.js`. Headless tests have no dependencies; the new harness reads the real HTML script order. The runner reports process errors, timeouts and failing output.
+- For browser tests: `npm ci`, `npx playwright install chromium`, then `npm run test:browser`. Playwright is development-only. The test server binds to localhost; tests cover setup, lessons, save/load, imports and keyboard focus. GitHub Actions runs headless and browser checks on pushes and pull requests.
+- Reproducible balance runs: `node tests/tournament.js --minutes=20 --seeds=1,7 --maps=land,coastal,islands --civs=franks,turks --out=results.json`. Each pairing swaps starting positions. JSON records completion, winner, economy, age, population, losses and inactivity. Short timed-out matches are smoke checks, not evidence of balance.
+- `window.__game.PERF` exposes simulation/render milliseconds, effective speed, backlog and dropped time. The loop retains unfinished ticks, budgets up to 32 ticks per frame, caps extreme backlogs at 2 seconds, and shows “catching up” beside game speed when overloaded. Post-victory time advances independently of rendering FPS.
 - There is a single branch: `main`.
 
 ## Credits

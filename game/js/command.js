@@ -28,6 +28,8 @@ if (typeof location !== 'undefined' && location.search) {
   for (const k of ['queue', 'formation', 'accuracy', 'rescue', 'breach', 'stances', 'flee', 'hotkeys']) if (q.get(k) === 'off') CMD[k] = false;
   if (q.get('resign') === 'off') CMD.autoresign = false;
 }
+GameHooks.on('worldCreated', () => { CMD.flying = []; CMD.capture = null; CMD.user = CMD.mouseShift = false; });
+GameHooks.on('worldRestored', () => { CMD.flying = W.projs.filter(p => p.miss); CMD.capture = null; CMD.user = CMD.mouseShift = false; });
 
 // ---------- helpers ----------
 function cmdMilitary(u) {
@@ -206,9 +208,9 @@ if (typeof fireProjectile === 'function') {
     const r = _fireProjectile.apply(this, arguments);
     if (!CMD.accuracy || W.projs.length !== n0 + 1) return r;
     const p = W.projs[n0];
-    if (Math.random() < cmdAccuracy(src, t, p)) return r;
+    if (simRandom() < cmdAccuracy(src, t, p)) return r;
     const speed = p.dur > 0 && p.dist > 0 ? p.dist / p.dur : 8;
-    const a = Math.random() * Math.PI * 2, d = CMD.missMin + Math.random() * (CMD.missMax - CMD.missMin);
+    const a = simRandom() * Math.PI * 2, d = CMD.missMin + simRandom() * (CMD.missMax - CMD.missMin);
     p.tx = Math.max(0.05, Math.min(W.n - 0.05, p.tx + Math.cos(a) * d)); p.ty = Math.max(0.05, Math.min(W.n - 0.05, p.ty + Math.sin(a) * d));
     p.dist = Math.hypot(p.tx - p.sx, p.ty - p.sy); p.dur = Math.max(0.1, p.dist / speed);
     p.miss = true; p.aim = p.target; p.target = 0;    // lands on the ground: no damage (a splash still bursts where it lands)
@@ -402,7 +404,7 @@ if (typeof updateUnit === 'function') {
       if ((u._pf || 0) >= CMD.pathFails || (W.map.inb(cx, cy) && !unitPass(u)(W.map.idx(cx, cy)))) { u._pf = 0; cmdRescue(u); }
     }
     if (!u.order && u.queue && u.queue.length) cmdNext(u);
-    if (CMD.stances && u.stance && u.owner === W.humanId) cmdStanceTick(u);
+    if (CMD.stances && u.stance) cmdStanceTick(u);
     const r = _updateUnit.apply(this, arguments);
     if (u.dead || u.dying) return r;
     if (CMD.breach && u._pfT === W.t && cmdMilitary(u)) cmdBreachCheck(u);
@@ -626,7 +628,9 @@ if (typeof updateTopbar === 'function') {
       s.onclick = e => cmdSetSpeed(e.shiftKey ? -1 : 1);
       clock.parentNode.insertBefore(s, clock.nextSibling);
     }
-    const txt = `⏩ ×${W.speed || 1}`; if (s.textContent !== txt) s.textContent = txt;
+    const lagging = typeof PERF !== 'undefined' && PERF.lag > 0.1;
+    const txt = `⏩ ×${W.speed || 1}${lagging ? ' · catching up' : ''}`; if (s.textContent !== txt) s.textContent = txt;
+    s.title = lagging ? `Simulation backlog ${PERF.lag.toFixed(2)} seconds. Reduce game speed to ease the load.` : 'Game speed (+ / − to change)';
   };
 }
 if (typeof openGameMenu === 'function') {
@@ -654,7 +658,7 @@ function cmdKey(e) {
   const modal = document.querySelector('#modal'); if (modal && !modal.classList.contains('hidden')) return;
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const k = e.key, cardHas = key => UI.cmds && UI.cmds.some(c => c.key === key);
+  const k = typeof controlKey === 'function' ? controlKey(e.key) : e.key, cardHas = key => UI.cmds && UI.cmds.some(c => c.key === key);
   if (k === ',') {
     const idle = W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && cmdMilitary(u) && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length));
     if (idle.length) { UI.idleMilIdx = ((UI.idleMilIdx === undefined ? -1 : UI.idleMilIdx) + 1) % idle.length; const u = idle[UI.idleMilIdx]; selectEnts([u], false); centerCamOn(u.x, u.y); }

@@ -88,10 +88,7 @@ if (typeof gatherRate === 'function') {
     return p && p.waterDef > 0 ? v * Math.max(WELLM.gatherFloor, 1 - p.waterDef * 1.5) : v;
   };
 }
-if (typeof worldTick === 'function') {
-  const _wt = worldTick;
-  worldTick = function (dt) {
-    _wt(dt);
+GameHooks.on('afterTick', dt => {
     if (!WELLM.enabled || !W.map) return;
     W.wlAcc = (W.wlAcc || 0) + dt;
     if (W.wlAcc < 1) return;
@@ -103,8 +100,7 @@ if (typeof worldTick === 'function') {
     }
     const h = W.players[W.humanId];
     if (h && h.waterDef > WELLM.thirstAt && W.t - (W.wlMsg || -99) > 60) { W.wlMsg = W.t; msg('Your people are thirsty. Dig wells, or settle by a river or lake.', '#8cf'); }
-  };
-}
+});
 
 // ---------- AI: dig wells before the people go thirsty ----------
 if (typeof AIPlayer === 'function') {
@@ -116,7 +112,7 @@ if (typeof AIPlayer === 'function') {
       const wells = this.mine(e => e.kind === 'bld' && e.type === 'well');
       const tcs = this.mine(e => e.kind === 'bld' && e.type === 'tc' && e.built);
       if (tcs.length && p.pop + 6 >= p.waterCap && !wells.some(w => !w.built) && wells.length < 16 && p.res.wood >= 40 && p.res.stone >= 10) {
-        const home = center(tcs[(Math.random() * tcs.length) | 0]);
+        const home = center(tcs[(simRandom() * tcs.length) | 0]);
         this.build('well', home, 3, 10) || this.build('well', home, 3, 14);
       }
     }

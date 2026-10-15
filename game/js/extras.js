@@ -185,7 +185,7 @@ function exSpectateBegin(settings) {
   W.spectate = true;
   if (p.name === settings.name || p.name === 'Player') {
     const pool = (typeof AI_NAMES !== 'undefined' ? AI_NAMES : ['Observer']).filter(n => !W.players.some(q => q && q.name === n));
-    p.name = pool.length ? pool[(Math.random() * pool.length) | 0] : p.name + ' (AI)';
+    p.name = pool.length ? pool[(simRandom() * pool.length) | 0] : p.name + ' (AI)';
   }
   p.ai = new AIPlayer(p, settings.difficulty || 'standard');
   W.revealAll = true; W.noFog = true; p.explored.fill(1);
@@ -250,7 +250,7 @@ if (typeof window !== 'undefined') {
 function exIdleList(kind) {
   if (!W || !W.list) return [];
   const mil = u => typeof cmdMilitary === 'function' ? cmdMilitary(u) : (UNITS[u.type].atk > 0 && u.type !== 'villager' && !hasTag(u.type, 'animal'));
-  return W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length) && (kind === 'vil' ? u.type === 'villager' : mil(u)));
+  return W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length) && (kind === 'vil' ? (u.type === 'villager' || u.type === 'sapper') : mil(u)));
 }
 function exSelectIdle(kind, all) {
   const list = exIdleList(kind);

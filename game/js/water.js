@@ -276,9 +276,9 @@ function wmFishTick(dt) {
     const prev = S.target.get(key) || 0;
     if (rec.fish.length > prev) S.target.set(key, rec.fish.length);
     if (!doSpawn || rec.fish.length >= (S.target.get(key) || 0) || rec.breeders < 2) continue;
-    const parent = rec.fish[(Math.random() * rec.fish.length) | 0];
+    const parent = rec.fish[(simRandom() * rec.fish.length) | 0];
     for (let t = 0; t < 14; t++) {
-      const x = Math.round(parent.x + (Math.random() - 0.5) * 7), y = Math.round(parent.y + (Math.random() - 0.5) * 7);
+      const x = Math.round(parent.x + (simRandom() - 0.5) * 7), y = Math.round(parent.y + (simRandom() - 0.5) * 7);
       if (!map.inb(x, y) || map.blk[map.idx(x, y)]) continue;
       if (!isWaterT(map.ter[map.idx(x, y)]) || waterBodyAt(map, x, y) !== rec.b) continue;
       if (W.list.some(u => u.kind === 'unit' && Math.abs(u.x - x - 0.5) < 1 && Math.abs(u.y - y - 0.5) < 1)) continue;
@@ -288,15 +288,11 @@ function wmFishTick(dt) {
     }
   }
 }
-if (typeof worldTick === 'function') {
-  const _wt = worldTick;
-  worldTick = function (dt) {
-    _wt(dt);
+GameHooks.on('afterTick', dt => {
     if (!WMOD.fishRegen || !W.map) return;
     const S = wmState(); S.acc += dt;
     if (S.acc >= 1) { const d = S.acc; S.acc = 0; wmFishTick(d); }
-  };
-}
+});
 
 // ---------- look: fresh water reads differently from the sea ----------
 if (typeof drawTile === 'function') {
