@@ -59,7 +59,7 @@ label.check { display: flex; align-items: center; gap: 6px; }
 .cmd:hover { border-color: #ffe39a; filter: brightness(1.2); }
 .cmd .hk { position: absolute; right: 1px; bottom: 0; background: rgba(0,0,0,0.75); color: #ffd76a; font: bold 11px sans-serif; padding: 0 3px; border-radius: 2px; }
 .cmd.locked { filter: grayscale(1) brightness(0.55); }
-.cmd.locked::after { content: '🔒'; position: absolute; left: 2px; top: 1px; font-size: 12px; }
+.cmd.locked::after { content: ''; position: absolute; left: 3px; top: 3px; width: 11px; height: 11px; background: #ffd76a; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='8' rx='1.5'/%3E%3Cpath d='M5 7V5a3 3 0 0 1 6 0v2' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='8' rx='1.5'/%3E%3Cpath d='M5 7V5a3 3 0 0 1 6 0v2' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E") center/contain no-repeat; filter: drop-shadow(0 1px 1px #000); }
 .cmd.poor { filter: saturate(0.4) brightness(0.8); border-color: #a04a3a; }
 #tooltip { position: fixed; z-index: 50; max-width: 320px; background: rgba(24,16,8,0.97); border: 1px solid #c09a54; padding: 8px 10px; border-radius: 4px; font-size: 14px; pointer-events: none; }
 .tt-name { font-family: 'Cinzel', serif; color: var(--gold); font-size: 15px; }
@@ -145,3 +145,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 body.vic-score-open #tipbox { top: auto; bottom: 186px; }
 .mini.grp { width: 40px; height: 40px; }
 .mini.grp b { position: absolute; right: 1px; top: 0; padding: 0 3px; border-radius: 6px; background: rgba(0,0,0,.72); color: #ffe39a; font: bold 11px/14px sans-serif; }
+svg.gl { display: inline-block; vertical-align: -0.14em; flex: none; }
+.btn.big svg.gl { margin-right: 4px; color: var(--gold, #d8b25a); }
+#selinfo .stat { white-space: nowrap; margin-right: 6px; }
+#selinfo .stat svg.gl { color: #d8b25a; }
+.tt-lock svg.gl { color: #ffb070; margin-right: 3px; }
+#topbar .res .gc { margin-left: 3px; font-size: 11px; color: #b9a57c; font-weight: 600; vertical-align: 1px; }
+#topbar .res .gc:not(:empty)::before { content: '·'; margin-right: 2px; opacity: .7; }
+@media (max-height: 820px) {
+  .menu-box { padding: 16px 36px; }
+  .menu-box .title { font-size: 40px; margin: 0.1em 0; }
+  .menu-box .btn.big { margin: 6px 0; padding: 7px; font-size: 17px; }
+  .menu-box .display-buttons { margin: 8px 0; }
+}

@@ -119,7 +119,7 @@ function buildSetup() {
         </select></label>
         <label id="lab-custom" class="${s.mapType === 'custom' ? '' : 'hidden'}">Custom map <select id="s-custom">${maps.map(m => `<option ${m === s.customMap ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select></label>
         <label>Map size <select id="s-size">${Object.keys(MAP_SIZES).map(k => `<option value="${k}" ${s.size === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)} (${MAP_SIZES[k]}×${MAP_SIZES[k]})</option>`).join('')}</select></label>
-        <label>Map seed <span class="inline"><input id="s-seed" type="number" value="${s.seed}"><button class="btn small" id="s-reseed">🎲</button></span></label>
+        <label>Map seed <span class="inline"><input id="s-seed" type="number" value="${s.seed}"><button class="btn small" id="s-reseed" title="New random seed">${GLYPH('dice')}</button></span></label>
         <canvas id="s-preview" width="220" height="120"></canvas>
         <h3>Rules</h3>
         <label>Starting age <select id="s-age">${AGES.map((a, i) => `<option value="${i}" ${+s.startAge === i ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
@@ -244,7 +244,7 @@ function initHUD() {
     <div class="res" id="r-vil" title="Idle villagers (press . to select)">💤 <span>0</span></div>
     <div id="age-label">Dark Age</div>
     <div id="clock">00:00</div>
-    <div class="tb-btns"><button class="btn small" id="b-dip">Diplomacy</button><button class="btn small" id="b-obj">Help</button><button class="btn small" id="b-snd">🔊</button><button class="btn small" id="b-menu">Menu (F10)</button></div>
+    <div class="tb-btns"><button class="btn small" id="b-dip">Diplomacy</button><button class="btn small" id="b-obj">Help</button><button class="btn small" id="b-snd" title="Audio settings">${GLYPH('sound')}</button><button class="btn small" id="b-menu">Menu (F10)</button></div>
   </div>
   <div id="msgs"></div>
   <div id="tipbox" class="hidden"></div>
@@ -285,7 +285,7 @@ function updateTopbar() {
   const idle = W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && (e.type === 'villager' || e.type === 'sapper') && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)).length;
   $('#r-vil span').textContent = idle;
   $('#age-label').textContent = AGES[p.age] + (p.researching.has('feudal') || p.researching.has('castleage') || p.researching.has('imperial') ? ' (advancing…)' : '');
-  $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' ⚡' : '') + (W.speed !== 1 && !document.querySelector('#r-speed') ? ` ×${W.speed}` : '');
+  $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' (instant)' : '') + (W.speed !== 1 && !document.querySelector('#r-speed') ? ` ×${W.speed}` : '');
   // messages
   const box = $('#msgs'); const now = performance.now();
   const html = W.msgs.filter(m => now - m.t < 9000).map(m => `<div style="color:${m.color}">${escapeHtml(m.text)}</div>`).join('');
@@ -393,7 +393,7 @@ function runCmd(c) {
 }
 function showTip(c, anchor) {
   const t = $('#tooltip');
-  t.innerHTML = `<div class="tt-name">${c.name} <span class="hk2">[${c.label || c.key}]</span></div>${c.cost ? '<div>' + costHtml(c.cost) + (c.time ? ` <span class="small">⏱${c.time}s</span>` : '') + '</div>' : ''}<div class="tt-desc">${c.desc || ''}</div>${c.lock ? `<div class="tt-lock">🔒 ${c.lock}</div>` : ''}`;
+  t.innerHTML = `<div class="tt-name">${c.name} <span class="hk2">[${c.label || c.key}]</span></div>${c.cost ? '<div>' + costHtml(c.cost) + (c.time ? ` <span class="small">${GLYPH('clock')} ${c.time}s</span>` : '') + '</div>' : ''}<div class="tt-desc">${c.desc || ''}</div>${c.lock ? `<div class="tt-lock">${GLYPH('lock')} ${c.lock}</div>` : ''}`;
   t.classList.remove('hidden');
   const r = anchor.getBoundingClientRect();
   t.style.left = Math.min(window.innerWidth - 330, r.left) + 'px'; t.style.bottom = (window.innerHeight - r.top + 8) + 'px';
@@ -427,7 +427,7 @@ function renderSelInfo() {
   if (e.kind === 'unit') {
     const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner) : d.name; icon = 'unit:' + e.type + (e.owner !== W.humanId && e.owner > 0 ? '@' + e.owner : '');
     if (!d.animal || e.owner) {
-      const rng = statU(e, 'range'); lines.push(`⚔ ${statU(e, 'atk')}${d.range ? ` 🎯 ${d.range + rng}` : ''} 🛡 ${statU(e, 'ma')}/${statU(e, 'pa')}`);
+      const rng = statU(e, 'range'); lines.push(`<span class="stat">${GLYPH('sword', 'Attack')} ${statU(e, 'atk')}</span>${d.range ? ` <span class="stat">${GLYPH('target', 'Range')} ${d.range + rng}</span>` : ''} <span class="stat">${GLYPH('shield', 'Armor (melee/pierce)')} ${statU(e, 'ma')}/${statU(e, 'pa')}</span>`);
     }
     if (e.carry && e.carry.amt > 0) lines.push(`Carrying ${Math.floor(e.carry.amt)} ${e.carry.res}`);
     if (e.order) lines.push(`<span class="dim">${orderLabel(e)}</span>`);
@@ -763,7 +763,7 @@ UI.showEnd = function (win) {
   if (UI.fromEditor) btns.push(['Return to Editor', () => { UI.gameRunning = false; Editor.open(UI.fromEditorName); }]);
   btns.push(['Main Menu', () => { UI.gameRunning = false; showScreen('menu'); }]);
   btns.push(['Keep watching', () => { }]);
-  openModal(win ? '🏆 Victory!' : '💀 Defeat', `<p>${win ? 'All rival players have been defeated or are your allies.' : 'Your civilization has fallen.'} Time: ${fmtTime(W.t)}</p><table class="stats"><tr><th>Player</th><th>Civ</th><th>Age</th><th>Kills</th><th>Lost</th><th>Gathered</th><th>Relic gold</th><th>Trade gold</th><th>Status</th></tr>${rows}</table>`, btns);
+  openModal(win ? GLYPH('trophy') + ' Victory!' : GLYPH('skull') + ' Defeat', `<p>${win ? 'All rival players have been defeated or are your allies.' : 'Your civilization has fallen.'} Time: ${fmtTime(W.t)}</p><table class="stats"><tr><th>Player</th><th>Civ</th><th>Age</th><th>Kills</th><th>Lost</th><th>Gathered</th><th>Relic gold</th><th>Trade gold</th><th>Status</th></tr>${rows}</table>`, btns);
 };
 // ---------- diplomacy ----------
 function openDiplomacy() {

@@ -94,7 +94,7 @@ const Editor = {
         <select id="ed-gsize">${Object.keys(MAP_SIZES).map(k => `<option ${k === 'small' ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
         <div class="row"><button class="btn small" id="ed-gen">New generated</button><button class="btn small" id="ed-blank">New blank</button></div>
         <div class="row"><input id="ed-name" value="My Map" maxlength="30"><button class="btn small" id="ed-save">Save</button></div>
-        <div class="row"><select id="ed-list"></select><button class="btn small" id="ed-load">Load</button><button class="btn small" id="ed-del">🗑</button></div>
+        <div class="row"><select id="ed-list"></select><button class="btn small" id="ed-load">Load</button><button class="btn small" id="ed-del" title="Delete saved map">${typeof GLYPH === 'function' ? GLYPH('trash') : 'Delete'}</button></div>
         <div class="row"><button class="btn small" id="ed-export">Export file</button><label class="btn small">Import file<input type="file" id="ed-import" accept=".json,application/json" hidden></label></div>
         <div class="row"><button class="btn primary" id="ed-play">▶ Save & Play</button><button class="btn small" id="ed-validate">Validate</button><button class="btn small" id="ed-exit">Exit</button></div>
       </div>
@@ -102,12 +102,12 @@ const Editor = {
         <button class="tool" data-tool="select" title="Select / move (drag) — Delete key removes">✥ Select</button>
         <button class="tool" data-tool="erase" title="Erase objects and engineering layers in brush">⌫ Erase</button>
         <button class="tool" data-tool="start" title="Set the owner's starting location">⚑ Start</button>
-        <button class="tool" data-tool="raise" title="Raise elevation">⛰ Raise</button>
-        <button class="tool" data-tool="lower" title="Lower elevation">⬇ Lower</button>
+        <button class="tool" data-tool="raise" title="Raise elevation">${typeof GLYPH === 'function' ? GLYPH('mountain') : ''} Raise</button>
+        <button class="tool" data-tool="lower" title="Lower elevation">↓ Lower</button>
         <button class="tool" data-tool="flatten" title="Flatten to level of first tile">▭ Flatten</button>
-        <button class="tool" data-tool="bridge" title="Paint wooden bridge over water">🌉 Bridge</button>
-        <button class="tool" data-tool="tunnel" title="Paint underground tunnel through land/cliffs">⛏ Tunnel</button>
-        <button class="tool" data-tool="trench" title="Paint defensive trench on land">塹 Trench</button>
+        <button class="tool" data-tool="bridge" title="Paint wooden bridge over water">${typeof GLYPH === 'function' ? GLYPH('bridge') : ''} Bridge</button>
+        <button class="tool" data-tool="tunnel" title="Paint underground tunnel through land/cliffs">${typeof GLYPH === 'function' ? GLYPH('pick') : ''} Tunnel</button>
+        <button class="tool" data-tool="trench" title="Paint defensive trench on land">${typeof GLYPH === 'function' ? GLYPH('trench') : ''} Trench</button>
       </div>
       <div class="row">Brush <input type="range" id="ed-brush" min="1" max="8" value="2"><span id="ed-bv">2</span>
       <button class="btn small" id="ed-undo" title="Ctrl+Z">↶ Undo</button><button class="btn small" id="ed-redo" title="Ctrl+Y">↷ Redo</button></div></div>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Age of Realms — Medieval RTS</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,13 +14,13 @@
   <div class="menu-box panel">
     <h1 class="title">Age of Realms</h1>
     <div class="subtitle">A medieval real-time strategy game</div>
-    <button class="btn big" id="btn-sp">⚔ Single Player</button>
-    <button class="btn big" id="btn-tutorial">Learn to Play</button>
-    <button class="btn big" id="btn-load">Load Match</button>
-    <button class="btn big" id="btn-editor">🗺 Map Editor</button>
-    <button class="btn big" id="btn-help">📜 How to Play</button>
-    <button class="btn big" id="btn-audio">🔊 Audio Settings</button>
-    <button class="btn big" id="btn-controls">Controls</button>
+    <button class="btn big" id="btn-sp" data-glyph="sword">Single Player</button>
+    <button class="btn big" id="btn-tutorial" data-glyph="book">Learn to Play</button>
+    <button class="btn big" id="btn-load" data-glyph="save">Load Match</button>
+    <button class="btn big" id="btn-editor" data-glyph="map">Map Editor</button>
+    <button class="btn big" id="btn-help" data-glyph="scroll">How to Play</button>
+    <button class="btn big" id="btn-audio" data-glyph="sound">Audio Settings</button>
+    <button class="btn big" id="btn-controls" data-glyph="keys">Controls</button>
     <div class="display-buttons"><button class="btn" id="btn-graphics">Try 2.5D Graphics</button><button class="btn" id="btn-fullscreen">Full Screen</button></div>
     <div id="graphics-status" class="small dim" role="status"></div>
     <div class="small dim">Click anywhere to enable sound. Built with procedural art, synthesized music and your system's speech voices.</div>
@@ -31,6 +32,7 @@
 <div id="tooltip" class="hidden"></div>
 <div id="modal" class="hidden"></div>
 <script src="js/data.js"></script>
+<script src="js/glyphs.js"></script>
 <script src="js/map.js"></script>
 <script src="js/world.js"></script>
 <script src="js/render.js"></script>

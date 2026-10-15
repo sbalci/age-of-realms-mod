@@ -68,3 +68,60 @@ if (typeof vicRenderScore === 'function') {
   const _vrs = vicRenderScore;
   vicRenderScore = function () { _vrs(); if (typeof document !== 'undefined') document.body.classList.toggle('vic-score-open', !!document.getElementById('vic-score')); };
 }
+
+// ---------- top bar: pause button and gatherer counts per resource ----------
+function polishGatherers(pid) {
+  const c = { food: 0, wood: 0, gold: 0, stone: 0, build: 0 };
+  for (const u of W.list) {
+    if (u.kind !== 'unit' || u.owner !== pid || u.dying || u.inside || !u.order) continue;
+    if (u.type !== 'villager' && u.type !== 'fishingship' && u.type !== 'sapper') continue;
+    const o = u.order;
+    if (o.t === 'build' || o.t === 'repair' || o.t === 'terra') { c.build++; continue; }
+    if (o.t === 'gather' || o.t === 'farm' || o.t === 'fish' || o.t === 'hunt') {
+      const t = ent(o.id); const k = o.t === 'hunt' || o.t === 'farm' || o.t === 'fish' ? 'food' : t ? resKind(t) : (u.carry && u.carry.res);
+      if (k && c[k] !== undefined) c[k]++;
+    }
+  }
+  return c;
+}
+if (typeof updateTopbar === 'function') {
+  const _ut2 = updateTopbar;
+  updateTopbar = function () {
+    _ut2();
+    if (typeof document === 'undefined' || !W || !W.players || W.menu) return;
+    const bb = document.querySelector('#topbar .tb-btns');
+    let pb = document.querySelector('#b-pause');
+    if (bb && !pb) {
+      pb = document.createElement('button'); pb.className = 'btn small'; pb.id = 'b-pause';
+      pb.onclick = () => { UI.paused = !UI.paused; };
+      bb.insertBefore(pb, bb.firstChild);
+    }
+    if (pb) { const t = UI.paused ? 'Resume' : 'Pause'; if (pb.textContent !== t) { pb.textContent = t; pb.title = `${t} the game (F3)`; } }
+    if (Math.abs(W.t - (W._gcT || -9)) < 1) return; W._gcT = W.t;   // counts change slowly
+    const p = W.spectate ? (W.players[W.watchId] || W.players[W.humanId]) : W.players[W.humanId]; if (!p) return;
+    const c = polishGatherers(p.id);
+    for (const r of ['food', 'wood', 'gold', 'stone']) {
+      const el = document.querySelector('#r-' + r); if (!el) continue;
+      let s = el.querySelector('.gc'); if (!s) { s = document.createElement('small'); s.className = 'gc'; el.appendChild(s); }
+      const txt = c[r] ? String(c[r]) : '';
+      if (s.textContent !== txt) { s.textContent = txt; el.title = `${r[0].toUpperCase() + r.slice(1)}: ${c[r]} gatherer${c[r] === 1 ? '' : 's'}${r === 'food' && c.build ? '' : ''}`; }
+    }
+    const v = document.querySelector('#r-vil'); if (v && c.build !== undefined) v.dataset.builders = c.build;
+  };
+}
+
+// ---------- F1 in the map editor ----------
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'F1' || !document.body.classList.contains('in-editor')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!document.querySelector('#modal').classList.contains('hidden')) return;
+    openModal('Map Editor help', `<p><b>Paint</b> terrain, elevation and objects with the left mouse button; the brush slider sets the size. Right-drag or the arrow keys move the view, the mouse wheel zooms.</p>
+<ul><li><b>Select</b>: click or drag objects to move them; Delete removes the selection.</li>
+<li><b>Raise / Lower / Flatten</b>: change elevation. Steps of two levels or more become cliffs that units cannot climb.</li>
+<li><b>Bridge</b>, <b>Tunnel</b>, <b>Trench</b>: paint engineering layers. Bridges go over water, tunnels pass through hills and cliffs, trenches slow units and stop cavalry and siege.</li>
+<li><b>Start</b>: set the selected player's starting location. Every player needs one before the map can be played.</li>
+<li><b>Validate</b> checks the map, <b>Save &amp; Play</b> saves and plays it at once, <b>Save</b> keeps it in this browser , <b>Export file</b> downloads it and <b>Import file</b> loads one.</li>
+<li><b>Ctrl+Z / Ctrl+Y</b>: undo and redo.</li></ul>`, [['Close', null]]);
+  }, true);
+}

@@ -44,8 +44,13 @@ class AIPlayer {
     // villagers (pause briefly to save food for the next Age)
     const nextAgeId = ['feudal', 'castleage', 'imperial'][p.age];
     const minV = [15, 24, 32][p.age] || 99;
-    const saving = this.saving = nextAgeId && vills.length >= Math.min(minV, this.cfg.maxVill - 2) && !p.researching.has(nextAgeId) && !techLocked(p, nextAgeId) && p.res.food < effCost(p, nextAgeId, true).food;
-    for (const tc of tcs) if (!saving && tc.queue.filter(q => q.kind === 'unit').length < 2 && vills.length + tcs.reduce((s, t) => s + t.queue.length, 0) < this.cfg.maxVill && p.res.food >= 50) queueUnit(tc, 'villager');
+    // Age-up planning. Villagers now age and some become monks, so the workforce hovers below the old fixed target;
+    // after a while in an age the AI saves for the next one anyway, and it saves gold as well as food.
+    if (this.ageSeen !== p.age) { this.ageSeen = p.age; this.ageSince = this.t; }
+    const enoughVills = this.enoughVills = vills.length >= Math.min(minV, this.cfg.maxVill - 2) || (this.t - (this.ageSince || 0) > 420 && vills.length >= 14);
+    const ageCost = nextAgeId ? effCost(p, nextAgeId, true) : null;
+    const saving = this.saving = !!nextAgeId && enoughVills && !p.researching.has(nextAgeId) && !techLocked(p, nextAgeId) && (p.res.food < (ageCost.food || 0) || p.res.gold < (ageCost.gold || 0));
+    for (const tc of tcs) if ((!saving || vills.length < minV) && tc.queue.filter(q => q.kind === 'unit').length < 2 && vills.length + tcs.reduce((s, t) => s + t.queue.length, 0) < this.cfg.maxVill && p.res.food >= 50) queueUnit(tc, 'villager');
     // scouting early for sheep
     this.scouting();
     // herd owned sheep home
@@ -76,7 +81,7 @@ class AIPlayer {
     // houses
     const houseBuilding = this.mine(e => e.kind === 'bld' && e.type === 'house' && !e.built).length;
     if (p.popCap < 200 && p.pop + 3 + tcs.length * 2 >= p.popCap && houseBuilding < (p.pop > 40 ? 2 : 1) && p.res.wood >= 25) this.build('house', home, 3, 12);
-    if (this.buildCooldown > 0) return;
+    if (this.buildCooldown > 0 && !(saving && this.mine(e => e.kind === 'bld' && e.type === 'farm').length < Math.round(this.ratios().food * vills.length))) return;
     // drop sites
     this.dropSites(vills, home);
     // farms when natural food runs out (never more than the food workforce needs)
@@ -115,6 +120,15 @@ class AIPlayer {
       ['range', age >= 2 && has('range') < 2 && nV > 35],
       ['tc', age >= 1 && has('tc') < 2 && nV > 30 && p.res.stone >= 100 && p.res.wood >= 275],
     ];
+    // the next age needs two buildings of this one: put the cheapest missing one first
+    if (nextAgeId && enoughVills && AGE_REQ[p.age + 1]) {
+      const need = AGE_REQ[p.age + 1], have = need.filter(t => hasBuilt(p, t)).length;
+      if (have < 2 && !(p.age + 1 === 3 && hasBuilt(p, 'castle'))) {
+        const missing = need.filter(t => !has(t) && !bldLocked(p, t) && (t !== 'dock' || this.waterNear()));
+        missing.sort((a, b) => Object.values(effCost(p, a)).reduce((x, y) => x + y, 0) - Object.values(effCost(p, b)).reduce((x, y) => x + y, 0));
+        if (missing.length) plan.unshift([missing[0], true]);
+      }
+    }
     let tries = 0;
     for (const [type, cond] of plan) {
       if (!cond) continue;
@@ -130,7 +144,7 @@ class AIPlayer {
     const tc = tcs[0];
     if (tc && !tc.queue.some(q => q.kind === 'tech')) {
       const nextAge = nextAgeId;
-      if (nextAge && nV >= Math.min(minV, this.cfg.maxVill - 2) && !techLocked(p, nextAge) && canPay(p, effCost(p, nextAge, true))) { tc.queue.filter(q => q.kind === 'unit').forEach(() => cancelQueue(tc, tc.queue.findIndex(q => q.kind === 'unit'))); queueTech(tc, nextAge); }
+      if (nextAge && this.enoughVills && !techLocked(p, nextAge) && canPay(p, effCost(p, nextAge, true))) { tc.queue.filter(q => q.kind === 'unit').forEach(() => cancelQueue(tc, tc.queue.findIndex(q => q.kind === 'unit'))); queueTech(tc, nextAge); }
       else if (!p.techs.has('loom') && age >= 0 && nV > 12 && p.res.gold >= 50) queueTech(tc, 'loom');
     }
     // economy techs when surplus
@@ -147,6 +161,12 @@ class AIPlayer {
       }
     }
     const mk = this.mine(e => e.kind === 'bld' && e.type === 'market' && e.built)[0];
+    if (mk && saving && ageCost) {
+      const needF = (ageCost.food || 0) - p.res.food, needG = (ageCost.gold || 0) - p.res.gold;
+      if (needF > 0 && p.res.gold - (ageCost.gold || 0) > (W.market.food || 100) + 50) marketTrade(p, 'food', true);
+      if (needG > 0 && p.res.stone > 250) marketTrade(p, 'stone', false);
+      if (needF > 0 && p.res.stone > 350) { marketTrade(p, 'stone', false); }
+    }
     if (mk) { if (p.res.wood < 100 && p.res.gold > 400) marketTrade(p, 'wood', true); if (p.res.food > 1500 && p.res.gold < 600) marketTrade(p, 'food', false); if (p.res.wood < 100 && p.res.food > 1200) { marketTrade(p, 'food', false); } }
     // trade carts with allies' markets
     const market = this.mine(e => e.kind === 'bld' && e.type === 'market' && e.built)[0];
@@ -350,7 +370,9 @@ class AIPlayer {
         if (canPay(p, c)) queueUnit(b, t);
       }
     };
-    if (armySize < maxArmy && ((econOK && !this.saving) || this.underThreat())) {
+    const raid = this.saving && this.underThreat() ? (() => { const h = this.home(); return unitsNear(h.x, h.y, 16, u => isEnemy(this.id, u.owner) && !UNITS[u.type].animal && UNITS[u.type].atk > 0 && u.type !== 'villager').length; })() : 0;
+    const defend = this.underThreat() && (!this.saving || armySize < raid * 1.5 + 2);
+    if (armySize < maxArmy && ((econOK && !this.saving) || defend)) {
       trainAt('barracks', enemyCav > 3 ? ['spearman', 'spearman', 'militia'] : ['militia', 'spearman']);
       trainAt('range', enemyArch > 4 ? ['skirmisher', 'archer'] : age >= 2 ? ['archer', 'archer', 'cavarcher'] : ['archer', 'archer', 'skirmisher']);
       trainAt('stable', age >= 2 ? ['knight', 'knight', 'scout'] : ['scout']);
@@ -402,7 +424,13 @@ class AIPlayer {
       for (const u of idle) if (!u.order && Math.hypot(u.x - h.x, u.y - h.y) > 12) setOrder(u, { t: 'move', x: h.x + 5, y: h.y + 5 });
     }
   }
-  underThreat() { const h = this.home(); return unitsNear(h.x, h.y, 16, u => isEnemy(this.id, u.owner) && !UNITS[u.type].animal).length > 0; }
+  // a real raid: two or more armed enemy units near home, or any siege. A lone scout passing by no longer
+  // counts, otherwise the AI kept training troops 'in defence' and never saved for the next age.
+  underThreat() {
+    const h = this.home();
+    const near = unitsNear(h.x, h.y, 16, u => isEnemy(this.id, u.owner) && !UNITS[u.type].animal && !u.dying && (UNITS[u.type].atk > 0 || hasTag(u.type, 'siege')) && u.type !== 'villager');
+    return near.length >= 2 || near.some(u => hasTag(u.type, 'siege'));
+  }
   targetPlayer() {
     const en = this.enemies(); if (!en.length) return null;
     const h = this.home();

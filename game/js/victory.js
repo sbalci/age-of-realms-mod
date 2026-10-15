@@ -689,7 +689,7 @@ function vicRenderBanner() {
   let el = document.getElementById('vic-banner');
   if (!el) { el = document.createElement('div'); el.id = 'vic-banner'; hud.appendChild(el); }
   const ts = W.over ? [] : vicTimers();
-  const html = ts.map(x => { const p = W.players[x.pid]; return `<div class="vb ${isFriend(x.pid, W.humanId) ? '' : 'hot'}"><span>${x.kind === 'wonder' ? '🏛 Wonder' : '✝ All relics'}</span><span class="sw" style="background:${p.color.c}"></span><span>${escapeHtml(p.name)}</span><b>${vicFmt(x.t)}</b></div>`; }).join('');
+  const html = ts.map(x => { const p = W.players[x.pid]; return `<div class="vb ${isFriend(x.pid, W.humanId) ? '' : 'hot'}"><span>${x.kind === 'wonder' ? (typeof GLYPH === 'function' ? GLYPH('crown') + ' ' : '') + 'Wonder' : '✝ All relics'}</span><span class="sw" style="background:${p.color.c}"></span><span>${escapeHtml(p.name)}</span><b>${vicFmt(x.t)}</b></div>`; }).join('');
   if (el._h !== html) { el.innerHTML = html; el._h = html; }
 }
 if (typeof updateTopbar === 'function') {
@@ -792,7 +792,7 @@ if (typeof UI === 'object' && typeof openModal === 'function' && VIC.score) {
     if (UI.fromEditor) btns.push(['Return to Editor', () => { UI.gameRunning = false; Editor.open(UI.fromEditorName); }]);
     btns.push(['Main Menu', () => { UI.gameRunning = false; showScreen('menu'); }]);
     btns.push(['Keep watching', () => { }]);
-    const m = openModal(win ? '🏆 Victory!' : '💀 Defeat', vicEndHtml(win), btns);
+    const m = openModal(win ? GLYPH('trophy') + ' Victory!' : GLYPH('skull') + ' Defeat', vicEndHtml(win), btns);
     const box = m.querySelector('.modal-box'); if (box) box.style.minWidth = 'min(820px, 92vw)';
     let series = 'score', hover = null;
     const cv = m.querySelector('#vic-chart');

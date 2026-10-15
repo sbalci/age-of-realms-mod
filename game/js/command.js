@@ -630,7 +630,7 @@ if (typeof updateTopbar === 'function') {
       clock.parentNode.insertBefore(s, clock.nextSibling);
     }
     const lagging = typeof PERF !== 'undefined' && PERF.lag > 0.1;
-    const txt = `⏩ ×${W.speed || 1}${lagging ? ' · catching up' : ''}`; if (s.textContent !== txt) s.textContent = txt;
+    const txt = `×${W.speed || 1}${lagging ? ' · catching up' : ''}`; if (s.dataset.txt !== txt) { s.dataset.txt = txt; s.innerHTML = (typeof GLYPH === 'function' ? GLYPH('fast') + ' ' : '') + txt; }
     s.title = lagging ? `Simulation backlog ${PERF.lag.toFixed(2)} seconds. Reduce game speed to ease the load.` : 'Game speed (+ / − to change)';
   };
 }

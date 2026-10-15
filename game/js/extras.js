@@ -222,7 +222,7 @@ if (typeof endGame === 'function') {
     W.over = true; W.won = true; W.spectWinners = alive.map(p => p.id);
     UI.showEnd(true);
     const h = typeof document !== 'undefined' ? document.querySelector('#modal .modal-box h2') : null;
-    if (h) h.textContent = alive.length ? `🏁 ${alive.map(p => p.name).join(' & ')} win${alive.length === 1 ? 's' : ''}` : '🏁 Game over';
+    if (h) h.innerHTML = (typeof GLYPH === 'function' ? GLYPH('flag') + ' ' : '') + (alive.length ? `${alive.map(p => escapeHtml(p.name)).join(' &amp; ')} win${alive.length === 1 ? 's' : ''}` : 'Game over');
     Sound.fanfare();
   };
 }

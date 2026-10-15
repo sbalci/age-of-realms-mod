@@ -167,6 +167,7 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 ```
 index.html        landing page
 game/             the game (all development happens here)
+  vendor/fonts/   Cinzel and Crimson Text (SIL OFL), bundled so the game needs no network
   index.html      loads the scripts in order
   style.css
   js/data.js      units, buildings, techs, civs, help text
@@ -188,7 +189,8 @@ game/             the game (all development happens here)
   js/extras.js    Turks, peaceful scouts, AI-vs-AI spectating, Ibn Battuta cheat, idle buttons
   js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
   js/movement.js  corner sliding, cliff-safe separation, sidestepping, unstick
-  js/polish.js    path-finding budget, spectator HUD, panel layout fixes
+  js/polish.js    path-finding budget, spectator HUD, pause button, gatherer counts, editor help
+  js/glyphs.js    drawn UI glyphs that replace emoji
   js/session.js   versioned saves, autosaves and restore
   js/onboarding.js rule presets, remappable shortcuts and interactive lessons
   js/engineering.js bounded AI bridge, tunnel and trench planning
