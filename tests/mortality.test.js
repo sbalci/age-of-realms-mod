@@ -26,7 +26,7 @@ ok('mod hooks installed', run(`typeof MOD === 'object' && MOD.aging && MOD.veter
 // ---- aging ----
 const a = run(`(() => {
   const p = W.players[1], tc = W.list.find(e=>e.kind==='bld'&&e.type==='tc'&&e.owner===1);
-  const v = spawnUnit('villager', 1, tc.x - 3, tc.y + 6); v.lifeK = 1; v.vows = true; v.bornT = W.t - 1000; v.carry = { res: 'wood', amt: 7 };
+  const v = spawnUnit('villager', 1, tc.x - 3, tc.y + 6); v.lifeK = 1; v.vows = true; v.bornT = W.t - (MOD.life.villagerVows + 100); v.carry = { res: 'wood', amt: 7 };
   const woodBefore = p.res.wood, id = v.id; recalcPop(); const popBefore = p.pop;
   worldTick(0.05);
   recalcPop();
@@ -39,7 +39,7 @@ ok('monk has monk hit points', a.maxhp >= a.monkHp);
 
 const b = run(`(() => {
   const p = W.players[1], tc = W.list.find(e=>e.kind==='bld'&&e.type==='tc'&&e.owner===1);
-  const v = spawnUnit('villager', 1, tc.x - 4, tc.y + 6); v.lifeK = 1; v.vows = true; v.bornT = W.t - 1600;
+  const v = spawnUnit('villager', 1, tc.x - 4, tc.y + 6); v.lifeK = 1; v.vows = true; v.bornT = W.t - (Math.max(MOD.life.villager, MOD.life.villagerVows) + 100);
   const lost0 = p.stats.lost, kills0 = W.players[2].stats.kills;
   worldTick(0.05);
   return { dying: !!v.dying, lostDelta: p.stats.lost - lost0, killsDelta: W.players[2].stats.kills - kills0 };

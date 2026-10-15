@@ -6,6 +6,11 @@ const GameHooks = {
   listeners: new Map(),
   on(name, fn) { if (!this.listeners.has(name)) this.listeners.set(name, new Set()); this.listeners.get(name).add(fn); return () => this.listeners.get(name).delete(fn); },
   emit(name, ...args) { for (const fn of this.listeners.get(name) || []) fn(...args); },
+  // value pipelines: GameHooks.modify('damage', (dmg, attacker, target) => dmg * 1.1) returns an unsubscribe function;
+  // GameHooks.apply('damage', dmg, attacker, target) runs every modifier in registration order
+  modifiers: new Map(),
+  modify(name, fn) { if (!this.modifiers.has(name)) this.modifiers.set(name, new Set()); this.modifiers.get(name).add(fn); return () => this.modifiers.get(name).delete(fn); },
+  apply(name, value, ...args) { for (const fn of this.modifiers.get(name) || []) value = fn(value, ...args); return value; },
 };
 function simRandom() { return W.rng(); }
 const ent = id => W && W.ents.get(id);
@@ -427,7 +432,7 @@ function computeDamage(att, t, meleeOverride) {
   if (t.kind === 'bld' && att.kind === 'unit') dmg += statU(att, 'bldBonus');
   if (att.kind === 'unit' && t.kind === 'unit' && UNITS[t.type].animal && att.type === 'villager') dmg += 2;
   dmg *= elevFactor(att, t);
-  return dmg;
+  return GameHooks.apply('damage', dmg, att, t);
 }
 function bldAtk(b) { const p = W.players[b.owner]; return BUILDINGS[b.type].atk + (p ? p.bldAtk + (b.type === 'tower' ? p.towerLvl * 2 : 0) : 0); }
 function applyDamage(t, dmg, src) {

@@ -44,10 +44,11 @@ The 2.5D view includes animated water glints that respect fog and building occlu
 
 **Mortality and veterans** (`game/js/mod.js`)
 - People age:
-  - soldiers live about 20 minutes, villagers about 25 and monks about 30, each with ±15% variation;
+  - soldiers live about 20 minutes, villagers about 30 and monks about 35, each with ±15% variation;
   - machines, ships and animals don't age;
   - deaths from old age don't count as battle losses.
-- One villager in five takes monastic vows at about 15 minutes and becomes a monk.
+- One villager in five takes monastic vows at about 18 minutes and becomes a monk.
+- Villagers in the last 15% of their lives are elders and gather 15% slower.
 - Soldiers who survive a battle earn experience and are promoted to Veteran, Elite and Champion. Each rank adds attack, hit points and armor, shown as chevrons above the unit.
 
 **Waters** (`game/js/water.js`)
@@ -58,6 +59,18 @@ The 2.5D view includes animated water glints that respect fog and building occlu
 **Clean water and wells** (`game/js/wells.js`)
 - Water capacity comes from Town Center cisterns and Wells (hotkey C). Both serve more people near fresh water.
 - Above capacity, gathering slows and people wear down, but thirst never kills.
+
+**Water and ageing economy** (`game/js/balance.js`)
+- Herbal Medicine (Monastery, Feudal): everyone lives 20% longer.
+- Sanitation (University, Feudal): Wells and Town Centers serve 50% more people.
+- The AI trains a replacement about two minutes before a villager retires or takes vows, and researches both technologies.
+
+**Terrain and battle tactics** (`game/js/tactics.js`)
+- Forest cover: ranged attacks do 25% less to units in forest.
+- Fords: fighting from a ford does 20% less; units caught in a ford take 15% more from melee.
+- Flanking: hitting a busy unit from behind does 20% more.
+- Leadership: soldiers near an Elite or Champion of their own side do 10% more.
+- The AI keeps a battle memory and trains counters to what hurts it, stages waves on high ground before attacking, regroups broken waves, heals wounded veterans in garrisons and moves archers uphill.
 - The 💧 in the top bar shows capacity. The AI digs wells ahead of its needs.
 
 **Terraforming and engineering** (`game/js/terra.js`): select villagers and press **N**.
@@ -155,6 +168,8 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 | `?rivers=off` | no generated rivers |
 | `?fishregen=off` | fish do not regrow |
 | `?thirst=off` | no water capacity |
+| `?balance=off` | earlier lifespans, no Herbal Medicine or Sanitation, no elder slowdown |
+| `?tactics=off` | no forest, ford, flanking or leadership modifiers; classic AI attacks |
 | `?terra=off` | no terraforming |
 | `?hd=off` | classic flat terrain and buildings |
 | `?unitshd=off` | classic live-drawn units and emoji icons (finer: `unitsprites`, `unitsmooth`, `facings`, `unitsil`, `hdicons`) |
@@ -190,6 +205,8 @@ game/             the game (all development happens here)
   js/units_hd.js  cached HD unit sprites, smooth motion, back views, silhouettes, drawn icons
   js/movement.js  corner sliding, cliff-safe separation, sidestepping, unstick
   js/polish.js    path-finding budget, spectator HUD, pause button, gatherer counts, editor help
+  js/balance.js   lifespans, elders, Herbal Medicine, Sanitation, AI villager replacement
+  js/tactics.js   forest cover, fords, flanking, leadership, AI battle memory and staging
   js/glyphs.js    drawn UI glyphs that replace emoji
   js/session.js   versioned saves, autosaves and restore
   js/onboarding.js rule presets, remappable shortcuts and interactive lessons

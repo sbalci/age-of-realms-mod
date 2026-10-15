@@ -28,6 +28,7 @@ class AIPlayer {
       this.economy(step);
       if (typeof this.engineer === 'function') this.engineer(step);
       this.military(step);
+      if (typeof this.tactics === 'function') this.tactics(step);
       this.diplomacy(step);
     } catch (e) { console.warn('AI error', e); }
   }
@@ -35,6 +36,8 @@ class AIPlayer {
   economy(dt) {
     const p = this.p;
     const vills = this.mine(e => e.kind === 'unit' && e.type === 'villager' && !e.dying);
+    // villagers about to die of old age or take vows are replaced ahead of time
+    const working = typeof balRetiring === 'function' ? vills.filter(v => !balRetiring(v)).length : vills.length;
     const tcs = this.mine(e => e.kind === 'bld' && e.type === 'tc' && e.built);
     const home = this.home();
     this.buildCooldown -= dt;
@@ -47,10 +50,10 @@ class AIPlayer {
     // Age-up planning. Villagers now age and some become monks, so the workforce hovers below the old fixed target;
     // after a while in an age the AI saves for the next one anyway, and it saves gold as well as food.
     if (this.ageSeen !== p.age) { this.ageSeen = p.age; this.ageSince = this.t; }
-    const enoughVills = this.enoughVills = vills.length >= Math.min(minV, this.cfg.maxVill - 2) || (this.t - (this.ageSince || 0) > 420 && vills.length >= 14);
+    const enoughVills = this.enoughVills = working >= Math.min(minV, this.cfg.maxVill - 2) || (this.t - (this.ageSince || 0) > 420 && vills.length >= 14);
     const ageCost = nextAgeId ? effCost(p, nextAgeId, true) : null;
     const saving = this.saving = !!nextAgeId && enoughVills && !p.researching.has(nextAgeId) && !techLocked(p, nextAgeId) && (p.res.food < (ageCost.food || 0) || p.res.gold < (ageCost.gold || 0));
-    for (const tc of tcs) if ((!saving || vills.length < minV) && tc.queue.filter(q => q.kind === 'unit').length < 2 && vills.length + tcs.reduce((s, t) => s + t.queue.length, 0) < this.cfg.maxVill && p.res.food >= 50) queueUnit(tc, 'villager');
+    for (const tc of tcs) if ((!saving || working < minV) && tc.queue.filter(q => q.kind === 'unit').length < 2 && working + tcs.reduce((s, t) => s + t.queue.length, 0) < this.cfg.maxVill && p.res.food >= 50) queueUnit(tc, 'villager');
     // scouting early for sheep
     this.scouting();
     // herd owned sheep home
@@ -148,7 +151,7 @@ class AIPlayer {
       else if (!p.techs.has('loom') && age >= 0 && nV > 12 && p.res.gold >= 50) queueTech(tc, 'loom');
     }
     // economy techs when surplus
-    this.research(['wheelbarrow', 'doublebit', 'horsecollar', 'goldmining', 'forging', 'fletching', 'scalemail', 'paddedarcher', 'scalebarding', 'bowsaw', 'heavyplow', 'up_manatarms', 'up_crossbow', 'up_pikeman', 'handcart', 'ironcasting', 'bodkin', 'chainmail', 'up_longsword', 'up_lightcav', 'masonry', 'ballistics', 'gillnets', 'up_wargalley', 'careening', 'sanctity', 'fervor', 'up_cavalier', 'up_arbalest', 'up_twohanded', 'chemistry', 'up_galleon', 'elite_uu', 'guardtower', 'murderholes', 'keep', 'up_eskirm', 'townwatch'], 300);
+    this.research(['herbalmedicine', 'sanitation', 'wheelbarrow', 'doublebit', 'horsecollar', 'goldmining', 'forging', 'fletching', 'scalemail', 'paddedarcher', 'scalebarding', 'bowsaw', 'heavyplow', 'up_manatarms', 'up_crossbow', 'up_pikeman', 'handcart', 'ironcasting', 'bodkin', 'chainmail', 'up_longsword', 'up_lightcav', 'masonry', 'ballistics', 'gillnets', 'up_wargalley', 'careening', 'sanctity', 'fervor', 'up_cavalier', 'up_arbalest', 'up_twohanded', 'chemistry', 'up_galleon', 'elite_uu', 'guardtower', 'murderholes', 'keep', 'up_eskirm', 'townwatch'], 300);
     // fishing ships
     const docks = this.mine(e => e.kind === 'bld' && e.type === 'dock' && e.built);
     if (docks.length) {
@@ -362,7 +365,8 @@ class AIPlayer {
     const enemyArch = W.list.filter(e => e.kind === 'unit' && isEnemy(this.id, e.owner) && hasTag(e.type, 'archer')).length;
     const trainAt = (btype, types) => {
       for (const b of this.mine(e => e.kind === 'bld' && e.type === btype && e.built && e.queue.length < 2)) {
-        let base = types[(simRandom() * types.length) | 0]; if (base === '__uu') base = CIVS[p.civ].uu;
+        const pool = typeof this.adaptTypes === 'function' ? this.adaptTypes(btype, types) : types;
+        let base = pool[(simRandom() * pool.length) | 0]; if (base === '__uu') base = CIVS[p.civ].uu;
         const t = currentType(p, base);
         if (unitLocked(p, t)) continue;
         const c = effCost(p, t);
@@ -421,7 +425,8 @@ class AIPlayer {
     } else {
       // gather idle army at rally point near home
       const h = this.home();
-      for (const u of idle) if (!u.order && Math.hypot(u.x - h.x, u.y - h.y) > 12) setOrder(u, { t: 'move', x: h.x + 5, y: h.y + 5 });
+      const rp = typeof this.rallyPoint === 'function' ? this.rallyPoint() : { x: h.x + 5, y: h.y + 5 };
+      for (const u of idle) if (!u.order && Math.hypot(u.x - rp.x, u.y - rp.y) > 6) setOrder(u, { t: 'move', x: rp.x + (simRandom() - 0.5) * 3, y: rp.y + (simRandom() - 0.5) * 3 });
     }
   }
   // a real raid: two or more armed enemy units near home, or any siege. A lone scout passing by no longer
@@ -456,6 +461,7 @@ class AIPlayer {
     const tc = center(tgt);
     const myReg = W.map.landReg[W.map.idx(cx | 0, cy | 0)], tReg = W.map.landReg[W.map.idx(tc.x | 0, tc.y | 0)];
     if (W.map.isWater(tc.x | 0, tc.y | 0) || myReg !== tReg) { this.ferry(army, tc); return; }
+    if (typeof this.stageAttack === 'function' && this.stageAttack(army, tc)) return;
     for (const u of army) {
       if (u.order && (u.order.t === 'attack' || u.order.t === 'board')) continue;
       if (u.order && u.order.t === 'attackmove' && Math.hypot(u.order.x - tc.x, u.order.y - tc.y) < 3) continue;
