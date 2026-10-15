@@ -1,0 +1,818 @@
+{
+  "summary": {
+    "date": "2026-10-15",
+    "commit": "f63f633",
+    "games": 10,
+    "errors": 0,
+    "minutes": 35,
+    "difficulty": "standard",
+    "maps": "land",
+    "civs": "franks turks",
+    "decidedShare": 0.9,
+    "medianLength": 30.9,
+    "feudalMedian": 9.9,
+    "castleMedian": 21.9,
+    "castleReached": 0.65,
+    "imperialReached": 0,
+    "gateCastleBy22": "7/20",
+    "peakVillagersMedian": 33,
+    "gatheredMedian": 16767,
+    "slowestTickMs": 834,
+    "oldAgeMedian": 2,
+    "vowsMedian": 4,
+    "thirstMedian": 0
+  },
+  "results": [
+    {
+      "seed": 1,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 32.5,
+      "over": true,
+      "maxTickMs": 283,
+      "winner": "turks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 1,
+          "ageUp": [
+            10.2
+          ],
+          "gathered": 13366,
+          "kills": 69,
+          "lost": 141,
+          "oldAge": 4,
+          "vows": 5,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            25,
+            26,
+            24,
+            24
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            9.7,
+            21.7
+          ],
+          "gathered": 18011,
+          "kills": 141,
+          "lost": 75,
+          "oldAge": 10,
+          "vows": 4,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            24,
+            25,
+            33,
+            37
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 109
+    },
+    {
+      "seed": 2,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 27.8,
+      "over": true,
+      "maxTickMs": 188,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            9.6,
+            17.8
+          ],
+          "gathered": 18880,
+          "kills": 125,
+          "lost": 29,
+          "oldAge": 1,
+          "vows": 2,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            27,
+            32,
+            39
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 1,
+          "ageUp": [
+            9.6
+          ],
+          "gathered": 10673,
+          "kills": 30,
+          "lost": 140,
+          "oldAge": 0,
+          "vows": 3,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            26,
+            26,
+            2
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 95
+    },
+    {
+      "seed": 3,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 35,
+      "over": false,
+      "maxTickMs": 326,
+      "winner": null,
+      "players": [
+        {
+          "civ": "franks",
+          "age": 1,
+          "ageUp": [
+            10.5
+          ],
+          "gathered": 14465,
+          "kills": 58,
+          "lost": 164,
+          "oldAge": 2,
+          "vows": 6,
+          "thirstSec": 118,
+          "vils": [
+            3,
+            14,
+            18,
+            25,
+            24,
+            22,
+            21
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            9.7,
+            29.3
+          ],
+          "gathered": 19018,
+          "kills": 162,
+          "lost": 57,
+          "oldAge": 16,
+          "vows": 2,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            21,
+            25,
+            28,
+            35
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 179
+    },
+    {
+      "seed": 4,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 28.2,
+      "over": true,
+      "maxTickMs": 217,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            10,
+            18.9
+          ],
+          "gathered": 19981,
+          "kills": 79,
+          "lost": 50,
+          "oldAge": 0,
+          "vows": 4,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            29,
+            30,
+            33
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 1,
+          "ageUp": [
+            10.1
+          ],
+          "gathered": 11437,
+          "kills": 50,
+          "lost": 80,
+          "oldAge": 2,
+          "vows": 6,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            18,
+            24,
+            26,
+            22
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 195
+    },
+    {
+      "seed": 5,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 30,
+      "over": true,
+      "maxTickMs": 224,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            9.3,
+            27.2
+          ],
+          "gathered": 16816,
+          "kills": 161,
+          "lost": 26,
+          "oldAge": 10,
+          "vows": 2,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            18,
+            25,
+            27,
+            33,
+            40
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 1,
+          "ageUp": [
+            9.9
+          ],
+          "gathered": 11527,
+          "kills": 25,
+          "lost": 169,
+          "oldAge": 0,
+          "vows": 2,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            25,
+            29,
+            30,
+            0
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 91
+    },
+    {
+      "seed": 6,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 30.2,
+      "over": true,
+      "maxTickMs": 160,
+      "winner": "turks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            9.9,
+            16.6
+          ],
+          "gathered": 18726,
+          "kills": 53,
+          "lost": 122,
+          "oldAge": 1,
+          "vows": 1,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            26,
+            27,
+            34,
+            32
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            9.7,
+            19.3
+          ],
+          "gathered": 22752,
+          "kills": 127,
+          "lost": 51,
+          "oldAge": 0,
+          "vows": 3,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            29,
+            31,
+            38,
+            38
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 109
+    },
+    {
+      "seed": 7,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 33.7,
+      "over": true,
+      "maxTickMs": 834,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            10.1,
+            24.4
+          ],
+          "gathered": 19273,
+          "kills": 185,
+          "lost": 47,
+          "oldAge": 10,
+          "vows": 6,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            18,
+            25,
+            25,
+            26,
+            33
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            10.1,
+            23
+          ],
+          "gathered": 16718,
+          "kills": 45,
+          "lost": 184,
+          "oldAge": 2,
+          "vows": 3,
+          "thirstSec": 101,
+          "vils": [
+            3,
+            14,
+            17,
+            28,
+            34,
+            24,
+            9
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 129
+    },
+    {
+      "seed": 8,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 32.4,
+      "over": true,
+      "maxTickMs": 211,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            10.3,
+            24.2
+          ],
+          "gathered": 16999,
+          "kills": 100,
+          "lost": 82,
+          "oldAge": 13,
+          "vows": 7,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            18,
+            26,
+            27,
+            28,
+            34
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 1,
+          "ageUp": [
+            10.1
+          ],
+          "gathered": 15476,
+          "kills": 83,
+          "lost": 96,
+          "oldAge": 9,
+          "vows": 4,
+          "thirstSec": 13,
+          "vils": [
+            3,
+            14,
+            18,
+            25,
+            25,
+            24,
+            26
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 96
+    },
+    {
+      "seed": 9,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 31.5,
+      "over": true,
+      "maxTickMs": 345,
+      "winner": "franks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 2,
+          "ageUp": [
+            9.3,
+            19.4
+          ],
+          "gathered": 15927,
+          "kills": 54,
+          "lost": 150,
+          "oldAge": 1,
+          "vows": 10,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            29,
+            29,
+            32,
+            29
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            10,
+            27.8
+          ],
+          "gathered": 19667,
+          "kills": 148,
+          "lost": 54,
+          "oldAge": 10,
+          "vows": 4,
+          "thirstSec": 23,
+          "vils": [
+            3,
+            14,
+            18,
+            25,
+            27,
+            38,
+            42
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 118
+    },
+    {
+      "seed": 10,
+      "mapType": "land",
+      "civs": [
+        "franks",
+        "turks"
+      ],
+      "difficulty": "standard",
+      "minutes": 28.4,
+      "over": true,
+      "maxTickMs": 205,
+      "winner": "turks",
+      "players": [
+        {
+          "civ": "franks",
+          "age": 1,
+          "ageUp": [
+            9.7
+          ],
+          "gathered": 8478,
+          "kills": 28,
+          "lost": 141,
+          "oldAge": 0,
+          "vows": 4,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            23,
+            23,
+            8
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "civ": "turks",
+          "age": 2,
+          "ageUp": [
+            10,
+            21.9
+          ],
+          "gathered": 13836,
+          "kills": 135,
+          "lost": 38,
+          "oldAge": 0,
+          "vows": 4,
+          "thirstSec": 0,
+          "vils": [
+            3,
+            14,
+            17,
+            25,
+            26,
+            29
+          ],
+          "army": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "warnings": [],
+      "wallSec": 84
+    }
+  ]
+}

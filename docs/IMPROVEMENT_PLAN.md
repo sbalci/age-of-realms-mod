@@ -33,6 +33,7 @@ The systems are broad and well tested; the opponent is the weak link. The build 
 
 - **Done:** ageing-aware AI (villager replacement, Herbal Medicine, Sanitation), terrain and battle tactics, balance harness (`tests/balance-report.js`, reports in [`docs/balance/`](balance/)), performance budget test in CI (`tests/perf.test.js`), save compatibility tests with fixtures from two releases (`tests/save-compat.test.js`), fixed command grid and larger minimap with filters (`game/js/hud.js`).
 - **Found by the new performance test and fixed:** builders boxed in near a site, farmers aiming at a taken centre tile and lumberjacks standing diagonally to a tree all searched for a route every tick (a 35-minute AI game spent 70% of its time there; lumberjacks in that spot never chopped at all). A mid-game tick went from 20.5 ms to about 8 ms, and route searches from 17 to 4 per tick. The AI's lumber-camp site search (up to 1.4 s in one tick) and scout routes into forest were also fixed.
+- **First balance report** ([docs/balance/latest.md](balance/latest.md), 10 seeds, Franks v Turks, 35 minutes): phase-1 gate **7 of 20** AI players in the Castle Age by minute 22 (target 9 of 10); 65% reach the Castle Age at all, none the Imperial Age; median Feudal Age 9.9 min; 9 of 10 games end with a winner (median 31 min); peak villagers 33. One game still had an 834 ms tick, to be traced.
 - **Next:** release tags and changelog, then phase 2 (economy planner, build orders) measured against the balance report.
 
 ## Computer opponents and balance
