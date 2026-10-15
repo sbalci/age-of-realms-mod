@@ -329,23 +329,51 @@ if (typeof updateTopbar === 'function') {
 }
 
 // ---------------------------------------------------------------- edge scrolling at the window edges
-// The canvas sits between the top bar and the bottom panel, so pushing the mouse to the very bottom (or top) of the
-// screen lands on the HUD and the canvas never sees it. Scroll whenever the pointer touches a window edge.
-const EX_PTR = { x: -1, y: -1, inWin: false };
+// The map canvas sits between the top bar and the bottom panel, and the panel (taller than the layout reserves)
+// covers the canvas's own bottom edge, so the canvas never sees the pointer there. Scroll down when the pointer:
+//  - touches the top of the bottom panel (the visible bottom edge of the map),
+//  - is in the bottom 8 px of the window, or
+//  - has just left the window through its bottom edge (like AoE2, keep scrolling until it comes back).
+// The same window-edge rules apply to the other three sides.
+const EX_PTR = { x: -1, y: -1, inWin: false, out: null };
+const EX_EDGE = { win: 8, band: 6, leave: 40 };
 if (typeof window !== 'undefined') {
-  window.addEventListener('mousemove', e => { EX_PTR.x = e.clientX; EX_PTR.y = e.clientY; EX_PTR.inWin = true; }, true);
-  document.addEventListener('mouseleave', () => { EX_PTR.inWin = false; });
-  window.addEventListener('blur', () => { EX_PTR.inWin = false; });
+  window.addEventListener('mousemove', e => { EX_PTR.x = e.clientX; EX_PTR.y = e.clientY; EX_PTR.inWin = true; EX_PTR.out = null; }, true);
+  document.addEventListener('mouseleave', () => {
+    EX_PTR.inWin = false;
+    // remember which edge the pointer went out through, if it was close to one
+    const L = EX_EDGE.leave, W_ = window.innerWidth, H_ = window.innerHeight;
+    EX_PTR.out = { l: EX_PTR.x <= L, r: EX_PTR.x >= W_ - L, t: EX_PTR.y <= L, b: EX_PTR.y >= H_ - L };
+    if (!EX_PTR.out.l && !EX_PTR.out.r && !EX_PTR.out.t && !EX_PTR.out.b) EX_PTR.out = null;
+  });
+  window.addEventListener('blur', () => { EX_PTR.inWin = false; EX_PTR.out = null; });
+}
+function exEdgeDir() {
+  const W_ = window.innerWidth, H_ = window.innerHeight, m = EX_EDGE.win;
+  if (!EX_PTR.inWin) { const o = EX_PTR.out; return o ? { x: o.l ? -1 : o.r ? 1 : 0, y: o.t ? -1 : o.b ? 1 : 0 } : { x: 0, y: 0 }; }
+  const x = EX_PTR.x, y = EX_PTR.y; let dx = 0, dy = 0;
+  if (x < m) dx = -1; else if (x >= W_ - m) dx = 1;
+  if (y < m) dy = -1; else if (y >= H_ - m) dy = 1;
+  // the visible bottom edge of the map: the top border of the bottom panel
+  const bottom = document.getElementById('bottom');
+  if (!dy && bottom && bottom.offsetParent !== null) {
+    const top = bottom.getBoundingClientRect().top;
+    if (top > 0 && y >= top - EX_EDGE.band && y <= top + EX_EDGE.band) dy = 1;
+  }
+  return { x: dx, y: dy };
 }
 if (typeof scrollCamera === 'function') {
   const _sc = scrollCamera;
   scrollCamera = function (dt) {
     _sc(dt);
-    if (!EX_PTR.inWin || UI.mouse.inCanvas || UI.drag || typeof document === 'undefined' || !document.hasFocus()) return;
-    if (document.body.classList.contains('in-editor')) return;
-    const m = 4, sp = 900 * dt / R.cam.zoom; let dx = 0, dy = 0;
-    if (EX_PTR.y >= window.innerHeight - m) dy += sp; else if (EX_PTR.y <= m - 1) dy -= sp;
-    if (EX_PTR.x <= m - 1) dx -= sp; else if (EX_PTR.x >= window.innerWidth - m) dx += sp;
-    if (dx || dy) { R.cam.x += dx; R.cam.y += dy; clampCam(); }
+    if (UI.drag || typeof document === 'undefined' || !document.hasFocus()) return;
+    if (document.body.classList.contains('in-editor') || !document.body.classList.contains('in-game')) return;
+    const d = exEdgeDir(); if (!d.x && !d.y) return;
+    // the canvas already scrolls at its own left, right and top edges; avoid doubling the speed there
+    const c = UI.mouse.inCanvas, mx = UI.mouse.x, my = UI.mouse.y, cm = 6;
+    if (c && ((d.x < 0 && mx < cm) || (d.x > 0 && mx > R.cw - cm))) d.x = 0;
+    if (c && ((d.y < 0 && my < cm) || (d.y > 0 && my > R.ch - cm))) d.y = 0;
+    const sp = 900 * dt / R.cam.zoom;
+    if (d.x || d.y) { R.cam.x += d.x * sp; R.cam.y += d.y * sp; clampCam(); }
   };
 }
