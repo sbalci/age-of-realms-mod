@@ -50,6 +50,33 @@ test('unavailable WebGL module falls back to Canvas 2D',async({page})=>{
   await page.locator('#btn-tutorial').click();await expect(page.locator('#hud')).toBeVisible();
 });
 
+test('2.5D gates open without rebuilding and water glints respect fog',async({page})=>{
+  test.setTimeout(90000);
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/game/?renderer=three');await page.waitForFunction(()=>window.__game?.T25D.stats.frames>1);
+  await page.locator('#btn-tutorial').click();
+  const result=await page.evaluate(()=>{
+    const g=__game,t=g.T25D,m=g.W.map;g.UI.paused=true;g.W.noFog=true;
+    for(const e of g.W.list.slice())if(e.kind==='res'&&e.x>=6&&e.x<15&&e.y>=6&&e.y<15)removeEnt(e);
+    for(let y=6;y<15;y++)for(let x=6;x<15;x++){m.ter[m.idx(x,y)]=T.WATER;m.elev[m.idx(x,y)]=0;}
+    m.computeVH();const gate=spawnBuilding('gate',1,16,12,true);gate.open=false;
+    g.centerCamOn(12,12);t.render(g.R.ctx,{selection:new Set([gate]),hover:gate});
+    const group=t.structures.get(gate.id).group,closed=group.userData.gateLeaf.visible,visible=t.stats.waterRipples;
+    const attributes=t.terrain.geometry.attributes,shoreClosed=t.shoreFaces.length>0&&attributes.position.count===attributes.normal.count&&attributes.position.count===attributes.color.count;
+    gate.open=true;t.render(g.R.ctx,{selection:new Set([gate])});
+    const opened=!group.userData.gateLeaf.visible,sameGroup=t.structures.get(gate.id).group===group;
+    const before=JSON.stringify(g.MatchSave.snapshot().graph);t.render(g.R.ctx,{selection:new Set([gate]),hover:gate});
+    const unchanged=before===JSON.stringify(g.MatchSave.snapshot().graph);
+    g.W.noFog=false;g.W.players[g.W.humanId].visible.fill(0);g.W.players[g.W.humanId].explored.fill(0);
+    t.render(g.R.ctx,{});const hidden=t.stats.waterRipples===0&&t.waterShimmer.geometry.drawRange.count===0;
+    g.W.noFog=true;t.render(g.R.ctx,{selection:new Set([gate]),hover:gate});
+    return {closed,opened,sameGroup,visible,hidden,unchanged,shoreClosed};
+  });
+  expect(result.closed&&result.opened&&result.sameGroup&&result.hidden&&result.unchanged&&result.shoreClosed).toBe(true);
+  expect(result.visible).toBeGreaterThan(0);expect(errors).toEqual([]);
+  await page.screenshot({path:'test-results/water-gates.png'});
+});
+
 test('full screen enters and exits while resizing the game', async ({page})=>{
   await page.goto('/game/');await page.waitForFunction(()=>!!window.__game?.W);
   await page.locator('#btn-fullscreen').click();

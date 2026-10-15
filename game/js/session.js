@@ -120,7 +120,10 @@ const MatchSave = {
     w.ents = new Map(w.list.map(e => [e.id, e])); w.grid = new Map(); w.fx = []; w.decals = []; w.missFx = []; w.msgs = [];
     w.map.vh = new Float32Array((w.n + 1) ** 2); w.map.landReg = new Int32Array(w.n ** 2); w.map.waterReg = new Int32Array(w.n ** 2);
     delete w.map._wb;
+    const mapVersion=w.map.version;
     w.map.computeVH(); w.map.computeRegions();
+    // Reconstructing derived height data is not a terrain edit; cached routes keep their revision.
+    if(Number.isSafeInteger(mapVersion)&&mapVersion>=0)w.map.version=mapVersion;
     return data;
   },
   restore(text) {

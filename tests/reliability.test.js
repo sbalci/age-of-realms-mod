@@ -23,6 +23,18 @@ test('same seed and orders reproduce a simulation despite cosmetic RNG', () => {
 test('inspection does not consume simulation randomness', () => {
   assert.equal(run(`(() => { const before=W.rng.state(); for(const u of W.list)if(u.kind==='unit')modLimits(u); return before===W.rng.state(); })()`), true);
 });
+
+test('2.5D wall connections respect map edges, ownership and destroyed neighbors',()=>{
+  assert.equal(run(`(() => {
+    make();W.map.blk.fill(0);
+    const wall=spawnBuilding('wall',1,0,20,true);
+    spawnBuilding('wall',1,W.n-1,19,true);const other=spawnBuilding('wall',2,0,21,true);
+    if(t25dWallMask(wall)!==0)return false;
+    const gate=spawnBuilding('gate',1,1,20,true);if(t25dWallMask(wall)!==1)return false;
+    other.owner=1;if(t25dWallMask(wall)!==5)return false;
+    gate.dead=true;return t25dWallMask(wall)===4;
+  })()`),true);
+});
 test('save/load preserves AI, typed fog layers, shared jobs and queued orders', () => {
   assert.equal(run(`(() => { make(); W.players[2].ai=new AIPlayer(W.players[2],'standard'); const vs=W.list.filter(e=>e.type==='villager'&&e.owner===1); const job=terraJob('plant',[{x:20,y:20}]); vs[0].order={t:'terra',job}; vs[1].order={t:'terra',job}; vs[0].terraJob=job; vs[0].terraQ=job.tiles[0]; vs[0].queue=[{t:'move',x:22,y:22}]; W.map.trench=new Uint8Array(W.n*W.n); W.map.trench[11]=1; const text=MatchSave.serialize(); MatchSave.restore(text); const a=ent(vs[0].id),b=ent(vs[1].id); return a.order.job===b.order.job&&a.terraQ===a.order.job.tiles[0]&&a.queue.length===1&&W.players[2].ai.p===W.players[2]&&W.players[2].ai instanceof AIPlayer&&W.players[1].explored instanceof Uint8Array&&W.map.trench[11]===1&&W.ents.get(a.id)===a; })()`), true);
 });
@@ -31,6 +43,19 @@ test('resuming preserves the next simulation results and pending arrows', () => 
   const expected = run(`for(let i=0;i<120;i++)worldTick(0.05); signature()`);
   const actual = run(`MatchSave.restore(SAVE); for(let i=0;i<120;i++)worldTick(0.05); signature()`);
   assert.equal(actual, expected);
+});
+
+test('save/load keeps path-budget decisions deterministic in a crowded tick',()=>{
+  run(`make();
+    for(let y=26;y<=40;y++)for(let x=26;x<=40;x++){const i=W.map.idx(x,y);W.map.ter[i]=T.GRASS;W.map.elev[i]=0;W.map.blk[i]=0;}
+    W.map.computeVH();W.map.computeRegions();
+    var routeGoal={x0:35,y0:35,x1:35,y1:35};
+    var routeIds=Array.from({length:32},()=>{const u=spawnUnit('villager',1,30.5,30.5);pathTo(u,routeGoal,0);return u.id;});
+    var routeSave=MatchSave.serialize();
+    function routeSignature(){W.tick++;for(const id of routeIds)pathTo(ent(id),routeGoal,0);return JSON.stringify({rng:W.rng.state(),routes:routeIds.map(id=>{const u=ent(id);return {path:u.path,retry:u.repathT,revision:u._pathMapVersion};})});}
+  `);
+  const expected=run('routeSignature()');
+  const actual=run('MatchSave.restore(routeSave);routeSignature()');assert.equal(actual,expected);
 });
 test('unsupported, corrupt and malicious saves leave the active match untouched', () => {
   assert.equal(run(`(() => { const old=W; const good=MatchSave.snapshot(); let rejected=0; const payloads=[JSON.stringify({...good,version:9}),'{',JSON.stringify({format:'age-of-realms-match',version:1,graph:{nodes:[{type:'Object',data:[['__proto__',{ref:0}]]}],root:{ref:0}}})]; for(const text of payloads)try{MatchSave.restore(text)}catch(e){rejected++} return rejected===3&&W===old&&({}).polluted===undefined; })()`), true);

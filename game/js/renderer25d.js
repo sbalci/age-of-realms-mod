@@ -4,6 +4,13 @@ const T25D_PIXELS = TW / Math.SQRT2;
 const T25D_HEIGHT = EH / (T25D_PIXELS * Math.sqrt(3) / 2);
 function t25dWorld(x, y, h = 0) { return { x, y: h * T25D_HEIGHT, z: y }; }
 function t25dCameraTarget(cam) { return { x: cam.x / TW + cam.y / TH, y: 0, z: cam.y / TH - cam.x / TW }; }
+function t25dWallMask(b) {
+  return fxWallMask((x,y)=>{
+    if(!W.map.inb(x,y))return false;
+    const neighbor=ent(W.map.blk[W.map.idx(x,y)]);
+    return !!neighbor&&!neighbor.dead&&neighbor.owner===b.owner&&['wall','palisade','gate','tower'].includes(neighbor.type);
+  },b.x,b.y);
+}
 function t25dInitialMode() {
   if (typeof window === 'undefined') return false;
   const q = new URLSearchParams(location.search);
@@ -130,10 +137,13 @@ const T25D = {
     if (b.type === 'farm') {
       for (let k = -3; k <= 3; k++) this.mesh(group, this.box, this.material('#758148'), k * s / 8, 0.15, 0, 0.12, 0.12, s * 0.85);
     } else if (['wall', 'palisade', 'gate'].includes(b.type)) {
-      const linked = (x, y) => { const id = W.map.blk[W.map.idx(x, y)], e = ent(id); return e && ['wall','palisade','gate','tower'].includes(e.type); };
-      const mask = fxWallMask(linked, b.x, b.y), alongX = mask & 3 || !(mask & 12);
+      const mask = t25dWallMask(b), alongX = mask & 3 || !(mask & 12);
       const wall = this.mesh(group, this.box, b.type === 'palisade' ? timber : stone, 0, height * 0.45, 0, alongX ? s : 0.28, height * 0.9, alongX ? 0.28 : s);
-      if (b.type === 'gate') { wall.scale.y *= 0.3; wall.position.y = height * 0.8; }
+      if (b.type === 'gate') {
+        wall.scale.y *= 0.25; wall.position.y = height * 0.9;
+        for(const side of [-1,1])this.mesh(group,this.box,stone,alongX?side*s*.4:0,height*.4,alongX?0:side*s*.4,alongX?s*.18:.34,height*.8,alongX?.34:s*.18);
+        group.userData.gateLeaf=this.mesh(group,this.box,timber,0,height*.39,0,alongX?s*.65:.16,height*.75,alongX?.16:s*.65);
+      }
       for (let i = -1; i <= 1; i++) this.mesh(group, this.box, stone, alongX ? i * s / 3 : 0, height, alongX ? 0 : i * s / 3, 0.2, 0.2, 0.2);
     } else if (['tower', 'outpost', 'castle', 'wonder'].includes(b.type)) {
       if (b.type === 'castle') {
@@ -179,7 +189,7 @@ const T25D = {
     group.userData.top = Math.max(height * 1.35, 0.4);
     return group;
   },
-  disposeGroup(group) { group.traverse(o => { if (o.userData.ownedGeometry && o.geometry) o.geometry.dispose(); if(o.userData.ownedMaterial)o.material.dispose(); }); group.removeFromParent(); },
+  disposeGroup(group) { group.traverse(o => { if (o.userData.ownedGeometry && o.geometry) o.geometry.dispose(); if(o.userData.ownedMaterial)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose(); }); group.removeFromParent(); },
   resetWorld() {
     for (const o of this.structures.values()) this.disposeGroup(o.group);
     for (const o of this.actors.values()) o.sprite.removeFromParent();
@@ -187,11 +197,13 @@ const T25D = {
     for (const a of this.assets.values()) { a.texture.dispose(); a.material.dispose(); a.dimMaterial.dispose(); } this.assets.clear();
     for (const o of [...this.statics.children, ...this.props.children]) this.disposeGroup(o);
     if (this.terrainTexture) this.terrainTexture.dispose(); this.terrainTexture = null;
-    this.world = W; this.mapVersion = -1; this.terrain = null; this.fogKey = '';
+    this.world = W; this.mapVersion = -1; this.terrain = this.waterShimmer = null; this.fogKey = '';
   },
   buildTerrain() {
     const THREE = this.lib, m = W.map, n = m.n, N = n + 1, positions = [], normals = [], uv = [];
     if (this.terrain) this.disposeGroup(this.terrain);
+    if (this.waterShimmer) this.disposeGroup(this.waterShimmer);
+    this.waterTiles=[];this.shoreFaces=[];
     for (const o of [...this.props.children]) this.disposeGroup(o);
     const vNorm = new Float32Array(N * N * 3);
     for (let vy = 0; vy <= n; vy++) for (let vx = 0; vx <= n; vx++) {
@@ -204,6 +216,7 @@ const T25D = {
     const vertices = [[0,0],[0,1],[1,0],[1,0],[0,1],[1,1]];
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
       const water = isWaterT(m.ter[m.idx(x,y)]);
+      if(water&&hdHash(x,y,217)>.7)this.waterTiles.push({x,y,phase:hdHash(x,y,791)*Math.PI*2});
       for (const [dx,dy] of vertices) {
         const vi = (y + dy) * N + x + dx, h = water ? -0.35 : m.vh[vi];
         positions.push(x+dx,h*T25D_HEIGHT,y+dy); uv.push((x+dx)/n,1-(y+dy)/n);
@@ -211,14 +224,36 @@ const T25D = {
         else normals.push(vNorm[vi * 3], vNorm[vi * 3 + 1], vNorm[vi * 3 + 2]);
       }
     }
+    // Water is flat while land follows the height field. Join their different edge heights to close shore gaps.
+    for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+      if(!isWaterT(m.ter[m.idx(x,y)]))continue;
+      for(const [dx,dy,a,b]of [[1,0,[1,0],[1,1]],[-1,0,[0,1],[0,0]],[0,1,[1,1],[0,1]],[0,-1,[0,0],[1,0]]]){
+        const nx=x+dx,ny=y+dy;if(!m.inb(nx,ny)||isWaterT(m.ter[m.idx(nx,ny)]))continue;
+        const ax=x+a[0],ay=y+a[1],bx=x+b[0],by=y+b[1],ah=m.vh[ay*N+ax],bh=m.vh[by*N+bx];
+        if(Math.max(Math.abs(ah+.35),Math.abs(bh+.35))<.00001)continue;
+        this.shoreFaces.push({offset:positions.length,x:nx,y:ny});
+        for(const [vx,vy,h]of [[ax,ay,ah],[ax,ay,-.35],[bx,by,bh],[bx,by,bh],[ax,ay,-.35],[bx,by,-.35]]){
+          positions.push(vx,h*T25D_HEIGHT,vy);uv.push(vx/n,1-vy/n);normals.push(-dx,0,-dy);
+        }
+      }
+    }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3)); geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3)); geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n*n*18).fill(1),3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(positions.length).fill(1),3));
+    geo.addGroup(0,n*n*6,0);
+    if(this.shoreFaces.length)geo.addGroup(n*n*6,this.shoreFaces.length*6,1);
     if (typeof hdtSync === 'function') hdtSync(m, false);
     if (this.terrainTexture) this.terrainTexture.dispose();
     if (typeof HDT !== 'undefined' && HDT.cv) { this.terrainTexture = new THREE.CanvasTexture(HDT.cv); this.terrainTexture.colorSpace = THREE.SRGBColorSpace; this.terrainTexture.anisotropy = Math.min(4,this.renderer.capabilities.getMaxAnisotropy()); }
     const mat = new THREE.MeshStandardMaterial({ map: this.terrainTexture, color: this.terrainTexture ? '#ffffff' : '#75974a', vertexColors: true, roughness: 1, side: THREE.DoubleSide });
-    const terrain = new THREE.Mesh(geo,mat); terrain.receiveShadow = true; terrain.userData.ownedGeometry = true; terrain.userData.ownedMaterial = true; terrain.userData.tileSurface = true;
+    const shoreMat=new THREE.MeshStandardMaterial({color:'#786b51',vertexColors:true,roughness:1,side:THREE.DoubleSide});
+    const terrain = new THREE.Mesh(geo,[mat,shoreMat]); terrain.receiveShadow = true; terrain.userData.ownedGeometry = true; terrain.userData.ownedMaterial = true; terrain.userData.tileSurface = true;
     this.statics.add(terrain); this.terrain = terrain;
+    const rippleGeo=new THREE.BufferGeometry();
+    rippleGeo.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(384*6),3));
+    rippleGeo.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(384*6),3));rippleGeo.setDrawRange(0,0);
+    const ripples=new THREE.LineSegments(rippleGeo,new THREE.LineBasicMaterial({color:'#c4e7e6',vertexColors:true,transparent:true,opacity:.4,depthWrite:false}));
+    ripples.userData.ownedGeometry=ripples.userData.ownedMaterial=true;ripples.frustumCulled=false;
+    this.statics.add(ripples);this.waterShimmer=ripples;this.rippleKey='';
     // Slender decks keep waterways open beneath bridges; tunnels and trenches remain simulation layers.
     for (let i=0;i<n*n;i++) {
       if (m.bridge && m.bridge[i]) { const x=i%n,z=(i/n)|0; const b=this.mesh(this.props,this.box,this.material('#9d784b','wood'),x+0.5,-0.35*T25D_HEIGHT+0.055,z+0.5,1,0.08,1); b.castShadow=true;b.userData.tileSurface=true; }
@@ -226,6 +261,22 @@ const T25D = {
       if (m.tun && m.tun[i]) { const x=i%n,z=(i/n)|0; this.mesh(this.props,this.box,this.material('#493e32'),x+0.5,m.h(x+0.5,z+0.5)*T25D_HEIGHT+0.01,z+0.5,0.45,0.025,0.45); }
     }
     this.mapVersion = m.version; this.fogKey = ''; this.stats.terrainBuilds++;
+  },
+  updateWater(editor) {
+    const key=[Math.floor(R.time*10),W.tick,R.cam.x,R.cam.y,R.cam.zoom,!!editor,!!W.noFog,W.settings.fog].join(':');
+    if(key===this.rippleKey)return;this.rippleKey=key;
+    const geo=this.waterShimmer.geometry,pos=geo.attributes.position,col=geo.attributes.color;let count=0;
+    for(const q of this.waterTiles){
+      if(count>=384)break;
+      const x=q.x+.25+hdHash(q.x,q.y,85)*.5,y=q.y+.25+hdHash(q.x,q.y,11)*.5;
+      if(this.fogAt(x,y,editor)!==1)continue;
+      const p=toScreen(x,y,-.35);if(p.x< -32||p.y< -32||p.x>R.cw+32||p.y>R.ch+32)continue;
+      const wave=(Math.sin(R.time*1.7+q.phase)+1)/2,r=.08+.12*wave;
+      pos.setXYZ(count*2,x-r,-.35*T25D_HEIGHT+.006,y+r);
+      pos.setXYZ(count*2+1,x+r,-.35*T25D_HEIGHT+.006,y-r);
+      const light=.2+.8*wave;col.setXYZ(count*2,light,light,light);col.setXYZ(count*2+1,light,light,light);count++;
+    }
+    pos.needsUpdate=col.needsUpdate=true;geo.setDrawRange(0,count*2);this.stats.waterRipples=count;
   },
   fogAt(x, y, editor = false) {
     if (editor || W.settings.fog === 'none' || W.noFog) return 1;
@@ -239,6 +290,7 @@ const T25D = {
     this.fogKey = key;
     const a=this.terrain.geometry.attributes.color, n=W.n;
     for(let i=0;i<n*n;i++) { const f=this.fogAt(i%n,(i/n)|0,editor); for(let k=0;k<18;k++)a.array[i*18+k]=f; }
+    for(const edge of this.shoreFaces){const f=this.fogAt(edge.x,edge.y,editor);for(let k=0;k<18;k++)a.array[edge.offset+k]=f;}
     a.needsUpdate=true;
     for(const o of this.props.children) o.visible=this.fogAt(o.position.x,o.position.z,editor)>0;
   },
@@ -287,7 +339,7 @@ const T25D = {
       if(screen.x < -220 || screen.x>R.cw+220 || screen.y < -150 || screen.y>R.ch+260)continue;
       if(e.kind==='bld') {
         keepBuildings.add(e.id);
-        const age=e.ghost?e.style:bldStyle(e), mask=['wall','palisade','gate'].includes(e.type)?Array.from(W.map.blk.slice(Math.max(0,W.map.idx(e.x,e.y)-W.n),W.map.idx(e.x,e.y)+W.n+2)).join(','):'';
+        const age=e.ghost?e.style:bldStyle(e), mask=['wall','palisade','gate'].includes(e.type)?t25dWallMask(e):'';
         const dim=e.ghost||this.fogAt(c.x,c.y,!!opts.editor)<1;
         const key=`${e.type}:${age}:${pcolor(e.owner).c}:${e.ghost}:${dim}:${mask}`;
         let cached=this.structures.get(e.id);
@@ -301,6 +353,7 @@ const T25D = {
         const h=BUILDINGS[e.type].water?-0.35:W.map.h(c.x,c.y);
         group.position.set(c.x,h*T25D_HEIGHT,c.y);group.scale.y=e.built?1:Math.max(0.08,e.progress||0);
         if(group.userData.sails)group.userData.sails.rotation.z=R.time*0.6;
+        if(group.userData.gateLeaf)group.userData.gateLeaf.visible=!e.open;
         this.pickables.push(...group.children.filter(o=>o.isMesh));
       } else {
         keepActors.add(e.id);let cached=this.actors.get(e.id);
@@ -327,10 +380,11 @@ const T25D = {
   overlay(ctx,list,opts) {
     camTransform(ctx);const selection=opts.selection||new Set();
     for(const e of list) {
-      if(selection.has(e)) {
+      if(selection.has(e)||opts.hover===e) {
         const c=center(e),p=iso(c.x,c.y,BUILDINGS[e.type]?.water?-0.35:W.map.h(c.x,c.y));
-        ctx.strokeStyle='#fff7cc';ctx.lineWidth=1.6;
-        if(e.kind==='bld'){const s=bsize(e);ctx.save();ctx.translate(p.x,p.y);poly(ctx,[P(-s/2,-s/2,0),P(s/2,-s/2,0),P(s/2,s/2,0),P(-s/2,s/2,0)],null,'#fff7cc',1.6);ctx.restore();}
+        const color=e.owner&&isEnemy(W.humanId,e.owner)?'#ff8a70':e.owner===W.humanId?'#b6f0a1':'#fff7cc';
+        ctx.strokeStyle=color;ctx.lineWidth=selection.has(e)?2:1;
+        if(e.kind==='bld'){const s=bsize(e);ctx.save();ctx.translate(p.x,p.y);poly(ctx,[P(-s/2,-s/2,0),P(s/2,-s/2,0),P(s/2,s/2,0),P(-s/2,s/2,0)],null,color,ctx.lineWidth);ctx.restore();}
         else {ctx.beginPath();ctx.ellipse(p.x,p.y,14,7,0,0,Math.PI*2);ctx.stroke();}
       }
       if(!e.maxhp || e.dying || !(selection.has(e)||opts.hover===e||e.hp<e.maxhp && W.t-(e.hitT||-99)<4))continue;
@@ -347,7 +401,7 @@ const T25D = {
   render(ctx,opts) {
     this.frame++;if(this.world!==W)this.resetWorld();
     this.syncCamera();if(this.mapVersion!==W.map.version)this.buildTerrain();
-    this.updateFog(!!opts.editor);const list=this.visibleEntities(opts);this.syncEntities(list,opts);
+    this.updateFog(!!opts.editor);this.updateWater(!!opts.editor);const list=this.visibleEntities(opts);this.syncEntities(list,opts);
     this.renderer.render(this.scene,this.camera);
     ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,R.cw,R.ch);this.overlay(ctx,list,opts);
     this.stats.frames++;this.stats.calls=this.renderer.info.render.calls;this.stats.triangles=this.renderer.info.render.triangles;

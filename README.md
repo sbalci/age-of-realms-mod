@@ -26,6 +26,8 @@ The optional **2.5D prototype** uses Three.js for elevated terrain, procedural b
 
 This prototype keeps the fixed isometric camera and uses terrain raycasting for commands. Engineering layers are visualized, and terrain edits rebuild the mesh. Projectiles, selection and placement indicators remain canvas overlays; some original cosmetic effects are exclusive to Canvas 2D. Buildings use procedural shapes rather than imported models. Renderer counters are available at `window.__game.T25D.stats`. Three.js and its MIT license live in `game/vendor/three`; after updating the pinned development dependency, run `npm run vendor:three` to refresh those files.
 
+The 2.5D view includes animated water glints that respect fog and building occlusion, gates that visibly open and close, and colored selection and hover outlines. Shoreline faces connect raised land to the water surface without gaps. Wall connections inspect only the four neighboring tiles and respect ownership and map edges. The pathfinding budget keeps usable routes during busy ticks, while changed destinations and terrain edits force a fresh route. Loading a match resets that budget while preserving the saved terrain revision.
+
 ## What's in the game
 
 **Base game (Special Build)**

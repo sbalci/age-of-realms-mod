@@ -79,3 +79,15 @@ test('nested dialogs return to the game menu without trapping the match in pause
   await page.getByRole('button', { name: 'Resume', exact: true }).click();
   expect(await page.evaluate(() => __game.UI.paused)).toBe(false);
 });
+
+test('spectator names remain text and normal play restores diplomacy',async({page})=>{
+  await page.locator('#btn-tutorial').click();
+  await page.evaluate(()=>{
+    const g=__game;g.UI.paused=true;g.UI.selection=[];g.W.spectate=true;g.W.watchId=2;
+    g.W.players[2].name='<img src=x onerror=alert(1)>';renderSelInfo();updateTopbar();
+  });
+  await expect(page.locator('#selinfo')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#selinfo img')).toHaveCount(0);await expect(page.locator('#b-dip')).toBeHidden();
+  await page.evaluate(()=>{__game.W.spectate=false;updateTopbar();});
+  await expect(page.locator('#b-dip')).toBeVisible();await expect(page.locator('#age-label')).toHaveAttribute('title','');
+});
