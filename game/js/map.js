@@ -139,6 +139,7 @@ class GameMap {
 
 // ---------- Pathfinding (A*, 8-directional) ----------
 const PF = { g: null, par: null, stamp: null, closed: null, cur: 1, heap: [], n: 0 };
+const PF_DX = [1, -1, 0, 0, 1, 1, -1, -1], PF_DY = [0, 0, 1, -1, 1, -1, 1, -1]; // neighbour offsets (were rebuilt for every neighbour)
 function pfInit(n) {
   if (PF.n === n) return;
   PF.n = n; PF.g = new Float32Array(n * n); PF.par = new Int32Array(n * n); PF.stamp = new Uint32Array(n * n); PF.closed = new Uint32Array(n * n);
@@ -152,9 +153,10 @@ function findPath(map, sx, sy, goal, passFn, maxNodes = 9000) {
   const heap = []; // [f, idx]
   const push = (f, i) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; const t = heap[p]; heap[p] = heap[k]; heap[k] = t; k = p; } };
   const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (; ;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; const t = heap[m]; heap[m] = heap[k]; heap[k] = t; k = m; } } return top; };
-  const dist = (x, y) => { const dx = Math.max(goal.x0 - x, 0, x - goal.x1), dy = Math.max(goal.y0 - y, 0, y - goal.y1); return { dx, dy }; };
-  const hfun = (x, y) => { const { dx, dy } = dist(x, y); return Math.max(dx, dy) + 0.414 * Math.min(dx, dy); };
-  const done = (x, y) => { const { dx, dy } = dist(x, y); return Math.max(dx, dy) <= goal.r; };
+  // distance to the goal rectangle, without allocating (this runs for every node the search touches)
+  const gx0 = goal.x0, gy0 = goal.y0, gx1 = goal.x1, gy1 = goal.y1, gr = goal.r;
+  const hfun = (x, y) => { const dx = Math.max(gx0 - x, 0, x - gx1), dy = Math.max(gy0 - y, 0, y - gy1); return dx > dy ? dx + 0.414 * dy : dy + 0.414 * dx; };
+  const done = (x, y) => Math.max(gx0 - x, 0, x - gx1) <= gr && Math.max(gy0 - y, 0, y - gy1) <= gr;
   const s = sy * n + sx;
   g[s] = 0; par[s] = -1; st[s] = stamp; push(hfun(sx, sy), s);
   let best = s, bestH = hfun(sx, sy), expanded = 0, found = -1;
@@ -166,7 +168,7 @@ function findPath(map, sx, sy, goal, passFn, maxNodes = 9000) {
     const hh = hfun(cx, cy); if (hh < bestH) { bestH = hh; best = c; }
     if (++expanded > maxNodes) break;
     for (let d = 0; d < 8; d++) {
-      const dx = [1, -1, 0, 0, 1, 1, -1, -1][d], dy = [0, 0, 1, -1, 1, -1, 1, -1][d];
+      const dx = PF_DX[d], dy = PF_DY[d];
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
       const j = ny * n + nx;

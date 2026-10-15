@@ -27,6 +27,14 @@ The systems are broad and well tested; the opponent is the weak link. The build 
 | Audio | Basic | Procedural music and speech; positional panning; no ambience layers per biome or battle intensity |
 | Content | Thin for long play | Random maps only (land, coastal, islands) and an editor; no scenarios, campaign, or map scripts |
 
+## Status
+
+15 October 2026, phase 1 (foundations):
+
+- **Done:** ageing-aware AI (villager replacement, Herbal Medicine, Sanitation), terrain and battle tactics, balance harness (`tests/balance-report.js`, reports in [`docs/balance/`](balance/)), performance budget test in CI (`tests/perf.test.js`), save compatibility tests with fixtures from two releases (`tests/save-compat.test.js`), fixed command grid and larger minimap with filters (`game/js/hud.js`).
+- **Found by the new performance test and fixed:** builders boxed in near a site, farmers aiming at a taken centre tile and lumberjacks standing diagonally to a tree all searched for a route every tick (a 35-minute AI game spent 70% of its time there; lumberjacks in that spot never chopped at all). A mid-game tick went from 20.5 ms to about 8 ms, and route searches from 17 to 4 per tick. The AI's lumber-camp site search (up to 1.4 s in one tick) and scout routes into forest were also fixed.
+- **Next:** release tags and changelog, then phase 2 (economy planner, build orders) measured against the balance report.
+
 ## Computer opponents and balance
 
 A stronger AI economy is the single highest-value change: a match only feels like Age of Empires when the rival reaches the Castle and Imperial Ages with a real army. Target: a standard AI reaches the Castle Age by minute 22 and the Imperial Age by minute 40 in 9 of 10 seeded games.

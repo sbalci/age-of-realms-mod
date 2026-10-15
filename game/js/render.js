@@ -1279,14 +1279,15 @@ function renderMinimap(cv, editor) {
     }
     bg.putImageData(img, 0, 0);
   }
-  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, S, S);
-  const k = S / (n * 2);
-  // diamond transform: tile (x,y) -> ((x-y)*k + S/2, (x+y)*k/2 + S/4)
-  g.setTransform(k, k / 2, -k, k / 2, S / 2, S / 4);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, S, cv.height);
+  const k = S / (n * 2), oy = (cv.height - S / 2) / 2;
+  // diamond transform: tile (x,y) -> ((x-y)*k + S/2, (x+y)*k/2 + oy); the diamond is S wide and S/2 tall, centred vertically
+  g.setTransform(k, k / 2, -k, k / 2, S / 2, oy);
   g.drawImage(MM.base, 0, 0);
-  // entities
+  // entities (MM.filter: 'all', 'mil', 'eco' or 'land')
   for (const e of W.list) {
     if (e.kind === 'unit' && e.inside) continue;
+    if (MM.filter && MM.filter !== 'all' && !mmFilterPass(e, MM.filter)) continue;
     const c = center(e);
     if (!editor && W.settings.fog !== 'none' && !W.noFog) {
       if (e.kind === 'unit' && e.owner !== W.humanId && !isVisibleToHuman(e)) continue;
@@ -1314,11 +1315,20 @@ function renderMinimap(cv, editor) {
   // view rect
   const corners = [screenToTile(0, 0), screenToTile(R.cw, 0), screenToTile(R.cw, R.ch), screenToTile(0, R.ch)];
   g.strokeStyle = '#fff'; g.lineWidth = 0.8; g.beginPath(); corners.forEach((c, i) => i ? g.lineTo(c.x, c.y) : g.moveTo(c.x, c.y)); g.closePath(); g.stroke();
+  if (typeof GameHooks === 'object') GameHooks.emit('minimap', g, cv, editor);
   g.setTransform(1, 0, 0, 1, 0, 0);
 }
+function mmFilterPass(e, f) {
+  if (f === 'land') return e.kind === 'relic' || (e.kind === 'bld' && e.owner === W.humanId && e.type === 'tc');
+  const mil = e.kind === 'unit' && e.owner !== 0 && UNITS[e.type] && UNITS[e.type].atk > 0 && e.type !== 'villager' && !UNITS[e.type].animal;
+  const milBld = e.kind === 'bld' && BUILDINGS[e.type] && (BUILDINGS[e.type].cat === 'mil' || BUILDINGS[e.type].atk > 0);
+  if (f === 'mil') return mil || milBld || e.kind === 'relic';
+  if (f === 'eco') return e.kind === 'res' || (e.kind === 'unit' && !mil && e.owner !== 0) || (e.kind === 'bld' && !milBld);
+  return true;
+}
 function minimapToTile(cv, mx, my) {
-  const n = W.n, S = cv.width, k = S / (n * 2);
-  const X = (mx - S / 2) / k, Y = (my - S / 4) / (k / 2);
+  const n = W.n, S = cv.width, k = S / (n * 2), oy = (cv.height - S / 2) / 2;
+  const X = (mx - S / 2) / k, Y = (my - oy) / (k / 2);
   return { x: (X + Y) / 2, y: (Y - X) / 2 };
 }
 

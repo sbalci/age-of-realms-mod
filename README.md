@@ -1,5 +1,56 @@
 # Age of Realms
 
+A medieval strategy game you play in your web browser: grow a village, advance through four ages, build an army and defeat computer rivals. It is free, runs on your own computer and needs no account.
+
+## How to play (no technical knowledge needed)
+
+You need a Windows or Mac computer with a keyboard and mouse, and about 5 minutes the first time.
+
+**1. Download the game**
+
+1. On this page, click the green **Code** button near the top, then **Download ZIP**.
+2. Open your Downloads folder and unzip the file:
+   - **Windows:** right-click `age-of-realms-mod-main.zip` → **Extract All…** → **Extract**.
+   - **Mac:** double-click the zip file.
+3. You now have a folder called `age-of-realms-mod-main`. You can move it anywhere, for example to your Documents.
+
+**2. Install Python (once)**
+
+The game uses Python to run a tiny private web server on your computer. Nothing is sent to the internet.
+
+- **Windows:** go to [python.org/downloads](https://www.python.org/downloads/), click the yellow **Download Python** button and run the installer. On the first screen, **tick "Add python.exe to PATH"**, then click **Install Now**.
+- **Mac:** usually nothing to do. If the game later says Python is missing, install it from [python.org/downloads](https://www.python.org/downloads/) or accept the "install command line developer tools" offer that macOS shows.
+
+**3. Start the game**
+
+Open the `age-of-realms-mod-main` folder and double-click:
+
+- **Windows:** `Start Game (Windows).bat`. If a blue "Windows protected your PC" box appears, click **More info** → **Run anyway**.
+- **Mac:** `Start Game (Mac).command`. The first time, macOS may refuse to open it: right-click (or Control-click) the file, choose **Open**, then **Open** again.
+
+A small black window opens and, after a moment, the game appears in your web browser. If the browser does not open by itself, type `http://127.0.0.1:8000/game/` into its address bar.
+
+**Keep the small black window open while you play.** When you are done, close the browser tab and then that window.
+
+**4. First game**
+
+Click **Learn to Play** for five short interactive lessons, or **Single Player** → **Start Game**. Press **F1** in a game for help. Sound starts after your first click.
+
+**Getting a newer version:** download the ZIP again (step 1) and use the new folder. Saved matches live in your browser, so they stay available as long as you use the same browser.
+
+**Something wrong?**
+
+| Problem | What to do |
+|---|---|
+| "Python is needed…" message | Install Python (step 2). On Windows, make sure "Add python.exe to PATH" was ticked; if not, run the installer again, choose **Modify**, and tick it. |
+| The window closes at once, or says port 8000 is in use | Another copy is probably still running. Close all of its black windows and try again, or restart the computer. |
+| The browser shows "This site can't be reached" | Wait a few seconds and press Refresh. The black window must stay open. |
+| A blank page, or nothing happens when you double-click `index.html` | Always start with the **Start Game** file, not by opening `index.html` directly. |
+
+---
+
+## About
+
 A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. You grow a settlement, advance through four ages, build an economy and an army, and defeat computer rivals. Playing requires no build step or external network calls. An optional Three.js renderer is bundled locally; development dependencies support browser tests and updating that bundle.
 
 It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison experiment](https://github.com/Barty-Bart/opus-55-effort-comparison) and adds systems for mortality, water, terraforming and engineering. The six original builds are archived unchanged in [`legacy/`](legacy/).
@@ -8,7 +59,9 @@ It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison exp
 
 <p><img src="assets/screenshots/overview.jpg" width="49%" alt="AI vs AI overview"> <img src="assets/screenshots/battle.jpg" width="49%" alt="Janissaries and knights in battle"></p>
 
-## Play
+## Play from the command line
+
+For people comfortable with a terminal (Linux too):
 
 ```sh
 git clone https://github.com/sbalci/age-of-realms-mod
@@ -141,6 +194,11 @@ The 2.5D view includes animated water glints that respect fog and building occlu
 
 **Idle buttons:** on the minimap corner, one for idle villagers and one for idle soldiers, each with a count. Click selects the next one; shift-click selects all.
 
+**Command grid and minimap** (`game/js/hud.js`)
+- Every command button sits where its hotkey is on the keyboard (Q W E R T Y / A S D F G H / Z X C V B N). Back is always bottom left and Delete bottom right, so positions never shift between selections.
+- The minimap is larger, scales with the window, and keeps the map's diamond shape without wasted space.
+- Filters under the minimap: All, Army, Eco and Land. Selected units' destinations show as lines; minimap clicks and right-click orders leave a short ring.
+
 The in-game **Help** (F1) describes every system.
 
 ### Learning, rules and saving
@@ -170,6 +228,7 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 | `?thirst=off` | no water capacity |
 | `?balance=off` | earlier lifespans, no Herbal Medicine or Sanitation, no elder slowdown |
 | `?tactics=off` | no forest, ford, flanking or leadership modifiers; classic AI attacks |
+| `?hud=off` | flowing command card and the small square minimap |
 | `?terra=off` | no terraforming |
 | `?hd=off` | classic flat terrain and buildings |
 | `?unitshd=off` | classic live-drawn units and emoji icons (finer: `unitsprites`, `unitsmooth`, `facings`, `unitsil`, `hdicons`) |
@@ -180,6 +239,7 @@ Add these to the game address, e.g. `game/?aging=off&thirst=off`:
 ## Repository layout
 
 ```
+Start Game (Windows).bat / Start Game (Mac).command   double-click launchers
 index.html        landing page
 game/             the game (all development happens here)
   vendor/fonts/   Cinzel and Crimson Text (SIL OFL), bundled so the game needs no network
@@ -207,23 +267,28 @@ game/             the game (all development happens here)
   js/polish.js    path-finding budget, spectator HUD, pause button, gatherer counts, editor help
   js/balance.js   lifespans, elders, Herbal Medicine, Sanitation, AI villager replacement
   js/tactics.js   forest cover, fords, flanking, leadership, AI battle memory and staging
+  js/hud.js       fixed command grid, larger minimap, filters and order lines
   js/glyphs.js    drawn UI glyphs that replace emoji
   js/session.js   versioned saves, autosaves and restore
   js/onboarding.js rule presets, remappable shortcuts and interactive lessons
   js/engineering.js bounded AI bridge, tunnel and trench planning
   js/main.js      boot and game loop
-tests/            headless tests (Node, no dependencies)
+tests/            headless tests (Node, no dependencies), balance harness, save fixtures
+docs/             improvement plan and balance reports
 legacy/           the six original experiment builds, prompts and metrics (archived, not maintained)
 ```
 
 ## Development
 
 - All scripts are classic scripts that share globals. They load in the order given in `game/index.html`.
-- Existing mods wrap engine functions. New systems should prefer `GameHooks.on(name, callback)`, which returns an unsubscribe function. The events are `entityAdded`, `worldCreated`, `worldRestored`, `beforeTick`, and `afterTick`. Water, wells, terrain jobs, victory tracking and unit interpolation now use these hooks. `entityAdded` runs before final unit/building stats are assigned; `worldCreated` runs after base initialization. UI preparation follows `worldRestored`.
+- Existing mods wrap engine functions. New systems should prefer `GameHooks.on(name, callback)`, which returns an unsubscribe function. The events are `entityAdded`, `worldCreated`, `worldRestored`, `beforeTick`, `afterTick`, `commands` (the command card before it is drawn), `topbar` and `minimap` (drawing on the minimap in tile coordinates). `GameHooks.modify(name, fn)` and `GameHooks.apply(name, value, ...args)` chain value modifiers; `damage` uses them. Water, wells, terrain jobs, victory tracking and unit interpolation now use these hooks. `entityAdded` runs before final unit/building stats are assigned; `worldCreated` runs after base initialization. UI preparation follows `worldRestored`.
 - Gameplay randomness uses `simRandom()` / `W.rng`, with its state retained in saves. Cosmetic animation, audio and particles use a separate `Math.random()` stream. A seed and the same orders reproduce the simulation.
 - Run `node tests/run-all.js --quick` for focused checks, `node tests/run-all.js --full` for integration and long AI simulations, or a single suite such as `node tests/terraform.test.js`. Headless tests have no dependencies; the new harness reads the real HTML script order. The runner reports process errors, timeouts and failing output.
 - For browser tests: `npm ci`, `npx playwright install chromium`, then `npm run test:browser`. Playwright is development-only. The test server binds to localhost; tests cover setup, lessons, save/load, imports and keyboard focus. GitHub Actions runs headless and browser checks on pushes and pull requests.
-- Reproducible balance runs: `node tests/tournament.js --minutes=20 --seeds=1,7 --maps=land,coastal,islands --civs=franks,turks --out=results.json`. Each pairing swaps starting positions. JSON records completion, winner, economy, age, population, losses and inactivity. Short timed-out matches are smoke checks, not evidence of balance.
+- Balance report: `node tests/balance-report.js --seeds=1,2,3,4,5,6,7,8,9,10 --minutes=35` plays seeded AI-vs-AI games in parallel and writes `docs/balance/latest.md`, `latest.json`, and one row per run in `docs/balance/history.csv` (age-up times, villager curves, old-age deaths, thirst, winners, slowest tick, and the phase-1 gate: AI in the Castle Age by minute 22). Options: `--maps`, `--civs`, `--difficulty`, `--jobs`, `--timeout`, `--no-history`.
+- Performance budget: `node tests/perf.test.js` (part of `--full` and CI) times simulation ticks for an AI economy, a 120-vs-120 battle and an 8-player map, in units of a fixed CPU workload so the budget holds on any machine.
+- Save compatibility: `tests/save-compat.test.js` loads every save in `tests/fixtures/saves`, plays it on and saves it again. When a release changes saved state, add a fixture with `node tests/make-save-fixture.js <date>-<commit>-<label>` and never regenerate old ones.
+- Quick AI matchups: `node tests/tournament.js --minutes=20 --seeds=1,7 --maps=land,coastal,islands --civs=franks,turks --out=results.json`. Each pairing swaps starting positions. JSON records completion, winner, economy, age, population, losses and inactivity. Short timed-out matches are smoke checks, not evidence of balance.
 - `window.__game.PERF` exposes simulation/render milliseconds, effective speed, backlog and dropped time. The loop retains unfinished ticks, budgets up to 32 ticks per frame, caps extreme backlogs at 2 seconds, and shows “catching up” beside game speed when overloaded. Post-victory time advances independently of rendering FPS.
 - There is a single branch: `main`.
 

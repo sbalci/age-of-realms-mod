@@ -372,8 +372,14 @@ function renderCommands() {
     UI.cmds = commandsFor(sel);
     if (typeof GameHooks === 'object') GameHooks.emit('commands', sel, UI.cmds);
     box.innerHTML = '';
+    // a 'commands' listener may give each command a fixed grid slot (c.slot = {row, col}) and ask for empty cells (UI.cmdGrid)
+    if (UI.cmdGrid) for (let r = 0; r < UI.cmdGrid.rows; r++) for (let k = 0; k < UI.cmdGrid.cols; k++) {
+      if (UI.cmds.some(c => c.slot && c.slot.row === r && c.slot.col === k)) continue;
+      const e = el('div', 'cmd-empty'); e.style.gridRow = r + 1; e.style.gridColumn = k + 1; box.appendChild(e);
+    }
     for (const c of UI.cmds) {
       const b = el('div', 'cmd');
+      if (c.slot) { b.style.gridRow = c.slot.row + 1; b.style.gridColumn = c.slot.col + 1; }
       b.style.backgroundImage = `url(${iconFor(c.icon)})`;
       b.innerHTML = `<span class="hk">${c.label || c.key}</span>`;
       b.onclick = e => { e.stopPropagation(); runCmd(c); };

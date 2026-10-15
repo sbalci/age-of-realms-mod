@@ -139,7 +139,18 @@ class AIPlayer {
       if (++tries > 2) break;
       const c = effCost(p, type); if (!canPay(p, c)) continue;
       if (type === 'miningcamp') { const g = findNearestRes({ x: home.x, y: home.y, type: 'villager' }, ['gold'], home.x, home.y, 25); if (g) { if (this.build('miningcamp', { x: g.x + 0.5, y: g.y + 0.5 }, 1, 4)) { this.buildCooldown = 5; break; } } continue; }
-      if (type === 'lumbercamp') { const tr = findNearestRes({ x: home.x, y: home.y, type: 'villager' }, ['tree'], home.x, home.y, 25, e => W.list.filter(o => o.kind === 'res' && o.type === 'tree' && Math.abs(o.x - e.x) < 3 && Math.abs(o.y - e.y) < 3).length > 5 && !W.list.some(b => b.kind === 'bld' && b.owner === this.id && b.type === 'lumbercamp' && Math.hypot(b.x - e.x, b.y - e.y) < 8)); if (tr) { if (this.build('lumbercamp', { x: tr.x + 0.5, y: tr.y + 0.5 }, 1, 4)) { this.buildCooldown = 5; break; } } continue; }
+      if (type === 'lumbercamp') {
+        // a tree with at least six others close by and no camp of ours within 8 tiles; the tree and camp lists are
+        // gathered once (scanning the whole world per candidate tree took over a second on a forested map)
+        if (this.noLumberSpotT > W.t) continue;
+        const trees = new Set(); for (const o of W.list) if (o.kind === 'res' && o.type === 'tree' && Math.abs(o.x - home.x) < 29 && Math.abs(o.y - home.y) < 29) trees.add(W.map.idx(o.x | 0, o.y | 0));
+        const camps = this.mine(b => b.kind === 'bld' && b.type === 'lumbercamp');
+        const dense = e => { let n = 0; const ex = e.x | 0, ey = e.y | 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (W.map.inb(ex + dx, ey + dy) && trees.has(W.map.idx(ex + dx, ey + dy)) && ++n > 5) return true; return false; };
+        const tr = findNearestRes({ x: home.x, y: home.y, type: 'villager' }, ['tree'], home.x, home.y, 25, e => dense(e) && !camps.some(b => Math.hypot(b.x - e.x, b.y - e.y) < 8));
+        if (tr) { if (this.build('lumbercamp', { x: tr.x + 0.5, y: tr.y + 0.5 }, 1, 4)) { this.buildCooldown = 5; break; } }
+        else this.noLumberSpotT = W.t + 30;
+        continue;
+      }
       const b = type === 'dock' ? this.buildDock(home) : this.build(type, home, type === 'tower' ? 6 : 5, type === 'castle' ? 14 : 16);
       if (b) { this.buildCooldown = 5; break; }
     }
@@ -329,7 +340,13 @@ class AIPlayer {
     if (!scout || scout.order || this.t > 360) return;
     const h = this.home();
     if (!this.scoutPts) { this.scoutPts = []; for (let r of [9, 14, 19]) for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + r; this.scoutPts.push({ x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r }); } }
-    const pt = this.scoutPts.shift(); if (pt) setOrder(scout, { t: 'move', x: Math.max(1, Math.min(W.n - 2, pt.x)), y: Math.max(1, Math.min(W.n - 2, pt.y)) });
+    // skip points in forest, water or another land mass: an unreachable goal makes the route search exhaust its whole budget
+    const reg = W.map.landReg[W.map.idx(scout.x | 0, scout.y | 0)];
+    while (this.scoutPts.length) {
+      const pt = this.scoutPts.shift(), x = Math.max(1, Math.min(W.n - 2, pt.x)), y = Math.max(1, Math.min(W.n - 2, pt.y));
+      if (!tilePassFor(scout, x, y) || W.map.landReg[W.map.idx(x | 0, y | 0)] !== reg) continue;
+      setOrder(scout, { t: 'move', x, y }); break;
+    }
   }
   manageBell(tcs) {
     const p = this.p;

@@ -1032,14 +1032,21 @@ function gatherLogic(u, dt) {
   const isFarm = e.kind === 'bld';
   const reach = isFarm ? 0.01 : naval ? 1.5 : 1.0;
   const dist = isFarm ? (u.x >= e.x && u.x <= e.x + 3 && u.y >= e.y && u.y <= e.y + 3 ? 0 : 1) : distTo(u, e);
-  if (dist > reach) {
+  // u.gnear: the route search said this unit already stands next to the resource (e.g. diagonally, 1.15 tiles away);
+  // it works from there instead of asking for a route again every tick
+  if (dist > reach && !(u.gnear === e.id && dist <= reach + 0.6)) {
     if (isFarm && !e.farmer) e.farmer = u.id;
     if (!u.path || u.pi >= u.path.length) {
-      if (isFarm) moveToPoint(u, e.x + 1.5, e.y + 1.5);
-      else { pathTo(u, rectOf(e), 1); if (!u.pathOk && u.path.length === 0) { u.gfail = (u.gfail || 0) + 1; if (u.gfail > 3) { u.gfail = 0; e.gatherers += 3; o.id = -1; } } }
+      // a farm is reached on any of its tiles (aiming at the centre tile failed whenever that one tile was taken,
+      // and the failed search then ran again every tick)
+      pathTo(u, rectOf(e), isFarm ? 0 : 1);
+      if (u.pathOk && u.path.length === 0) u.gnear = e.id;
+      else if (!u.pathOk && (isFarm || u.path.length === 0)) {
+        u.gfail = (u.gfail || 0) + 1;
+        if (u.gfail > 3) { u.gfail = 0; if (isFarm) { if (e.farmer === u.id) e.farmer = 0; setOrder(u, null); return; } e.gatherers += 3; o.id = -1; }
+      } else u.gfail = 0;
     }
-    followPath(u, dt);
-    return;
+    if (u.gnear !== e.id) { followPath(u, dt); return; }
   }
   // working
   u.path = null;
@@ -1089,9 +1096,18 @@ function buildLogic(u, dt) {
   const b = ent(u.order.id);
   if (!b || b.dead) { setOrder(u, null); return; }
   if (b.built) { afterBuild(u, b); return; }
-  if (distTo(u, b) > 1.1) {
-    if (!u.path || u.pi >= u.path.length) { pathTo(u, rectOf(b), 1); if (!u.pathOk && distTo(u, b) > 2.5) { u.bfail = (u.bfail || 0) + 1; if (u.bfail > 4) { u.bfail = 0; setOrder(u, null); return; } } }
-    followPath(u, dt); return;
+  // A builder that cannot get closer than 2.5 tiles (crowded or fenced-in foundation) works from where it stands;
+  // before, it searched for a route to the site again every tick, which was most of the simulation's time.
+  const bd = distTo(u, b);
+  if (bd > 1.1 && !(u.bclose === b.id && bd <= 2.5)) {
+    if (!u.path || u.pi >= u.path.length) {
+      pathTo(u, rectOf(b), 1);
+      if (!u.pathOk) {
+        if (bd <= 2.5) u.bclose = b.id;
+        else { u.bfail = (u.bfail || 0) + 1; if (u.bfail > 4) { u.bfail = 0; setOrder(u, null); return; } }
+      }
+    }
+    if (u.bclose !== b.id) { followPath(u, dt); return; }
   }
   u.path = null; faceTo(u, b);
   if (!u.work || u.work.kind !== 'build') { u.work = { kind: 'build' }; b.builders++; }

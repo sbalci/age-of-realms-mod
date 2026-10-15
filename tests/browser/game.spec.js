@@ -91,3 +91,25 @@ test('spectator names remain text and normal play restores diplomacy',async({pag
   await page.evaluate(()=>{__game.W.spectate=false;updateTopbar();});
   await expect(page.locator('#b-dip')).toBeVisible();await expect(page.locator('#age-label')).toHaveAttribute('title','');
 });
+test('command buttons keep fixed slots and the minimap filters toggle', async ({ page }) => {
+  await page.locator('#btn-sp').click();
+  await page.locator('#s-start').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  const slots = async () => page.evaluate(() => [...document.querySelectorAll('#cmds .cmd')].map(b => [b.querySelector('.hk').textContent, b.style.gridRow, b.style.gridColumn]));
+  await page.evaluate(() => { __game.UI.selection = [__game.W.list.find(e => e.type === 'villager' && e.owner === 1)]; __game.UI.panelKey = ''; });
+  await expect(page.locator('#cmds .cmd')).not.toHaveCount(0);
+  const vil = Object.fromEntries((await slots()).map(([k, r, c]) => [k, r + '/' + c]));
+  expect(vil.Del).toBe('4/6');
+  expect(vil.S).toBe('2/2');
+  await page.evaluate(() => { __game.UI.selection = [__game.W.list.find(e => e.type === 'tc' && e.owner === 1)]; __game.UI.panelKey = ''; });
+  await expect(page.locator('#cmds .cmd .hk', { hasText: 'Y' })).toHaveCount(1);
+  const tc = Object.fromEntries((await slots()).map(([k, r, c]) => [k, r + '/' + c]));
+  expect(tc.Del).toBe('4/6');
+  expect(tc.Q).toBe('1/1');
+  expect(await page.locator('#cmds .cmd-empty').count()).toBeGreaterThan(0);
+  const size = await page.locator('#minimap').boundingBox();
+  expect(size.width).toBeGreaterThan(230);
+  expect(Math.abs(size.width - size.height * 2)).toBeLessThan(2);
+  await page.locator('.mm-filters button[data-f="mil"]').click();
+  await expect(page.locator('.mm-filters button.on')).toHaveText('Army');
+});
