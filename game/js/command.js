@@ -613,7 +613,7 @@ if (typeof drawOverlays === 'function') {
 function cmdSetSpeed(dir) {
   const s = CMD.speeds, cur = W.speed || 1;
   let i = dir > 0 ? s.findIndex(v => v > cur + 1e-6) : (() => { let k = -1; s.forEach((v, j) => { if (v < cur - 1e-6) k = j; }); return k; })();
-  if (i < 0) i = dir > 0 ? s.length - 1 : 0;
+  if (i < 0) i = dir > 0 ? s.indexOf(1) : 0;   // past the fastest speed, wrap back to normal (×1)
   W.speed = s[i];
   msg(`Game speed ×${W.speed}`, '#ccc');
   if (typeof updateTopbar === 'function' && typeof document !== 'undefined') updateTopbar();
@@ -625,13 +625,13 @@ if (typeof updateTopbar === 'function') {
     let s = document.querySelector('#r-speed');
     if (!s) {
       const clock = document.querySelector('#clock'); if (!clock) return;
-      s = document.createElement('div'); s.id = 'r-speed'; s.className = 'res'; s.title = 'Game speed (+ / − to change)'; s.style.cursor = 'pointer';
+      s = document.createElement('div'); s.id = 'r-speed'; s.className = 'res'; s.title = 'Game speed: click or + for faster (after the fastest it returns to ×1), Shift+click or − for slower'; s.style.cursor = 'pointer';
       s.onclick = e => cmdSetSpeed(e.shiftKey ? -1 : 1);
       clock.parentNode.insertBefore(s, clock.nextSibling);
     }
     const lagging = typeof PERF !== 'undefined' && PERF.lag > 0.1;
     const txt = `×${W.speed || 1}${lagging ? ' · catching up' : ''}`; if (s.dataset.txt !== txt) { s.dataset.txt = txt; s.innerHTML = (typeof GLYPH === 'function' ? GLYPH('fast') + ' ' : '') + txt; }
-    s.title = lagging ? `Simulation backlog ${PERF.lag.toFixed(2)} seconds. Reduce game speed to ease the load.` : 'Game speed (+ / − to change)';
+    s.title = lagging ? `Simulation backlog ${PERF.lag.toFixed(2)} seconds. Reduce game speed to ease the load.` : 'Game speed: click or + for faster (after the fastest it returns to ×1), Shift+click or − for slower';
   };
 }
 if (typeof openGameMenu === 'function') {
