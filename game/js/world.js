@@ -480,7 +480,8 @@ function killEnt(e, src) {
     if (d.naval) { Sound.play('sink', e.x, e.y); emitFx('splash', e.x, e.y, 10); W.decals.push({ type: 'wreck', x: e.x, y: e.y, t: W.t, face: e.face, ship: e.type, owner: e.owner, dur: 6 }); removeEnt(e); return; }
     if (d.animal && d.food > 0) {
       // becomes carcass resource
-      const c = addEnt({ id: newId(), kind: 'res', type: 'carcass', animal: e.type, x: Math.max(0, Math.min(W.n - 1, e.x | 0)), y: Math.max(0, Math.min(W.n - 1, e.y | 0)), fx: e.x, fy: e.y, face: e.face, amount: d.food, max: d.food, owner: 0, gatherers: 0 });
+      const food = e.food || d.food;
+      const c = addEnt({ id: newId(), kind: 'res', type: 'carcass', animal: e.breed || e.type, x: Math.max(0, Math.min(W.n - 1, e.x | 0)), y: Math.max(0, Math.min(W.n - 1, e.y | 0)), fx: e.x, fy: e.y, face: e.face, amount: food, max: food, owner: 0, gatherers: 0 });
       removeEnt(e);
       Sound.play(e.type === 'sheep' ? 'bleat' : 'animaldie', e.x, e.y);
       return c;

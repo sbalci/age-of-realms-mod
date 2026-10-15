@@ -45,8 +45,10 @@ const P = run(`(() => { mk('turks','franks',0); const p=W.players[1], q=W.player
   if(c) setOrder(v,{t:'gather',id:c.id}); for(let i=0;i<40;i++) worldTick(0.05);
   const noButcher=!!c && !v.order && (!v.carry||!v.carry.amt);
   const fv=W.list.find(e=>e.kind==='unit'&&e.owner===2&&e.type==='villager'); const fb=spawnUnit('boar',0,fv.x+1.5,fv.y); setOrder(fv,{t:'hunt',id:fb.id}); worldTick(0.05);
-  return { boarT, boarF, sheepT, sheepF, refused, noButcher, franksHunt: !!fv.order&&fv.order.t==='hunt', eatsT: eatsMeat(1,'boar'), eatsSheep: eatsMeat(1,'sheep'), eatsF: eatsMeat(2,'boar') }; })()`);
-ok('Turks do not eat pork: no boar at a Turkish start (sheep instead); villagers refuse to hunt or butcher boar; Franks still hunt', P.boarT === 0 && P.boarF > 0 && P.sheepT >= P.sheepF + 3 && P.refused && P.noButcher && P.franksHunt && !P.eatsT && P.eatsSheep && P.eatsF, P);
+  const cows=W.list.filter(e=>e.kind==='unit'&&e.breed==='cow'); const cow=cows[0]; const cname=civUnitName(cow.type,cow.owner,cow);
+  applyDamage(cow,999,null); const cc=W.list.find(e=>e.kind==='res'&&e.type==='carcass'&&e.animal==='cow');
+  return { cows: cows.length, cname, cowFood: cc&&cc.amount, cowEat: eatsMeat(1,'cow'), boarT, boarF, sheepT, sheepF, refused, noButcher, franksHunt: !!fv.order&&fv.order.t==='hunt', eatsT: eatsMeat(1,'boar'), eatsSheep: eatsMeat(1,'sheep'), eatsF: eatsMeat(2,'boar') }; })()`);
+ok('Turks do not eat pork: no boar at a Turkish start (3 cows of 150 food per boar instead); villagers refuse to hunt or butcher boar; Franks still hunt', P.boarT === 0 && P.boarF > 0 && P.cows === 3 * P.boarF && P.cname === 'Cow' && P.cowFood === 150 && P.cowEat && P.sheepT >= P.sheepF + 6 && P.refused && P.noButcher && P.franksHunt && !P.eatsT && P.eatsSheep && P.eatsF, P);
 const D = run(`(() => { mk('turks','franks',2); W.settings.spectate=true; exSpectateBegin(Object.assign({}, W.settings, {name:'P0', difficulty:'standard'}));
   for(let i=2;i<W.players.length;i++) W.players[i].ai=new AIPlayer(W.players[i],'standard');
   const p=W.players[1]; const hasAi=!!p.ai; let err=null; try { for(let i=0;i<20*60*4;i++) worldTick(0.05); } catch(e){ err=e.stack; }

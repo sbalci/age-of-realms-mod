@@ -79,7 +79,7 @@ function uhdExtra(u, d) {
     return wk + '/' + ot + '/' + c + '/' + (u.work && u.work.kind === 'butcher' ? 'b' : '') + '/' + uhdVariantId(u, d);
   }
   if (dr === 'monk') return (u.relic ? 'r' : '') + (u.recharge > 0 ? 'c' : '') + '/' + (u.anim === 'work' && u.work ? u.work.kind : '') + '/' + uhdVariantId(u, d);
-  if (UHD.ANIMAL.has(dr)) return '' + ((u.id || 0) % 2);
+  if (UHD.ANIMAL.has(dr)) return (u.breed || '') + ((u.id || 0) % 2);
   return '' + uhdVariantId(u, d);
 }
 function uhdKey(u, d, t, wt, zb, pcc) {

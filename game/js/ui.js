@@ -431,7 +431,7 @@ function renderSelInfo() {
   const e = sel[0]; const p = W.players[e.owner];
   let name, icon, lines = [];
   if (e.kind === 'unit') {
-    const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner) : d.name; icon = 'unit:' + e.type + (e.owner !== W.humanId && e.owner > 0 ? '@' + e.owner : '');
+    const d = UNITS[e.type]; name = typeof civUnitName === 'function' ? civUnitName(e.type, e.owner, e) : d.name; icon = 'unit:' + e.type + (e.owner !== W.humanId && e.owner > 0 ? '@' + e.owner : '');
     if (!d.animal || e.owner) {
       const rng = statU(e, 'range'); lines.push(`<span class="stat">${GLYPH('sword', 'Attack')} ${statU(e, 'atk')}</span>${d.range ? ` <span class="stat">${GLYPH('target', 'Range')} ${d.range + rng}</span>` : ''} <span class="stat">${GLYPH('shield', 'Armor (melee/pierce)')} ${statU(e, 'ma')}/${statU(e, 'pa')}</span>`);
     }

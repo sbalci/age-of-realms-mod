@@ -18,12 +18,14 @@ if (typeof CIVS === 'object' && !CIVS.turks) {
   };
   if (typeof AI_NAMES !== 'undefined' && Array.isArray(AI_NAMES)) AI_NAMES.push('Mehmed', 'Suleiman', 'Alp Arslan');
 }
-// Turks do not eat pork: villagers will not hunt boar or butcher a boar carcass, and the two boars near a
-// Turkish start become sheep (3 per boar, 300 food against the boar's 340, but safe to gather).
+// Turks do not eat pork: villagers will not hunt boar or butcher a boar carcass. Each boar near a Turkish
+// start becomes three cows instead (a herd breed of sheep worth 150 food: 900 food against the boars' 680).
+const COW = { food: 150, hp: 10 };
+function makeCow(u) { u.breed = 'cow'; u.food = COW.food; u.maxhp = u.hp = COW.hp; return u; }
 if (typeof CIVS === 'object' && CIVS.turks) {
   CIVS.turks.noMeat = ['boar'];
   CIVS.turks.noMeatMsg = 'Turks do not eat pork: villagers will not hunt wild boar.';
-  if (!CIVS.turks.bonuses.includes('No pork: start with sheep instead of wild boar')) CIVS.turks.bonuses.push('No pork: start with sheep instead of wild boar');
+  if (!CIVS.turks.bonuses.includes('No pork: start with cows instead of wild boar')) CIVS.turks.bonuses.push('No pork: start with cows instead of wild boar');
 }
 if (typeof GameHooks === 'object') GameHooks.on('worldCreated', () => {
   if (W.editor) return;
@@ -34,7 +36,7 @@ if (typeof GameHooks === 'object') GameHooks.on('worldCreated', () => {
       // only boars that are closer to this player than to any other start
       if (W.players.some(q => q && q !== p && q.startX !== undefined && Math.hypot(b.x - q.startX, b.y - q.startY) < Math.hypot(b.x - p.startX, b.y - p.startY))) continue;
       const x = b.x, y = b.y; removeEnt(b);
-      for (let k = 0; k < 3; k++) spawnUnit('sheep', 0, Math.min(W.n - 1, x + (k % 2) * 0.8), Math.min(W.n - 1, y + (k >> 1) * 0.8));
+      for (let k = 0; k < 3; k++) makeCow(spawnUnit('sheep', 0, Math.min(W.n - 1, x + (k % 2) * 0.9), Math.min(W.n - 1, y + (k >> 1) * 0.9)));
     }
   }
 });
@@ -60,7 +62,8 @@ if (typeof applyCivBonus === 'function') {
   };
 }
 const isImam = u => !!(u && u.type === 'monk' && typeof W !== 'undefined' && W.players && W.players[u.owner] && W.players[u.owner].civ === 'turks');
-function civUnitName(type, owner) {
+function civUnitName(type, owner, e) {
+  if (e && e.breed === 'cow') return 'Cow';
   const p = typeof W !== 'undefined' && W.players ? W.players[owner] : null;
   if (type === 'monk' && p && p.civ === 'turks') return 'Imam';
   return UNITS[type] ? UNITS[type].name : type;
