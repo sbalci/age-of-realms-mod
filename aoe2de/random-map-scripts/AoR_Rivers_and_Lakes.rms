@@ -1,0 +1,379 @@
+/* =====================================================================
+   Age of Realms: Rivers and Lakes  (AoE2 DE random map script)
+   ---------------------------------------------------------------------
+   Ported from the Age of Realms web game (game/js/water.js): water comes
+   in three kinds, each with its own fish.
+     * Rivers  run between the players (shallow WATER) with fordable
+               shallows on every route between players.  Fish: salmon.
+     * Lakes   sit inland, one or two near every player (azure water).
+               Fish: perch.  Lake shores are good for mills and wells.
+     * Sea     (35% of maps) along one edge of the map (DEEP_WATER).
+               Fish: tuna, dorado and marlin, for docks and fishing ships.
+   Start: Town Center, villagers, scout, 8 sheep, deer, 2 boar, berries,
+   gold and stone, like the standard maps.  Turks in the Age of Realms
+   data mod cannot hunt boar and start with cows instead.
+   CC0: free to use, share and change.
+   ===================================================================== */
+
+start_random
+  percent_chance 35 #define AOR_SEA
+end_random
+
+<PLAYER_SETUP>
+random_placement
+ai_info_map_type RIVERS 0 0
+
+<LAND_GENERATION>
+base_terrain WATER
+
+create_player_lands
+{
+  terrain_type                    GRASS
+  land_percent                    86
+  base_size                       12
+  other_zone_avoidance_distance   7     /* river width between neighbours */
+  border_fuzziness                6
+  clumping_factor                 15
+if AOR_SEA
+  top_border                      26    /* open water along one edge becomes the sea */
+endif
+}
+
+<ELEVATION_GENERATION>
+create_elevation 4
+{
+  base_terrain                    GRASS
+  number_of_clumps                12
+  number_of_tiles                 1200
+  set_scale_by_groups
+  spacing                         2
+}
+
+<TERRAIN_GENERATION>
+/* ---- the sea: water far from any shore turns deep; the narrow rivers stay shallow ---- */
+if AOR_SEA
+create_terrain MED_WATER
+{
+  base_terrain                    WATER
+  land_percent                    100
+  number_of_clumps                9999
+  spacing_to_other_terrain_types  4
+}
+create_terrain DEEP_WATER
+{
+  base_terrain                    MED_WATER
+  land_percent                    100
+  number_of_clumps                9999
+  spacing_to_other_terrain_types  3
+}
+endif
+
+/* ---- lakes: one or two near each player, kept away from the rivers ---- */
+create_terrain DLC_WATER5
+{
+  base_terrain                    GRASS
+  land_percent                    5
+  number_of_clumps                2
+  set_scale_by_groups
+  spacing_to_other_terrain_types  5
+  set_avoid_player_start_areas    14
+  clumping_factor                 25
+}
+
+/* ---- forests and ground patches ---- */
+create_terrain FOREST
+{
+  base_terrain                    GRASS
+  land_percent                    9
+  number_of_clumps                12
+  spacing_to_other_terrain_types  4
+  set_avoid_player_start_areas
+  set_scale_by_groups
+}
+create_terrain PINE_FOREST
+{
+  base_terrain                    GRASS
+  land_percent                    4
+  number_of_clumps                8
+  spacing_to_other_terrain_types  4
+  set_avoid_player_start_areas
+  set_scale_by_groups
+}
+create_terrain LEAVES
+{
+  base_terrain                    GRASS
+  land_percent                    6
+  number_of_clumps                30
+  spacing_to_other_terrain_types  1
+  set_scale_by_size
+}
+create_terrain DIRT
+{
+  base_terrain                    GRASS
+  land_percent                    4
+  number_of_clumps                24
+  spacing_to_other_terrain_types  1
+  set_scale_by_size
+}
+
+<CONNECTION_GENERATION>
+/* fords: every pair of players gets a crossing of shallows through the rivers */
+create_connect_all_players_land
+{
+  replace_terrain WATER        SHALLOW
+  replace_terrain MED_WATER    SHALLOW
+  replace_terrain DEEP_WATER   SHALLOW
+  replace_terrain DLC_WATER5   SHALLOW
+  terrain_cost    WATER        7
+  terrain_cost    DLC_WATER5   12
+  terrain_cost    MED_WATER    20
+  terrain_cost    DEEP_WATER   40
+  terrain_cost    FOREST       9
+  terrain_cost    PINE_FOREST  9
+  terrain_size    WATER        2  1
+  terrain_size    DLC_WATER5   2  1
+}
+
+<OBJECTS_GENERATION>
+/* ---------------- start ---------------- */
+create_object TOWN_CENTER
+{
+  set_place_for_every_player
+  group_placement_radius          18
+  min_distance_to_players         0
+  max_distance_to_players         0
+}
+create_object VILLAGER
+{
+  set_place_for_every_player
+  min_distance_to_players         6
+  max_distance_to_players         6
+}
+create_object SCOUT
+{
+  number_of_objects               1
+  set_place_for_every_player
+  min_distance_to_players         7
+  max_distance_to_players         9
+}
+create_object RELIC
+{
+  number_of_objects               5
+  min_distance_to_players         25
+  temp_min_distance_group_placement 20
+}
+
+/* ---------------- food ---------------- */
+create_object SHEEP
+{
+  number_of_objects               4
+  set_loose_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         7
+  max_distance_to_players         8
+}
+create_object SHEEP
+{
+  number_of_objects               2
+  number_of_groups                2
+  set_loose_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         14
+  max_distance_to_players         30
+}
+create_object FORAGE
+{
+  number_of_objects               6
+  group_placement_radius          3
+  set_tight_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         10
+  max_distance_to_players         12
+  min_distance_group_placement    6
+}
+create_object DEER
+{
+  number_of_objects               4
+  group_variance                  1
+  set_loose_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         16
+  max_distance_to_players         22
+}
+create_object BOAR
+{
+  number_of_objects               1
+  number_of_groups                2
+  set_loose_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         16
+  max_distance_to_players         22
+}
+
+/* ---------------- gold and stone ---------------- */
+create_object GOLD
+{
+  number_of_objects               7
+  group_placement_radius          3
+  set_tight_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         12
+  max_distance_to_players         16
+  min_distance_group_placement    7
+  max_distance_to_other_zones     7
+}
+create_object GOLD
+{
+  number_of_objects               4
+  group_placement_radius          2
+  set_tight_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         20
+  max_distance_to_players         26
+  min_distance_group_placement    7
+}
+create_object STONE
+{
+  number_of_objects               5
+  group_placement_radius          2
+  set_tight_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         14
+  max_distance_to_players         18
+  min_distance_group_placement    7
+}
+create_object STONE
+{
+  number_of_objects               4
+  group_placement_radius          2
+  set_tight_grouping
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         22
+  max_distance_to_players         28
+  min_distance_group_placement    7
+}
+create_object GOLD
+{
+  number_of_objects               5
+  number_of_groups                3
+  set_scaling_to_map_size
+  group_placement_radius          2
+  set_tight_grouping
+  set_gaia_object_only
+  min_distance_to_players         30
+  min_distance_group_placement    9
+}
+
+/* ---------------- fish: one kind per water ---------------- */
+/* rivers: salmon (225 food each) */
+create_object FISH_SALMON
+{
+  number_of_objects               1
+  number_of_groups                5
+  set_gaia_object_only
+  set_place_for_every_player
+  terrain_to_place_on             WATER
+  min_distance_to_players         8
+  max_distance_to_players         32
+  min_distance_group_placement    4
+}
+create_object FISH_SALMON
+{
+  number_of_objects               1
+  number_of_groups                6
+  set_scaling_to_map_size
+  set_gaia_object_only
+  terrain_to_place_on             WATER
+  min_distance_to_players         20
+  min_distance_group_placement    5
+}
+/* lakes: perch (200 food each) */
+create_object FISH_PERCH
+{
+  number_of_objects               1
+  number_of_groups                10
+  set_scaling_to_map_size
+  set_gaia_object_only
+  terrain_to_place_on             DLC_WATER5
+  min_distance_group_placement    3
+}
+/* the sea: tuna and dorado, marlin far out */
+if AOR_SEA
+create_object FISH_TUNA
+{
+  number_of_objects               1
+  number_of_groups                14
+  set_scaling_to_map_size
+  set_gaia_object_only
+  terrain_to_place_on             DEEP_WATER
+  min_distance_group_placement    5
+}
+create_object FISH_DORADO
+{
+  number_of_objects               1
+  number_of_groups                8
+  set_scaling_to_map_size
+  set_gaia_object_only
+  terrain_to_place_on             MED_WATER
+  min_distance_group_placement    5
+}
+create_object GREAT_FISH_MARLIN
+{
+  number_of_objects               1
+  number_of_groups                4
+  set_scaling_to_map_size
+  set_gaia_object_only
+  terrain_to_place_on             DEEP_WATER
+  min_distance_to_players         30
+  min_distance_group_placement    10
+}
+endif
+
+/* ---------------- trees, predators, birds ---------------- */
+create_object OAKTREE
+{
+  number_of_objects               2
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         4
+  max_distance_to_players         6
+}
+create_object OAKTREE
+{
+  number_of_objects               2
+  set_gaia_object_only
+  set_place_for_every_player
+  min_distance_to_players         7
+  max_distance_to_players         10
+}
+create_object OAKTREE
+{
+  number_of_objects               30
+  set_scaling_to_map_size
+  set_gaia_object_only
+  min_distance_to_players         12
+  min_distance_group_placement    3
+  terrain_to_place_on             GRASS
+}
+create_object WOLF
+{
+  number_of_objects               1
+  number_of_groups                2
+  set_scaling_to_map_size
+  set_gaia_object_only
+  min_distance_to_players         30
+}
+create_object HAWK
+{
+  number_of_objects               4
+  set_scaling_to_map_size
+}
