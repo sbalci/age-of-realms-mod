@@ -959,7 +959,7 @@ function drawUnitFigure(g, u, t) {
       break;
     }
     case 'sheep': case 'deer': case 'boar': case 'wolf': {
-      drawAnimalBody(g, d.draw, t, anim, 1, u);
+      drawAnimalBody(g, u.breed || d.draw, t, anim, 1, u);
       if (u.type === 'sheep' && u.owner) { g.fillStyle = pc.c; g.fillRect(4, -9, 3, 3); g.strokeStyle = pc.c; g.lineWidth = 1.5; g.beginPath(); g.arc(7, -9, 2.5, 0.5, 2.6); g.stroke(); }
       break;
     }
@@ -1009,6 +1009,16 @@ function drawAnimalBody(g, kind, t, anim, s = 1, u) {
     g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 0.6; g.beginPath(); g.arc(0, -8, 7, 0, 6.3); g.stroke();
     const hb = anim === 'idle' ? Math.max(0, Math.sin(t * 0.7 + (u ? u.id : 0))) * 3 : 0; // grazing
     g.fillStyle = '#2a2622'; g.beginPath(); g.ellipse(8, -9 + hb, 2.6, 2, 0.3, 0, 6.3); g.fill(); g.fillRect(6.5, -11 + hb, 1.2, 1.5);
+  } else if (kind === 'cow') { // herd breed of sheep (u.breed = 'cow'): bigger, brown and white, short horns
+    for (const [x, o] of [[-6, 0], [-3.5, 1], [4, 0.5], [6.5, 1.5]]) limb(g, x, -7, 7, run ? Math.sin(ph + o * 2) * 0.4 : 0, 2, '#4a3426');
+    g.fillStyle = '#8a5a34'; g.beginPath(); g.ellipse(0, -10, 9.5, 4.8, 0, 0, 6.3); g.fill();
+    g.fillStyle = '#f2ece0'; g.beginPath(); g.ellipse(-3, -10.5, 3.6, 2.6, 0.3, 0, 6.3); g.fill(); g.beginPath(); g.ellipse(4, -9, 2.4, 2, -0.2, 0, 6.3); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 0.6; g.beginPath(); g.ellipse(0, -10, 9.5, 4.8, 0, 0, 6.3); g.stroke();
+    g.strokeStyle = '#4a3426'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(-9, -11); g.quadraticCurveTo(-12, -8, -11, -4); g.stroke();
+    const hb = anim === 'idle' ? Math.max(0, Math.sin(t * 0.6 + (u ? u.id : 0))) * 3 : 0;
+    g.fillStyle = '#7a4e2e'; g.beginPath(); g.ellipse(10.5, -11 + hb, 3.4, 2.6, 0.35, 0, 6.3); g.fill();
+    g.fillStyle = '#f2ece0'; g.beginPath(); g.ellipse(12.4, -10 + hb, 1.6, 1.3, 0.35, 0, 6.3); g.fill();
+    g.strokeStyle = '#e8dcc0'; g.lineWidth = 1; g.beginPath(); g.moveTo(9.5, -13.5 + hb); g.lineTo(8.5, -15.5 + hb); g.moveTo(11.5, -13.5 + hb); g.lineTo(12.5, -15.5 + hb); g.stroke();
   } else if (kind === 'deer') {
     for (const [x, o] of [[-5, 0], [-3, 1], [4, 0.5], [6, 1.5]]) limb(g, x, -9, 9, run ? Math.sin(ph + o * 2) * 0.7 : 0, 1.4, '#6a4424');
     g.fillStyle = '#9a6a3a'; g.beginPath(); g.ellipse(0, -11, 8, 3.8, 0, 0, 6.3); g.fill();
