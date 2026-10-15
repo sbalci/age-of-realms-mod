@@ -18,6 +18,26 @@ if (typeof CIVS === 'object' && !CIVS.turks) {
   };
   if (typeof AI_NAMES !== 'undefined' && Array.isArray(AI_NAMES)) AI_NAMES.push('Mehmed', 'Suleiman', 'Alp Arslan');
 }
+// Turks do not eat pork: villagers will not hunt boar or butcher a boar carcass, and the two boars near a
+// Turkish start become sheep (3 per boar, 300 food against the boar's 340, but safe to gather).
+if (typeof CIVS === 'object' && CIVS.turks) {
+  CIVS.turks.noMeat = ['boar'];
+  CIVS.turks.noMeatMsg = 'Turks do not eat pork: villagers will not hunt wild boar.';
+  if (!CIVS.turks.bonuses.includes('No pork: start with sheep instead of wild boar')) CIVS.turks.bonuses.push('No pork: start with sheep instead of wild boar');
+}
+if (typeof GameHooks === 'object') GameHooks.on('worldCreated', () => {
+  if (W.editor) return;
+  for (const p of W.players) {
+    if (!p || !p.civ || !CIVS[p.civ] || !(CIVS[p.civ].noMeat || []).includes('boar') || p.startX === undefined) continue;
+    for (const b of W.list.slice()) {
+      if (b.kind !== 'unit' || b.type !== 'boar' || b.owner !== 0 || Math.hypot(b.x - p.startX, b.y - p.startY) > 22) continue;
+      // only boars that are closer to this player than to any other start
+      if (W.players.some(q => q && q !== p && q.startX !== undefined && Math.hypot(b.x - q.startX, b.y - q.startY) < Math.hypot(b.x - p.startX, b.y - p.startY))) continue;
+      const x = b.x, y = b.y; removeEnt(b);
+      for (let k = 0; k < 3; k++) spawnUnit('sheep', 0, Math.min(W.n - 1, x + (k % 2) * 0.8), Math.min(W.n - 1, y + (k >> 1) * 0.8));
+    }
+  }
+});
 if (typeof UNITS === 'object' && !UNITS.janissary) {
   UNITS.janissary = {
     name: 'Janissary', tags: ['archer', 'gunpowder', 'land', 'unique'], hp: 35, atk: 17, ma: 1, pa: 0, range: 7, rof: 3.45, speed: 0.96, los: 9,

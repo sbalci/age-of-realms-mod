@@ -335,6 +335,7 @@ function orderTarget(units, t, shift) {
         continue;
       }
       if (u.type === 'villager') {
+        if (td.animal && !eatsMeat(u.owner, t.type)) { if (typeof modNote === 'function') modNote('nomeat', 8, (CIVS[W.players[u.owner].civ].noMeatMsg || 'Your people will not eat that.'), '#ffd27a', u.owner); const c = center(t); setOrder(u, { t: 'move', x: c.x, y: c.y }); continue; }
         if (td.animal && (t.owner === u.owner || t.owner === 0 || t.type !== 'sheep') && t.type !== 'wolf') { setOrder(u, { t: 'hunt', id: t.id }); action = 'gather'; continue; }
         if (own && hasTag(t.type, 'machine') && t.hp < t.maxhp) { setOrder(u, { t: 'repair', id: t.id }); action = 'build'; continue; }
       }
@@ -885,12 +886,13 @@ function updateUnit(u, dt) {
       const t = ent(o.id);
       if (!t || t.dead) {
         // find the carcass
-        const c = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && Math.hypot(e.x + 0.5 - u.x, e.y + 0.5 - u.y) < 5);
+        const c = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && eatsMeat(u.owner, e.animal) && Math.hypot(e.x + 0.5 - u.x, e.y + 0.5 - u.y) < 5);
         if (c) setOrder(u, { t: 'gather', id: c.id }); else setOrder(u, null);
         break;
       }
       if (t.kind === 'res') { setOrder(u, { t: 'gather', id: t.id }); break; }
       if (t.type === 'sheep' && t.owner !== u.owner && t.owner !== 0) { setOrder(u, null); break; }
+      if (!eatsMeat(u.owner, t.type)) { setOrder(u, null); break; }
       u.work = { kind: 'hunt' };
       doAttackAnimal(u, t, dt);
       if (t.dead) { const c = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && Math.abs(e.x - (t.x | 0)) <= 1 && Math.abs(e.y - (t.y | 0)) <= 1); if (c) setOrder(u, { t: 'gather', id: c.id }); }
@@ -992,12 +994,15 @@ function gatherRate(u, e) {
   if (p.ai) r *= p.ai.gatherMul;
   return r;
 }
+// Dietary rules: a civilization can refuse the meat of some animals (CIVS[civ].noMeat, e.g. Turks and boar).
+function eatsMeat(owner, animal) { const p = W.players && W.players[owner], c = p && typeof CIVS === 'object' && CIVS[p.civ]; return !(c && c.noMeat && c.noMeat.includes(animal)); }
 function carryCap(u) { const p = W.players[u.owner]; return u.type === 'fishingship' ? 15 : p.carry; }
 function gatherLogic(u, dt) {
   const o = u.order;
   const e = ent(o.id);
   const cap = carryCap(u);
   const naval = !!UNITS[u.type].naval;
+  if (e && e.type === 'carcass' && !eatsMeat(u.owner, e.animal)) { setOrder(u, null); return; }
   if (!e || e.dead || (e.kind === 'res' && e.amount <= 0) || (e.kind === 'bld' && (!e.built || (e.farmer && e.farmer !== u.id)))) {
     // find replacement of same kind
     const type = o.rtype || (e ? e.type : null);
@@ -1009,6 +1014,7 @@ function gatherLogic(u, dt) {
     } else if (type) {
       const types = type === 'carcass' || type === 'berry' ? ['carcass', 'berry'] : type === 'gold' || type === 'stone' ? [type] : [type];
       next = findNearestRes(u, types, u.x, u.y, 12);
+      if (next && next.type === 'carcass' && !eatsMeat(u.owner, next.animal)) next = findNearestRes(u, ['berry'], u.x, u.y, 12);
       if (!next && type === 'carcass') { const sheep = W.list.find(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === u.owner && !s.dying && Math.hypot(s.x - u.x, s.y - u.y) < 14); if (sheep) { setOrder(u, { t: 'hunt', id: sheep.id }); return; } }
     }
     if (next) { setOrder(u, { t: 'gather', id: next.id, rtype: next.type }); return; }

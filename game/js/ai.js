@@ -229,7 +229,7 @@ class AIPlayer {
     const home = this.home();
     if (res === 'food') {
       const sheep = W.list.filter(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.dying && Math.hypot(s.x - home.x, s.y - home.y) < 14);
-      const carc = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 5 && Math.hypot(e.x - home.x, e.y - home.y) < 14 && e.gatherers < 4);
+      const carc = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 5 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14 && e.gatherers < 4);
       if (carc) { setOrder(v, { t: 'gather', id: carc.id }); return true; }
       if (sheep.length) { setOrder(v, { t: 'hunt', id: sheep[0].id }); return true; }
       const farm = W.list.find(f => f.kind === 'bld' && f.type === 'farm' && f.owner === this.id && f.built && !f.farmer);
