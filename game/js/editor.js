@@ -3,6 +3,7 @@
 const ED_OBJECTS = [
   { k: 'tree', v: 0, label: 'Oak tree', icon: 'woodi' }, { k: 'tree', v: 1, label: 'Pine tree', icon: 'woodi' }, { k: 'tree', v: 2, label: 'Palm tree', icon: 'woodi' },
   { k: 'shrub', label: 'Shrub (decor)', icon: 'food' }, { k: 'berry', label: 'Berry bush', icon: 'food' }, { k: 'gold', label: 'Gold', icon: 'gold' }, { k: 'stone', label: 'Stone', icon: 'stone' },
+  { k: 'coal', depth: 1, label: 'Buried coal seam', icon: 'coal' }, { k: 'gold', depth: 2, label: 'Underground gold', icon: 'gold' }, { k: 'stone', depth: 2, label: 'Underground stone', icon: 'stone' },
   { k: 'fish', v: 0, label: 'Shore fish', icon: 'fish' }, { k: 'fish', v: 1, label: 'Deep fish', icon: 'fish' }, { k: 'relic', label: 'Relic', icon: 'relicicon' },
   { k: 'unit', t: 'sheep', label: 'Sheep' }, { k: 'unit', t: 'deer', label: 'Deer' }, { k: 'unit', t: 'boar', label: 'Wild Boar' }, { k: 'unit', t: 'wolf', label: 'Wolf' },
 ];
@@ -51,7 +52,7 @@ const Editor = {
   toSpec() {
     const map = W.map, objects = [];
     for (const e of W.list) {
-      if (e.kind === 'res') { if (e.type === 'carcass') continue; objects.push({ k: e.type, x: e.x, y: e.y, v: e.v || 0 }); }
+      if (e.kind === 'res') { if (e.type === 'carcass') continue; objects.push({ k: e.type, x: e.x, y: e.y, v: e.v || 0, ...(e.depth ? { depth: e.depth } : {}) }); }
       else if (e.kind === 'relic') objects.push({ k: 'relic', x: e.x, y: e.y });
       else if (e.kind === 'unit') objects.push({ k: 'unit', t: e.type, x: Math.floor(e.x), y: Math.floor(e.y), o: e.owner });
       else if (e.kind === 'bld') objects.push({ k: 'bld', t: e.type, x: e.x, y: e.y, o: e.owner });
@@ -90,7 +91,7 @@ const Editor = {
     E.innerHTML = `<div id="ed-side" class="panel">
       <h2>Map Editor</h2>
       <div class="ed-sec"><b>File</b><div class="row">
-        <select id="ed-gtype"><option value="land">Highlands</option><option value="coastal" selected>Coastal</option><option value="islands">Islands</option></select>
+        <select id="ed-gtype"><option value="land">Highlands</option><option value="coastal" selected>Coastal</option><option value="islands">Islands</option><option value="anatolia">Anatolia</option><option value="mediterranean">Mediterranean</option><option value="world">World</option></select>
         <select id="ed-gsize">${Object.keys(MAP_SIZES).map(k => `<option ${k === 'small' ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
         <div class="row"><button class="btn small" id="ed-gen">New generated</button><button class="btn small" id="ed-blank">New blank</button></div>
         <div class="row"><input id="ed-name" value="My Map" maxlength="30"><button class="btn small" id="ed-save">Save</button></div>
@@ -267,7 +268,7 @@ const Editor = {
       let layerChanged = false;
       for (const { x, y } of tiles) {
         const i = map.idx(x, y);
-        for (const k of ['bridge', 'tun', 'trench']) if (map[k] && map[k][i]) { map[k][i] = 0; layerChanged = true; }
+        for (const k of ['bridge', 'tun', 'trench', 'excavated']) if (map[k] && map[k][i]) { map[k][i] = 0; layerChanged = true; }
       }
       if (layerChanged) { map.computeRegions(); this.terrainChanged(tiles); }
       return;
@@ -296,11 +297,11 @@ const Editor = {
           spawnUnit(o.t, owner, x + 0.5, y + 0.5);
           continue;
         }
-        if (map.blk[i]) continue;
+        if (map.blk[i] || W.list.some(e => e.kind === 'res' && e.x === x && e.y === y)) continue;
         if (o.k === 'fish' ? !water : water) { if (list.length === 1) this.status(`${o.label} must be placed on ${o.k === 'fish' ? 'water' : 'land'}.`); continue; }
         if (W.list.some(e => (e.kind === 'relic' || (e.kind === 'res' && e.type === 'shrub')) && e.x === x && e.y === y)) continue;
         if (o.k !== 'shrub' && W.list.some(e => e.kind === 'unit' && Math.floor(e.x) === x && Math.floor(e.y) === y)) continue;
-        spawnRes(o.k, x, y, o.v || 0);
+        spawnRes(o.k, x, y, o.v || 0, o.depth || 0);
         if (o.k === 'tree' && map.ter[i] === T.GRASS) { map.ter[i] = T.FOREST; }
       }
       if (o.k === 'tree') this.terrainChanged(list);

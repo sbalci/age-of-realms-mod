@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Age of Realms · Geographic maps</title>
+<style>body{margin:0;background:#192127;color:#e8dfc8;font:15px/1.5 system-ui,sans-serif;padding:32px}h1{font:32px Georgia;margin:0 0 8px}p{color:#b7b9ae;max-width:850px;margin:0 0 24px}main{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}section{border-top:1px solid #807450;padding-top:12px}h2{font:24px Georgia;margin:0 0 12px}canvas{width:100%;image-rendering:pixelated}small{display:block;color:#aaa99a;margin-top:8px}a{color:#d6bc7b}@media(max-width:850px){main{grid-template-columns:1fr}}</style>
+<h1>Three real-world battlefields</h1><p>North-up tactical grids made from public-domain Natural Earth coastlines and lakes. Hills, forests, resources and starting positions are arranged for play. Choose these maps in Game Setup or the Map Editor; Large is recommended for the World map.</p><main id="maps"></main><small>Blue: water · Green: land · Brown: mountains · Gold: example player starts. The World extent is 60°S–85°N, covering the inhabited continents. <a href="https://www.naturalearthdata.com/about/terms-of-use/">Made with Natural Earth</a>.</small>
+<script src="../game/js/data.js"></script><script src="../game/js/map.js"></script><script src="../game/js/geography-data.js"></script><script src="../game/js/geography.js"></script>
+<script>
+for(const [type,definition]of Object.entries(REAL_MAPS)){
+  const n=120,terrain=geographyTerrain(type,n,8),section=document.createElement('section'),h=document.createElement('h2'),canvas=document.createElement('canvas');h.textContent=definition.name;canvas.width=canvas.height=480;canvas.setAttribute('aria-label',definition.name+' coastline and starting locations');const g=canvas.getContext('2d');
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const i=y*n+x;g.fillStyle=terrain.water[i]?'#315b70':['#708359','#889065','#9a926c','#b5ac8f'][terrain.elev[i]];g.fillRect(x*4,y*4,4,4);}
+  terrain.starts.forEach((p,i)=>{g.beginPath();g.fillStyle='#f2d27c';g.strokeStyle='#1d292c';g.lineWidth=2;g.arc(p.x*4+2,p.y*4+2,5,0,Math.PI*2);g.fill();g.stroke();g.fillStyle='#fff1c9';g.font='bold 13px system-ui';g.fillText(i+1,p.x*4+9,p.y*4+6);});
+  g.fillStyle='#eee1bd';g.font='bold 13px system-ui';g.fillText('N ↑',12,23);section.append(h,canvas);document.getElementById('maps').append(section);
+}
+</script></html>

@@ -296,7 +296,7 @@ if (typeof drawTechIcon === 'function') {
 function vicStats(p) {
   if (!p.vs) {
     p.vs = { uKilled: 0, uLost: 0, bRazed: 0, bLost: 0, killValue: 0, razeValue: 0, trainedVil: 0, trainedMil: 0,
-      gathered: { food: 0, wood: 0, gold: 0, stone: 0 }, techs: 0, techValue: 0, ageT: [0, null, null, null],
+      gathered: { food: 0, wood: 0, gold: 0, stone: 0, coal: 0 }, techs: 0, techValue: 0, ageT: [0, null, null, null],
       maxPop: 0, maxVil: 0, maxMil: 0, maxRelics: 0, wondersBuilt: 0, castlesBuilt: 0, defeatT: null };
     for (let a = 1; a <= 3; a++) p.vs.ageT[a] = a <= p.age ? 0 : null;
   }
@@ -315,7 +315,7 @@ function vicScore(p, counts) {
   const s = vicStats(p), c = counts || vicCounts(p.id);
   const g = s.gathered;
   const mil = Math.round((s.killValue + s.razeValue) / 5);
-  const eco = Math.round((g.food + g.wood + g.gold + g.stone + (p.stats.relicGold || 0) + (p.stats.tradeGold || 0)) / 10 + (p.stats.tributeSent || 0) / 20);
+  const eco = Math.round((g.food + g.wood + g.gold + g.stone + (g.coal || 0) + (p.stats.relicGold || 0) + (p.stats.tradeGold || 0)) / 10 + (p.stats.tributeSent || 0) / 20);
   const tech = Math.round(s.techValue / 5);
   const soc = Math.round(c.soc / 5 + c.relics * 10);
   return { mil, eco, tech, soc, total: mil + eco + tech + soc };
@@ -776,8 +776,8 @@ function vicEndHtml(win) {
   const panes = {
     Summary: table([['Civilization', p => CIVS[p.civ].name], ['Age reached', p => AGES[p.age]], ['Military score', p => SC(p).mil], ['Economy score', p => SC(p).eco], ['Technology score', p => SC(p).tech], ['Society score', p => SC(p).soc], ['Total score', p => SC(p).total, 'tot'], ['Status', status]]),
     Military: table([['Units killed', p => S(p).uKilled], ['Units lost', p => S(p).uLost], ['Buildings razed', p => S(p).bRazed], ['Buildings lost', p => S(p).bLost], ['Military trained', p => S(p).trainedMil], ['Largest army', p => S(p).maxMil], ['Kill/loss ratio', p => S(p).uLost ? (S(p).uKilled / S(p).uLost).toFixed(2) : S(p).uKilled ? '∞' : '—']]),
-    Economy: table([['Food gathered', p => Math.floor(G(p).food)], ['Wood gathered', p => Math.floor(G(p).wood)], ['Gold gathered', p => Math.floor(G(p).gold)], ['Stone gathered', p => Math.floor(G(p).stone)], ['Relic gold', p => Math.floor(p.stats.relicGold || 0)], ['Trade gold', p => Math.floor(p.stats.tradeGold || 0)], ['Tribute sent', p => Math.floor(p.stats.tributeSent || 0)], ['Villagers trained', p => S(p).trainedVil], ['Most villagers', p => S(p).maxVil], ['Peak population', p => S(p).maxPop]]),
-    Technology: table([['Technologies researched', p => S(p).techs], ['Feudal Age', p => at(S(p).ageT[1])], ['Castle Age', p => at(S(p).ageT[2])], ['Imperial Age', p => at(S(p).ageT[3])]]),
+    Economy: table([['Food gathered', p => Math.floor(G(p).food)], ['Wood gathered', p => Math.floor(G(p).wood)], ['Gold gathered', p => Math.floor(G(p).gold)], ['Stone gathered', p => Math.floor(G(p).stone)], ['Coal gathered', p => Math.floor(G(p).coal || 0)], ['Relic gold', p => Math.floor(p.stats.relicGold || 0)], ['Trade gold', p => Math.floor(p.stats.tradeGold || 0)], ['Tribute sent', p => Math.floor(p.stats.tributeSent || 0)], ['Villagers trained', p => S(p).trainedVil], ['Most villagers', p => S(p).maxVil], ['Peak population', p => S(p).maxPop]]),
+    Technology: table([['Technologies researched', p => S(p).techs], ...AGES.slice(1).map((name, i) => [name, p => at(S(p).ageT[i + 1])])]),
     Society: table([['Relics held now', p => vicCounts(p.id).relics], ['Most relics held', p => S(p).maxRelics], ['Wonders built', p => S(p).wondersBuilt], ['Castles built', p => S(p).castlesBuilt], ['Buildings constructed', p => p.stats.built]]),
     Timeline: `<div class="vic-series">${[['score', 'Score'], ['pop', 'Population'], ['vil', 'Villagers'], ['mil', 'Military']].map(([k, n], i) => `<button data-series="${k}" class="${i ? '' : 'on'}">${n}</button>`).join('')}</div><div class="vic-chartbox"><canvas id="vic-chart"></canvas></div><div class="small">Sampled every ${VIC.sampleEvery} s of game time. Hover the chart for exact values.</div>`,
   };

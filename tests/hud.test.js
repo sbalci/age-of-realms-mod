@@ -6,7 +6,7 @@ const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL 
 // every card a player can open, in every age
 const cards = JSON.parse(run(`(() => {
   const spec = generateMapSpec({ size: 'small', seed: 3, mapType: 'coastal', numPlayers: 2 }), cards = [];
-  for (const age of [0, 1, 2, 3]) {
+  for (const age of AGES.map((_, i) => i)) {
     createWorld(spec, { players: [{ name: 'A', civ: 'turks', color: PLAYER_COLORS[0], human: true }, { name: 'B', civ: 'franks', color: PLAYER_COLORS[1] }], seed: 3, fog: 'none', startRes: 'high', startAge: age, difficulty: 'standard' });
     const card = (label, sel) => { UI.selection = sel; const c = commandsFor(sel); GameHooks.emit('commands', sel, c); cards.push({ label: label + '@' + age, cmds: c.map(x => ({ name: x.name, key: x.key, slot: x.slot })) }); };
     for (const bt of Object.keys(BUILDINGS)) { const b = spawnBuilding(bt, 1, 10, 10, true); if (!b) continue; b.built = true; b.garrison = b.garrison || []; card(bt, [b]); removeEnt(b); }

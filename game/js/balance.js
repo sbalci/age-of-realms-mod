@@ -17,8 +17,8 @@ if (typeof location !== 'undefined' && location.search && new URLSearchParams(lo
 // ---------- lifespans ----------
 // In 35-minute AI test games each side lost 14-21 villagers to old age and vows (25-minute lives, vows at 15):
 // most of the starting town was gone before the Castle Age. Villagers now live about 30 minutes and the
-// one-in-five who are called to the cloister go at about 18; monks live about 35.
-if (BAL.enabled && typeof MOD === 'object' && MOD.life) Object.assign(MOD.life, { villager: 1800, villagerVows: 1080, monk: 2100 });
+// one-in-ten who take vows do so on becoming elders (85% of their life); monks live about 35.
+if (BAL.enabled && typeof MOD === 'object' && MOD.life) Object.assign(MOD.life, { villager: 1800, villagerVows: 1800 * BAL.elderShare, monk: 2100 });
 
 // ---------- technologies ----------
 if (BAL.enabled && typeof TECHS === 'object') {

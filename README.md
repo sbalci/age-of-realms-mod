@@ -1,6 +1,6 @@
 # Age of Realms
 
-A medieval strategy game you play in your web browser: grow a village, advance through four ages, build an army and defeat computer rivals. It is free, runs on your own computer and needs no account.
+A strategy game you play in your web browser: grow a medieval village, advance through six ages into modern and futuristic warfare, build an army and defeat computer rivals. It is free, runs on your own computer and needs no account.
 
 ## How to play (no technical knowledge needed)
 
@@ -51,7 +51,7 @@ Click **Learn to Play** for five short interactive lessons, or **Single Player**
 
 ## About
 
-A browser medieval real-time strategy game in plain HTML, CSS and JavaScript. You grow a settlement, advance through four ages, build an economy and an army, and defeat computer rivals. Playing requires no build step or external network calls. An optional Three.js renderer is bundled locally; development dependencies support browser tests and updating that bundle.
+A browser real-time strategy game in plain HTML, CSS and JavaScript. You grow a medieval settlement, advance through six ages, build an economy and an army, and defeat computer rivals. Playing requires no build step or external network calls. An optional Three.js renderer is bundled locally; development dependencies support browser tests and updating that bundle.
 
 It starts from the Special Build of Barty-Bart's [Opus 5.5 effort-comparison experiment](https://github.com/Barty-Bart/opus-55-effort-comparison) and adds systems for mortality, water, terraforming and engineering. The six original builds are archived unchanged in [`legacy/`](legacy/).
 
@@ -75,7 +75,15 @@ A local server is required. Opening `index.html` directly may not load the scrip
 
 Press **Full Screen** in the menu or game HUD to fill the display. Press **Esc** or **Exit Full Screen** to return. The canvas follows the available window size.
 
-**Art styles.** Press **Try Kenney Art** in the main menu (or open `/game/?art=kenney`) to swap the drawn buildings, trees and mines for sprites rendered from Kenney's free [Fantasy Town](https://kenney.nl/assets/fantasy-town-kit), [Castle](https://kenney.nl/assets/castle-kit) and [Nature](https://kenney.nl/assets/nature-kit) kits (CC0, public domain). **Classic Art** switches back; the choice is remembered. Walls, gates and farms keep the drawn art. The source models are in `assets/thirdparty/kenney/`; `node tools/art/bake-kenney.mjs` rebuilds the sprites in `game/art/kenney/` after editing `tools/art/kenney-recipes.js`.
+**Art styles.** Kenney's medieval artwork is the default: buildings, varied trees, mines, berry bushes, undergrowth, felled timber and wheat fields rendered from the free [Fantasy Town](https://kenney.nl/assets/fantasy-town-kit), [Castle](https://kenney.nl/assets/castle-kit) and [Nature](https://kenney.nl/assets/nature-kit) kits (CC0, public domain). Farms show three harvest stages and berry bushes lose fruit as they are gathered. **Classic Art** in the main menu restores the drawn style; **Kenney Art** switches back. The choice is remembered, or force it with `/game/?art=kenney` or `?art=classic`. Walls and gates retain their connected drawn art. Sprites are bundled locally and load after the game boots; missing images use the drawn fallback.
+
+The source models and original licenses are in `assets/thirdparty/kenney/`. After installing the development dependencies, `npm run art:bake` rebuilds the 86 scenery sprites in `game/art/kenney/` from `tools/art/kenney-recipes.js`. A local Playwright Chromium installation is needed (`npx playwright install chromium`); `CHROMIUM_PATH` can select an existing Chromium executable for baking and browser tests. See [the graphics review](docs/GRAPHICS_REVIEW.md) for scope and validation.
+
+**Animated units and later eras.** The main-menu **Unit artwork** selector offers Seljuk, Ottoman, medieval, modern and futuristic styles. The default follows civilization and age: Turkish units begin with Seljuk dress, then use Ottoman dress; workers change clothing in the new ages. The 53 actor atlases include villagers, warriors, cavalry, six animal types, tanks and walkers, with animation and player colors. They use Kenney/Quaternius CC0 rigs plus original equipment and model recipes. Open [the interactive asset gallery](tools/art/actor-gallery.html) on the local server, see [the full preview](assets/screenshots/unit-library.jpg), or read [sources, licenses and progression rules](docs/ACTOR_ASSETS.md). Rebuild with `npm run art:actors`.
+
+After Imperial, research **Modern Age** at the Town Center to unlock Riflemen, Marksmen and Battle Tanks. Research **Industrialization** and **Electronics** at the University, then **Future Age** at the Town Center to unlock Plasma Guards, Railgunners and Fusion Walkers. Seven supporting technologies improve the economy, weapons and armor. Both new ages are also available as starting ages in Game Setup.
+
+![Kenney medieval art in a staged Castle Age town](assets/screenshots/art-kenney.jpg)
 
 The optional **2.5D prototype** uses Three.js for elevated terrain, procedural building meshes, lighting and shadows. Units, resources and relics retain their existing sprite art, with the same simulation, commands and saves. Click **Try 2.5D Graphics**, or open `/game/?renderer=three`; the HUD button switches back to Canvas 2D. The choice is remembered locally, and `/game/?renderer=canvas` forces the original renderer. WebGL2 is required; initialization failures fall back to Canvas 2D.
 
@@ -87,7 +95,7 @@ The 2.5D view includes animated water glints that respect fog and building occlu
 
 **Base game (Special Build)**
 - 10 civilizations with unique units, including the **Turks** (Janissary hand cannoneers; their monks are Imams).
-- Four ages and a full economy.
+- Four medieval ages and a full economy, extended with Modern and Future ages.
 - Navy and transports, monks and relics, trade and the market.
 - Diplomacy and tribute.
 - Elevation and cliffs.
@@ -102,9 +110,15 @@ The 2.5D view includes animated water glints that respect fog and building occlu
   - soldiers live about 20 minutes, villagers about 30 and monks about 35, each with ±15% variation;
   - machines, ships and animals don't age;
   - deaths from old age don't count as battle losses.
-- One villager in five takes monastic vows at about 18 minutes and becomes a monk.
+- One in ten villagers takes vows on becoming elderly (85% of their lifespan, about 25½ minutes), becoming a Monk or a Turkish Imam.
 - Villagers in the last 15% of their lives are elders and gather 15% slower.
 - Soldiers who survive a battle earn experience and are promoted to Veteran, Elite and Champion. Each rank adds attack, hit points and armor, shown as chevrons above the unit.
+
+**Real-world maps, Wonders and mining** ([guide](docs/MAPS_AND_MINES.md))
+- Anatolia, Mediterranean and World presets use bundled public-domain Natural Earth coastlines and lakes.
+- Wonders can be started in any age and evolve through six architectural forms; their victory countdown survives advancement.
+- Coal is required for Modern Age, Industrialization, Precision Rifling and Composite Armor.
+- Right-click a buried seam with villagers to excavate and mine it, or open a connected sapper tunnel beneath a mountain.
 
 **Waters** (`game/js/water.js`)
 - Rivers with fords, plus lakes and seas, are classified per tile.
@@ -131,7 +145,7 @@ The 2.5D view includes animated water glints that respect fog and building occlu
 **Terraforming and engineering** (`game/js/terra.js`): select villagers and press **N**.
 - **Canals:** ships can sail them.
 - **Trenches:** units inside move slower and take less pierce damage; cavalry, siege and carts cannot cross.
-- **Raise, lower and dig mountains:** raising costs stone, lowering and digging refund it.
+- **Raise, lower and excavate:** raising costs stone; removing elevation refunds stone. Digging mine shafts opens buried deposits without generating stone.
 - **Plant trees:** saplings mature into trees.
 - **Bridges** (15 wood per tile): land units cross and ships sail under. Removing a bridge refunds 8 wood.
 - **Sappers** (Mining Camp, Feudal Age):
@@ -160,7 +174,7 @@ The 2.5D view includes animated water glints that respect fog and building occlu
   - A Resign button; beaten computer players resign too.
 
 **Victory, technology and score** (`game/js/victory.js`)
-- **Wonder** (Imperial Age) and **relic victory**: hold out for 5 minutes. Announcements and a countdown banner keep everyone informed.
+- **Wonder** (available in every Age, with evolving architecture) and **relic victory**: hold out for 5 minutes. Announcements and a countdown banner keep everyone informed.
 - **Imperial upgrades:**
   - Units: Halberdier, Paladin, Heavy Cavalry Archer, Capped Ram, Onager.
   - Technologies: Crop Rotation, Two-Man Saw, Gold and Stone Shaft Mining, and the full Blacksmith line.

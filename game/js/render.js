@@ -540,7 +540,7 @@ function drawBuilding(ctx, b, alpha) {
   ctx.drawImage(sp.cv, gp.x - sp.ax, gp.y - sp.ay, sp.w, sp.h);
   // animated overlays
   const t = R.time;
-  if (b.type === 'mill') {
+  if (b.type === 'mill' && !sp.staticSails) {
     const st = bldStyle(b); const hub = P(0.3, 0.58, st >= 2 ? 42 : 36);
     ctx.save(); ctx.translate(gp.x + hub[0], gp.y + hub[1]); const a = t * 1.2;
     for (let k = 0; k < 4; k++) { ctx.save(); ctx.rotate(a + k * Math.PI / 2); ctx.scale(0.8, 1); ctx.fillStyle = '#e8dcc0'; ctx.strokeStyle = '#5a3a20'; ctx.lineWidth = 1; ctx.fillRect(2, -3, 22, 6); ctx.strokeRect(2, -3, 22, 6); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(24, 0); ctx.stroke(); ctx.restore(); }
@@ -623,6 +623,7 @@ function drawRes(ctx, e) {
   if (e.type === 'fish') { drawFish(ctx, e, t); return; }
   const gp = iso(cx, cy, W.map.h(cx, cy));
   const frac = e.amount / e.max;
+  if (R.resourceArt && R.resourceArt(ctx, e, gp, frac)) return;
   if (e.type === 'tree') {
     if (e.felled) {
       // felled trunk lying + stump
@@ -1136,6 +1137,12 @@ function drawProjectile(ctx, p) {
   else if (p.type === 'axe') { ctx.rotate(p.t * 20); ITEMS.throwaxe(ctx); }
   else if (p.type === 'stone' || p.type === 'boulder') { ctx.fillStyle = '#6a625a'; ctx.beginPath(); ctx.arc(0, 0, p.type === 'boulder' ? 5 : 3.5, 0, 6.3); ctx.fill(); ctx.fillStyle = '#8a827a'; ctx.beginPath(); ctx.arc(-1, -1, 1.5, 0, 6.3); ctx.fill(); }
   else if (p.type === 'bullet') { ctx.fillStyle = '#ffe070'; ctx.fillRect(-4, -0.8, 8, 1.6); }
+  else if (p.type === 'shell') { ctx.fillStyle = '#f6d185'; ctx.fillRect(-5, -1.5, 10, 3); }
+  else if (p.type === 'laser' || p.type === 'plasma') {
+    ctx.shadowColor = p.type === 'laser' ? '#64e9ff' : '#bb85ff'; ctx.shadowBlur = 7;
+    ctx.fillStyle = ctx.shadowColor; ctx.fillRect(-8, -2, 16, 4);
+    ctx.fillStyle = '#efffff'; ctx.fillRect(-7, -0.7, 14, 1.4); ctx.shadowBlur = 0;
+  }
   else if (p.type === 'fire') { ctx.fillStyle = 'rgba(255,140,30,0.9)'; ctx.beginPath(); ctx.arc(0, 0, 3 + Math.random() * 2, 0, 6.3); ctx.fill(); ctx.fillStyle = 'rgba(255,240,120,0.9)'; ctx.beginPath(); ctx.arc(0, 0, 1.5, 0, 6.3); ctx.fill(); }
   ctx.restore();
 }
@@ -1305,7 +1312,7 @@ function renderMinimap(cv, editor) {
       if (e.kind === 'bld' && e.owner !== W.humanId && !e.seenBy) continue;
     }
     let col = null, s = 1;
-    if (e.kind === 'res') { col = { tree: '#1f4a1a', gold: '#f0d040', stone: '#b0b0b0', berry: '#d05070', fish: '#80c0ff', carcass: '#d05070' }[e.type]; if (e.type === 'shrub') continue; }
+    if (e.kind === 'res') { col = { tree: '#1f4a1a', gold: '#f0d040', stone: '#b0b0b0', coal: '#626e7d', berry: '#d05070', fish: '#80c0ff', carcass: '#d05070' }[e.type]; if (e.type === 'shrub') continue; }
     else if (e.kind === 'relic') { col = '#fff'; s = 1.5; }
     else if (e.kind === 'unit' && e.owner === 0) { col = UNITS[e.type].predator ? '#aa4444' : '#e0d8c0'; }
     else { col = pcolor(e.owner).c; s = e.kind === 'bld' ? bsize(e) : 1.4; }
@@ -1361,7 +1368,7 @@ function iconFor(key) {
     g.translate(32 + (d.naval ? 0 : -2), d.naval ? 48 : 56); g.scale(sc, sc);
     drawUnitFigure(g, fake, 0.5); g.restore();
   } else if (kind === 'bld') {
-    const s = BUILDINGS[id].size; const sp = bldSprite(id, W && W.players[W.humanId] ? Math.min(3, W.players[W.humanId].age) : 1, pc);
+    const s = BUILDINGS[id].size; const sp = bldSprite(id, W && W.players[W.humanId] ? (id === 'wonder' ? W.players[W.humanId].age : Math.min(3, W.players[W.humanId].age)) : 1, pc);
     const sc = Math.min(56 / sp.w, 56 / sp.h) * 1.15;
     if (id === 'farm') { g.save(); g.translate(32, 36); g.scale(0.34, 0.34); drawFarm(g, { built: true, food: 175, owner: 1, x: 0, y: 0, progress: 1 }, { x: 0, y: 0 }); g.restore(); }
     else g.drawImage(sp.cv, 32 - sp.w * sc / 2, 60 - sp.h * sc, sp.w * sc, sp.h * sc);
@@ -1385,10 +1392,10 @@ function drawTechIcon(g, id, pc) {
   g.lineCap = 'round';
   const gold = '#e8c860', steel = '#c8ccd4', wood = '#8a5a30';
   switch (icon) {
-    case 'age1': case 'age2': case 'age3': {
+    case 'age1': case 'age2': case 'age3': case 'age4': case 'age5': {
       const n = +icon.slice(3);
       g.fillStyle = pc.c; g.beginPath(); g.moveTo(-18, -20); g.lineTo(18, -20); g.lineTo(16, 6); g.lineTo(0, 22); g.lineTo(-16, 6); g.closePath(); g.fill(); g.strokeStyle = gold; g.lineWidth = 2.5; g.stroke();
-      g.fillStyle = gold; g.font = 'bold 20px serif'; g.textAlign = 'center'; g.fillText(['', 'II', 'III', 'IV'][n], 0, 5);
+      g.fillStyle = gold; g.font = 'bold 20px serif'; g.textAlign = 'center'; g.fillText(['', 'II', 'III', 'IV', 'V', 'VI'][n], 0, 5);
       g.beginPath(); g.moveTo(-12, -20); g.lineTo(-12, -28); g.lineTo(-6, -23); g.lineTo(0, -30); g.lineTo(6, -23); g.lineTo(12, -28); g.lineTo(12, -20); g.fill();
       break;
     }

@@ -86,7 +86,8 @@ function uhdKey(u, d, t, wt, zb, pcc) {
   const ph = uhdPhase(u, d, t, wt);
   const face = (u.face || 1) < 0 ? -1 : 1, back = UHD.on.facings && u.back ? 1 : 0;
   const a = u.type + '|' + (u.owner || 0) + '|' + pcc + '|' + (u.anim || 'idle') + '|', b = '|' + face + '|' + back + '|' + uhdExtra(u, d) + '|';
-  return { key: a + ph.frame + b + zb, set: a + '*' + b, ph, face, back };
+  const art = typeof UnitArt !== 'undefined' ? '|' + UnitArt.key(u) + ':' + UnitArt.revision : '';
+  return { key: a + ph.frame + b + zb + art, set: a + '*' + b + art, ph, face, back };
 }
 // LRU over a Map (insertion order = age): touch moves to the end, evict drops from the front until under budget
 function uhdTouch(map, key) { const v = map.get(key); if (v === undefined) return undefined; map.delete(key); map.set(key, v); return v; }

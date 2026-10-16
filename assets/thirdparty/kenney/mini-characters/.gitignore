@@ -1,0 +1,13 @@
+# Keep the original download on disk; distribute only the two rigs and texture used by the game.
+/Models/*
+!/Models/GLB format/
+/Models/GLB format/*
+!/Models/GLB format/character-male-b.glb
+!/Models/GLB format/character-female-b.glb
+!/Models/GLB format/Textures/
+/Models/GLB format/Textures/*
+!/Models/GLB format/Textures/colormap.png
+/Previews/
+/*.png
+/*.html
+/*.url

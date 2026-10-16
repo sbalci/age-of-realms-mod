@@ -71,7 +71,7 @@ const E = run(`(() => { fresh(10); const p=W.players[1];
   v.bornT=W.t-life1*0.9; const tree=W.list.find(e=>e.kind==='res'&&e.type==='tree'); const rOld=gatherRate(v,tree); v.bornT=W.t; const rYoung=gatherRate(v,tree);
   v.bornT=W.t-(life1-60); const retiring=balRetiring(v); v.bornT=W.t; const young=balRetiring(v);
   return {villagerLife:MOD.life.villager, vows:MOD.life.villagerVows, life0, life1, cap0, cap1, ratio:+(rOld/rYoung).toFixed(3), retiring, young}; })()`);
-ok('villagers live about 30 minutes; vows at about 18', E.villagerLife === 1800 && E.vows === 1080, E);
+ok('villagers live about 30 minutes; vows on becoming elderly', E.villagerLife === 1800 && E.vows === 1530, E);
 ok('Herbal Medicine adds 20% to lifespans', Math.abs(E.life1 - E.life0 * 1.2) < 1e-6, E);
 ok('Sanitation raises clean-water capacity', E.cap1 > E.cap0, E);
 ok('elders gather 15% slower', E.ratio === 0.85, E);
@@ -81,6 +81,34 @@ const R = run(`(() => { fresh(11); const p=W.players[2]; p.ai=new AIPlayer(p,'st
   const tc=W.list.find(e=>e.kind==='bld'&&e.type==='tc'&&e.owner===2); p.res.food=1000; tc.queue=[];
   p.ai.economy(1); return {queued: tc.queue.filter(q=>q.kind==='unit'&&q.id==='villager').length}; })()`);
 ok('the AI queues replacements for villagers about to die', R.queued >= 1, R);
+const TB = run(`(() => { fresh(13); const o=flat(12,8);
+  const sp=spawnUnit('spearman',1,o.x+2.5,o.y+2.5), mil=spawnUnit('militia',2,o.x+4.2,o.y+2.5), kn=spawnUnit('knight',2,o.x+4.8,o.y+2.5);
+  rebuildGrid(); const tCounter=findTargetFor(sp,6);
+  const ar=spawnUnit('archer',1,o.x+2.5,o.y+5.5), m1=spawnUnit('militia',2,o.x+5.5,o.y+5.2), m2=spawnUnit('militia',2,o.x+5.5,o.y+5.8);
+  m2.hp=m2.maxhp*0.2; rebuildGrid(); const tWounded=findTargetFor(ar,6);
+  [sp,mil,kn,ar,m1,m2].forEach(removeEnt);
+  const p2=W.players[2]; p2.ai=new AIPlayer(p2,'standard');
+  const kArch=spawnUnit('archer',2,o.x+4.5,o.y+3.5), kFoe=spawnUnit('militia',1,o.x+3.2,o.y+3.5);
+  kArch.order={t:'attack',id:kFoe.id}; kArch.cd=1.0;
+  const monk=spawnUnit('monk',2,o.x+7.5,o.y+3.5), eKn=spawnUnit('knight',1,o.x+9.5,o.y+3.5);
+  const ram=spawnUnit('ram',2,o.x+4.5,o.y+6.5), raider=spawnUnit('militia',1,o.x+5.5,o.y+6.5), guard=spawnUnit('spearman',2,o.x+2.5,o.y+6.5);
+  rebuildGrid(); p2.ai.tacT=2; p2.ai.tactics(0);
+  const kiteOk=kArch.order&&kArch.order.t==='move'&&kArch.order.then&&kArch.order.then.t==='attack';
+  const monkConv=monk.order&&monk.order.t==='convert'&&monk.order.id===eKn.id;
+  const escortOk=guard.order&&guard.order.t==='attack'&&guard.order.id===raider.id;
+  [kArch,kFoe,monk,eKn,ram,raider,guard].forEach(removeEnt);
+  // Economy: one-sheep-at-a-time and auto-deposit on camp completion
+  for(const s of W.list) if(s.kind==='unit'&&s.type==='sheep'&&Math.hypot(s.x-W.players[2].startX,s.y-W.players[2].startY)<12) s.owner=2;
+  const v2s=W.list.filter(u=>u.kind==='unit'&&u.owner===2&&u.type==='villager');
+  for(const v of v2s) setOrder(v,null);
+  p2.ai.assign(v2s[0],'food'); p2.ai.assign(v2s[1],'food');
+  const sameSheep=v2s[0].order&&v2s[1].order&&v2s[0].order.t==='hunt'&&v2s[0].order.id===v2s[1].order.id;
+  const woodBefore=W.players[1].res.wood; const v1=W.list.find(u=>u.kind==='unit'&&u.owner===1&&u.type==='villager');
+  v1.carry={res:'wood',amt:10}; const lc=spawnBuilding('lumbercamp',1,o.x+1,o.y+1,true); afterBuild(v1,lc);
+  const deposited=W.players[1].res.wood===woodBefore+10&&v1.carry.amt===0;
+  return {counter:tCounter===kn, wounded:tWounded===m2, kiteOk, monkConv, escortOk, sameSheep, deposited}; })()`);
+ok('battle & economy: counter/wounded target priority, ranged kiting, combat monk conversion, siege escort, one-sheep slaughter, and camp auto-deposit',
+  TB.counter && TB.wounded && TB.kiteOk && TB.monkConv && TB.escortOk && TB.sameSheep && TB.deposited, TB);
 // soak: AI vs AI for 8 minutes with everything on
 const Z = run(`(() => { fresh(12); for(const p of W.players.slice(1)) p.ai=new AIPlayer(p,'standard'); W.spectate=true; let err=null;
   try { for(let i=0;i<20*60*8;i++) worldTick(0.05); } catch(e){ err=String(e.stack||e).slice(0,300); }

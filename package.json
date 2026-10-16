@@ -5,6 +5,9 @@
     "test": "node tests/run-all.js",
     "test:syntax": "node tests/check-syntax.js",
     "vendor:three": "node scripts/vendor-three.js",
+    "art:bake": "node tools/art/bake-kenney.mjs",
+    "art:actors": "node tools/art/bake-actors.mjs",
+    "maps:build": "node tools/build-geography.mjs",
     "test:quick": "node tests/run-all.js --quick",
     "test:full": "node tests/run-all.js --full",
     "test:browser": "playwright test"

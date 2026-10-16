@@ -1,20 +1,33 @@
-// ===== Optional art style: Kenney CC0 kits, pre-rendered by tools/art/bake-kenney.mjs =====
-// Turn on with /game/?art=kenney (remembered in this browser), off with ?art=classic.
-// Buildings, trees and mines use the baked sprites; walls, gates, farms and anything without a sprite keep
-// the drawn art. Sprites load in the background; until one arrives the drawn version is shown.
+// ===== Default art style: Kenney CC0 kits, pre-rendered by tools/art/bake-kenney.mjs =====
+// ?art=classic restores drawn art; valid choices are remembered in this browser.
+// Local sprites load progressively, with drawn art as the fallback for missing assets.
 'use strict';
-const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/' };
+const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/', revision: 0, failed: [] };
 (function () {
   let v = null;
+  const valid = value => value === 'kenney' || value === 'classic';
   try { v = new URLSearchParams(location.search).get('art'); } catch (e) { /* headless */ }
-  try { if (v) localStorage.setItem('aor.art', v); else v = localStorage.getItem('aor.art'); } catch (e) { /* storage blocked */ }
-  KART.on = v === 'kenney' && typeof KENNEY_ART === 'object' && typeof Image === 'function';
+  try { if (valid(v)) localStorage.setItem('aor.art', v); else v = localStorage.getItem('aor.art'); } catch (e) { /* storage blocked */ }
+  KART.on = v !== 'classic' && typeof KENNEY_ART === 'object' && typeof Image === 'function';
   if (!KART.on) return;
-  for (const k of Object.keys(KENNEY_ART)) {
-    const im = new Image();
-    im.onload = () => { KART.img[k] = im; KART.cache.clear(); };
-    im.src = KART.base + k + '.png';
-  }
+  const load = () => {
+    for (const k of Object.keys(KENNEY_ART)) {
+      const im = new Image();
+      im.onload = () => {
+        KART.img[k] = im; KART.revision++;
+        // Portraits and command buttons may have cached the drawn fallback during loading.
+        if (typeof ICONS !== 'undefined') ICONS.clear();
+        if (typeof UI !== 'undefined') UI.panelKey = '';
+        const box = document.getElementById('selinfo');
+        if (box) box.dataset.multiKey = '';
+      };
+      im.onerror = () => { KART.failed.push(k); };
+      im.src = KART.base + k + '.png';
+    }
+  };
+  // Start after the page has booted so a slow image cannot hold up the main loop's load handler.
+  if (typeof window !== 'undefined' && document.readyState !== 'complete') window.addEventListener('load', load, { once: true });
+  else load();
 })();
 
 // best sprite name for a type at an age style: exact, else the nearest lower age, else the bare name
@@ -33,6 +46,7 @@ function kartSprite(name, decorate) {
 if (KART.on && typeof bldSprite === 'function') {
   const _bldSprite = bldSprite;
   bldSprite = function (type, st, pc) {
+    if (type === 'wonder') return _bldSprite.apply(this, arguments);
     const name = kartKey(type, st);
     if (!name) return _bldSprite.apply(this, arguments);
     const key = name + '|' + pc.c;
@@ -41,23 +55,11 @@ if (KART.on && typeof bldSprite === 'function') {
       const size = BUILDINGS[type].size;
       // player colour: a small flag at the front-left corner of the footprint
       s = kartSprite(name, g => flag(g, -size / 2 + 0.12, size / 2 - 0.12, 0, pc.c, 0.3, size >= 3 ? 0.9 : 0.7));
+      s.staticSails = type === 'mill';
       KART.cache.set(key, s);
     }
     return s;
   };
-}
-if (KART.on && typeof drawBuilding === 'function') {
-  // the drawn mill animates its own sails; the Kenney mill has sails baked in
-  const _drawBuilding = drawBuilding;
-  drawBuilding = function (ctx, b) {
-    if (b.type !== 'mill' || !kartKey('mill', 0)) return _drawBuilding.apply(this, arguments);
-    b.type = 'kart_mill';
-    try { return _drawBuilding.apply(this, arguments); } finally { b.type = 'mill'; }
-  };
-  if (typeof BUILDINGS === 'object' && BUILDINGS.mill && !BUILDINGS.kart_mill) Object.defineProperty(BUILDINGS, 'kart_mill', { value: BUILDINGS.mill, enumerable: false });
-  if (typeof BLD_H === 'object') BLD_H.kart_mill = BLD_H.mill;
-  const _bs = bldSprite;
-  bldSprite = function (type, st, pc) { return _bs.call(this, type === 'kart_mill' ? 'mill' : type, st, pc); };
 }
 if (KART.on && typeof treeSprite === 'function') {
   const _treeSprite = treeSprite;
@@ -70,18 +72,46 @@ if (KART.on && typeof treeSprite === 'function') {
     return s;
   };
 }
-if (KART.on && typeof drawRes === 'function') {
-  const _drawRes = drawRes;
-  drawRes = function (ctx, e) {
-    if (e.type !== 'gold' && e.type !== 'stone') return _drawRes.apply(this, arguments);
-    const name = e.type + '_' + (e.id & 1);
-    if (!KART.img[name]) return _drawRes.apply(this, arguments);
+if (KART.on) {
+  // A renderer hook keeps resource hit flashes and other surrounding effects intact.
+  R.resourceArt = function (ctx, e, gp, frac) {
+    const pile = e.type === 'gold' || e.type === 'stone';
+    const felled = e.type === 'tree' && e.felled;
+    if (!pile && !felled && e.type !== 'berry' && e.type !== 'shrub') return false;
+    const name = (felled ? 'felled' : e.type) + '_' + (e.id & 1);
+    if (!KART.img[name]) return false;
+    const stage = e.type === 'berry' ? Math.ceil(Math.max(0, Math.min(1, frac)) * 4) : 0;
+    const key = name + '|' + stage;
+    let s = KART.cache.get(key);
+    if (!s) {
+      s = kartSprite(name, e.type === 'berry' ? g => {
+        const rng = mulberry32(31 + (e.id & 1));
+        for (let i = 0; i < stage * 4; i++) {
+          const x = (rng() - 0.5) * 24, y = -8 - rng() * 12;
+          g.fillStyle = '#702a39'; g.beginPath(); g.arc(x, y, 2, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#ec7b79'; g.beginPath(); g.arc(x - 0.5, y - 0.6, 0.8, 0, Math.PI * 2); g.fill();
+        }
+      } : null);
+      KART.cache.set(key, s);
+    }
+    const k = pile ? 0.55 + 0.45 * Math.sqrt(Math.max(0, frac)) : felled ? 0.75 + 0.25 * Math.max(0, frac) : 1;
+    ctx.save(); ctx.translate(gp.x, gp.y);
+    if (felled && e.fallDir < 0) ctx.scale(-1, 1);
+    ctx.drawImage(s.cv, -s.ax * k, -s.ay * k, s.w * k, s.h * k); ctx.restore();
+    if (e.type === 'gold' && Math.sin(R.time * 3 + e.id) > 0.97) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(gp.x + (e.id % 7) - 3, gp.y - 10, 1.5, 0, 6.3); ctx.fill(); }
+    return true;
+  };
+}
+if (KART.on && typeof drawFarm === 'function') {
+  const _drawFarm = drawFarm;
+  drawFarm = function (ctx, b, gp) {
+    const p = W && W.players[b.owner];
+    const frac = Math.max(0, b.food / Math.max(1, p ? p.farmFood : 175));
+    const name = 'farm_' + (frac > 0.5 ? 2 : frac > 0.2 ? 1 : 0);
+    if (!b.built || !KART.img[name]) return _drawFarm.apply(this, arguments);
     let s = KART.cache.get(name);
     if (!s) { s = kartSprite(name); KART.cache.set(name, s); }
-    const cx = e.x + 0.5, cy = e.y + 0.5, gp = iso(cx, cy, W.map.h(cx, cy));
-    const k = 0.55 + 0.45 * Math.sqrt(Math.max(0, e.amount / e.max));   // the pile shrinks as it is mined
-    ctx.drawImage(s.cv, gp.x - s.ax * k, gp.y - s.ay * k, s.w * k, s.h * k);
-    if (e.type === 'gold' && Math.sin(R.time * 3 + e.id) > 0.97) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(gp.x + (e.id % 7) - 3, gp.y - 10, 1.5, 0, 6.3); ctx.fill(); }
+    ctx.drawImage(s.cv, gp.x - s.ax, gp.y - s.ay, s.w, s.h);
   };
 }
 // main-menu toggle next to "Try 2.5D Graphics"; switching reloads the page (only offered in the menu)
@@ -89,8 +119,8 @@ if (typeof document !== 'undefined' && typeof KENNEY_ART === 'object') {
   const addBtn = () => {
     const bar = document.querySelector('.display-buttons'); if (!bar || document.getElementById('btn-art')) return;
     const b = document.createElement('button'); b.className = 'btn'; b.id = 'btn-art';
-    b.textContent = KART.on ? 'Classic Art' : 'Try Kenney Art';
-    b.title = 'Switch building and tree art between the drawn style and Kenney\'s free (CC0) low-poly kits';
+    b.textContent = KART.on ? 'Classic Art' : 'Kenney Art';
+    b.title = 'Switch between classic drawn art and Kenney’s CC0 medieval buildings, farms and scenery';
     b.onclick = () => { const u = new URL(location.href); u.searchParams.set('art', KART.on ? 'classic' : 'kenney'); location.href = u.toString(); };
     bar.prepend(b);
   };

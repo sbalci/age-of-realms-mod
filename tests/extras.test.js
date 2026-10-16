@@ -62,4 +62,17 @@ ok('spectator: your slot is AI-played and grows its economy, commands disabled',
 const E2 = run(`(() => { let shown=0; UI.showEnd=()=>{shown++}; W.over=false; const p=W.players[1]; p.alive=false; W.players[2].alive=true; for(const e of W.list.slice()) if(e.owner===1) { e.dead=true; } W.list=W.list.filter(e=>e.owner!==1);
   checkVictory(); return {over:W.over, shown, winners:W.spectWinners}; })()`);
 ok('spectator: game ends with the last side standing as winner', E2.over && E2.shown === 1 && E2.winners && E2.winners.length === 1 && E2.winners[0] === 2, E2);
+const N = run(`(() => {
+  const def = defaultOppCivs('franks', 5, []);
+  const uniqDef = new Set(['franks', ...def]).size === 6;
+  const chosen = resolveOppCivs({ civ: 'franks', oppCivs: ['turks', 'japanese', 'random', 'random'] }, 4, mulberry32(42));
+  const uniqRandom = new Set(['franks', ...chosen]).size === 5;
+  const leaderT = aiLeaderName('turks', mulberry32(1), new Set());
+  const leaderJ = aiLeaderName('japanese', mulberry32(1), new Set());
+  const validLeaders = AI_LEADERS.turks.includes(leaderT) && AI_LEADERS.japanese.includes(leaderJ);
+  const allCivsHavePool = Object.keys(CIVS).every(k => AI_CIV_UNITS[k] && Array.isArray(AI_CIV_UNITS[k].barracks) && Array.isArray(AI_CIV_UNITS[k].range2) && Array.isArray(AI_CIV_UNITS[k].stable2));
+  return { def, uniqDef, chosen, uniqRandom, leaderT, leaderJ, validLeaders, allCivsHavePool };
+})()`);
+ok('AI opponent setup: defaults and random slots pick distinct nations, honor explicit nations, pair leader names, and define per-civ AI unit pools',
+  N.uniqDef && N.chosen[0] === 'turks' && N.chosen[1] === 'japanese' && N.uniqRandom && N.validLeaders && N.allCivsHavePool, N);
 console.log(`\n${pass} passed, ${fail} failed`);

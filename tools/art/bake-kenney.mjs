@@ -16,7 +16,7 @@ const previewIdx = args.indexOf('--preview');
 const preview = previewIdx >= 0;
 const only = preview && args[previewIdx + 1] ? args[previewIdx + 1].split(',') : null;
 
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.glb': 'model/gltf-binary', '.json': 'application/json' };
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
   const file = path.resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (!file.startsWith(root)) return res.writeHead(403).end();

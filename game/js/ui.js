@@ -2,7 +2,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
-const RES_ICON = { food: '🍖', wood: '🪵', gold: '🪙', stone: '🪨' };
+const RES_ICON = { food: '🍖', wood: '🪵', gold: '🪙', stone: '🪨', coal: '◆' };
 const TIPS = [
   'Keep your Town Center busy training Villagers — a strong economy wins games.',
   'Scout with your Scout Cavalry to find sheep: any sheep your units walk near becomes yours.',
@@ -83,8 +83,24 @@ function speakAs(civ, kind) {
 }
 
 // ---------- game setup ----------
-const SETUP_DEFAULT = { name: 'Player', color: 0, civ: 'franks', mapType: 'coastal', size: 'small', opponents: 2, difficulty: 'standard', teams: 'ffa', startAge: 0, startRes: 'standard', fog: 'normal', speed: '1', seed: 0, cheats: true, tips: true, customMap: '' };
+const SETUP_DEFAULT = { name: 'Player', color: 0, civ: 'franks', mapType: 'coastal', size: 'small', opponents: 2, oppCivs: [], difficulty: 'standard', teams: 'ffa', startAge: 0, startRes: 'standard', fog: 'normal', speed: '1', seed: 0, cheats: true, tips: true, customMap: '' };
 function loadSetup() { try { return Object.assign({}, SETUP_DEFAULT, JSON.parse(localStorage.getItem('aoe_setup') || '{}')); } catch (e) { return Object.assign({}, SETUP_DEFAULT); } }
+function defaultOppCivs(humanCiv, count, saved) {
+  const keys = Object.keys(CIVS);
+  const out = [], used = new Set([humanCiv]);
+  for (let i = 0; i < count; i++) {
+    const sv = Array.isArray(saved) ? saved[i] : undefined;
+    if (sv === 'random' || (sv && CIVS[sv] && !used.has(sv))) {
+      out.push(sv);
+      if (sv !== 'random') used.add(sv);
+    } else {
+      const pick = keys.find(k => !used.has(k)) || keys.find(k => k !== humanCiv) || keys[i % keys.length];
+      out.push(pick);
+      used.add(pick);
+    }
+  }
+  return out;
+}
 function buildSetup() {
   const s = loadSetup();
   if (!s.seed) s.seed = (Math.random() * 1e6) | 0;
@@ -100,7 +116,7 @@ function buildSetup() {
         <label>Civilization <select id="s-civ">${civOpts}</select></label>
         <div id="civ-info" class="civ-info"></div>
         <h3>Opponents</h3>
-        <label>Computer players <select id="s-opp">${[1, 2, 3].map(n => `<option ${s.opponents == n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Computer players <select id="s-opp">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option ${s.opponents == n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label>Difficulty <select id="s-diff">${['easy', 'standard', 'hard', 'hardest'].map(d => `<option value="${d}" ${s.difficulty === d ? 'selected' : ''}>${d[0].toUpperCase() + d.slice(1)}</option>`).join('')}</select></label>
         <label>Teams <select id="s-teams">
           <option value="ffa" ${s.teams === 'ffa' ? 'selected' : ''}>Free for all</option>
@@ -115,6 +131,9 @@ function buildSetup() {
           <option value="land" ${s.mapType === 'land' ? 'selected' : ''}>Highlands (land, hills & cliffs)</option>
           <option value="coastal" ${s.mapType === 'coastal' ? 'selected' : ''}>Coastal (mixed land & inland sea)</option>
           <option value="islands" ${s.mapType === 'islands' ? 'selected' : ''}>Islands (naval, transports needed)</option>
+          <option value="anatolia" ${s.mapType === 'anatolia' ? 'selected' : ''}>Anatolia (real coastline)</option>
+          <option value="mediterranean" ${s.mapType === 'mediterranean' ? 'selected' : ''}>Mediterranean (real coastline, naval)</option>
+          <option value="world" ${s.mapType === 'world' ? 'selected' : ''}>World (real continents, large recommended)</option>
           <option value="custom" ${s.mapType === 'custom' ? 'selected' : ''} ${maps.length ? '' : 'disabled'}>Custom map (from Map Editor)</option>
         </select></label>
         <label id="lab-custom" class="${s.mapType === 'custom' ? '' : 'hidden'}">Custom map <select id="s-custom">${maps.map(m => `<option ${m === s.customMap ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}</select></label>
@@ -133,14 +152,39 @@ function buildSetup() {
     <div class="setup-btns"><button class="btn" id="s-back">Back</button><button class="btn primary" id="s-start">Start Game</button></div>
   </div>`;
   let color = s.color;
+  let oppCivs = defaultOppCivs(s.civ, 7, s.oppCivs);
+  const oppTouched = new Set();
   const civInfo = () => {
     const c = CIVS[$('#s-civ').value], uu = UNITS[c.uu];
     $('#civ-info').innerHTML = `<b>${c.name}</b> <span class="small">(voices: ${c.lang})</span><ul>${c.bonuses.map(b => `<li>${b}</li>`).join('')}</ul><div class="uu"><b>Unique unit:</b> ${uu.name} — ${uu.desc}</div>`;
   };
   const oppList = () => {
-    const n = +$('#s-opp').value, t = $('#s-teams').value;
-    const rows = []; for (let i = 0; i < n; i++) rows.push(`Computer ${i + 1}: ${teamOf(t, i + 1, n + 1) === teamOf(t, 0, n + 1) && t !== 'ffa' ? '<b>ally</b>' : 'enemy'}`);
-    $('#opp-list').innerHTML = rows.join('<br>');
+    const n = +$('#s-opp').value, t = $('#s-teams').value, hCiv = $('#s-civ').value;
+    const usedColors = new Set([color]);
+    const nextColor = () => { for (let i = 0; i < PLAYER_COLORS.length; i++) if (!usedColors.has(i)) { usedColors.add(i); return i; } return 0; };
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      const ci = nextColor(), pc = PLAYER_COLORS[ci];
+      const selCiv = oppCivs[i] || defaultOppCivs(hCiv, i + 1, oppCivs)[i];
+      oppCivs[i] = selCiv;
+      const isAlly = teamOf(t, i + 1, n + 1) === teamOf(t, 0, n + 1) && t !== 'ffa';
+      const opts = [`<option value="random" ${selCiv === 'random' ? 'selected' : ''}>Random (different)</option>`]
+        .concat(Object.keys(CIVS).map(k => `<option value="${k}" ${selCiv === k ? 'selected' : ''}>${CIVS[k].name}</option>`)).join('');
+      const c = CIVS[selCiv], uu = c && UNITS[c.uu];
+      const uuText = uu ? uu.name : 'Random nation';
+      const uuTitle = c ? `${c.name} — Unique unit: ${uu ? uu.name : ''} (${c.bonuses[0] || ''})` : 'Picks a nation not already in the match';
+      rows.push(`<div class="opp-row"><span class="sw" style="background:${pc.c}" title="${pc.name}"></span><span class="opp-label">Computer ${i + 1}:</span><select class="s-opp-civ" id="s-opp-civ-${i + 1}" data-opp="${i}" aria-label="Computer ${i + 1} civilization">${opts}</select><span class="opp-uu" title="${escapeHtml(uuTitle)}">${escapeHtml(uuText)}</span><span class="opp-team ${isAlly ? 'ally' : 'enemy'}">${isAlly ? '<b>ally</b>' : 'enemy'}</span></div>`);
+    }
+    $('#opp-list').innerHTML = rows.join('');
+    for (const sel of document.querySelectorAll('#opp-list .s-opp-civ')) {
+      sel.onchange = () => {
+        const idx = +sel.dataset.opp;
+        oppCivs[idx] = sel.value;
+        oppTouched.add(idx);
+        if (CIVS[sel.value]) speakAs(sel.value, 'select');
+        oppList();
+      };
+    }
   };
   const preview = () => {
     const cv = $('#s-preview'), g = cv.getContext('2d'); g.fillStyle = '#111'; g.fillRect(0, 0, cv.width, cv.height);
@@ -157,8 +201,20 @@ function buildSetup() {
     for (const o of spec.objects) if (o.k === 'tree') { g.fillStyle = '#244a1c'; g.fillRect(o.x, o.y, 1, 1); } else if (o.k === 'bld') { g.fillStyle = '#fff'; g.fillRect(o.x, o.y, 4, 4); }
     g.restore();
   };
-  $('#s-colors').onclick = e => { const i = e.target.dataset.i; if (i === undefined) return; color = +i; for (const sw of document.querySelectorAll('#s-colors .swatch')) sw.classList.toggle('on', +sw.dataset.i === color); };
-  $('#s-civ').onchange = () => { civInfo(); speakAs($('#s-civ').value, 'select'); };
+  $('#s-colors').onclick = e => { const i = e.target.dataset.i; if (i === undefined) return; color = +i; for (const sw of document.querySelectorAll('#s-colors .swatch')) sw.classList.toggle('on', +sw.dataset.i === color); oppList(); };
+  $('#s-civ').onchange = () => {
+    const newCiv = $('#s-civ').value;
+    const used = new Set([newCiv]);
+    for (let i = 0; i < oppCivs.length; i++) if (oppTouched.has(i) && oppCivs[i] !== 'random') used.add(oppCivs[i]);
+    for (let i = 0; i < oppCivs.length; i++) {
+      if (!oppTouched.has(i) && oppCivs[i] === newCiv) {
+        const replacement = Object.keys(CIVS).find(k => !used.has(k)) || newCiv;
+        oppCivs[i] = replacement;
+        used.add(replacement);
+      } else if (oppCivs[i] !== 'random') used.add(oppCivs[i]);
+    }
+    civInfo(); oppList(); speakAs(newCiv, 'select');
+  };
   $('#s-opp').onchange = () => { oppList(); preview(); };
   $('#s-teams').onchange = oppList;
   $('#s-map').onchange = () => { $('#lab-custom').classList.toggle('hidden', $('#s-map').value !== 'custom'); preview(); };
@@ -166,9 +222,12 @@ function buildSetup() {
   $('#s-reseed').onclick = () => { $('#s-seed').value = (Math.random() * 1e6) | 0; preview(); };
   $('#s-back').onclick = () => showScreen('menu');
   $('#s-start').onclick = () => {
+    const nOpp = +$('#s-opp').value;
+    const chosenOppCivs = [...document.querySelectorAll('#opp-list .s-opp-civ')].map(el => el.value);
     const cfg = {
       name: $('#s-name').value.trim() || 'Player', color, civ: $('#s-civ').value, mapType: $('#s-map').value, customMap: $('#s-custom') ? $('#s-custom').value : '',
-      size: $('#s-size').value, opponents: +$('#s-opp').value, difficulty: $('#s-diff').value, teams: $('#s-teams').value, startAge: +$('#s-age').value,
+      size: $('#s-size').value, opponents: nOpp, oppCivs: chosenOppCivs.length ? chosenOppCivs : oppCivs.slice(0, nOpp),
+      difficulty: $('#s-diff').value, teams: $('#s-teams').value, startAge: +$('#s-age').value,
       startRes: $('#s-res').value, fog: $('#s-fog').value, speed: $('#s-speed').value, seed: +$('#s-seed').value || 1, cheats: $('#s-cheats').checked, tips: $('#s-tips').checked,
       rules: typeof readSetupRules === 'function' ? readSetupRules() : undefined,
     };
@@ -184,6 +243,46 @@ function teamOf(mode, idx, total) {
   return 0;
 }
 const AI_NAMES = ['Charlemagne', 'Frederick', 'Isabella', 'Doge Enrico', 'Minamoto', 'Wu Zetian', 'Basil II', 'Harald', 'Saladin', 'Joan', 'Otto', 'El Cid'];
+const AI_LEADERS = {
+  franks: ['Charlemagne', 'Joan', 'Charles Martel'],
+  teutons: ['Frederick', 'Otto', 'Hermann'],
+  spanish: ['Isabella', 'El Cid', 'Alfonso'],
+  italians: ['Doge Enrico', 'Lorenzo', 'Sforza'],
+  japanese: ['Minamoto', 'Nobunaga', 'Tokugawa'],
+  chinese: ['Wu Zetian', 'Taizong', 'Kublai'],
+  byzantines: ['Basil II', 'Justinian', 'Alexios'],
+  vikings: ['Harald', 'Ragnar', 'Leif'],
+  saracens: ['Saladin', 'Baybars', 'Harun'],
+  turks: ['Mehmed', 'Suleiman', 'Alp Arslan'],
+};
+function resolveOppCivs(cfg, count, rng) {
+  const civKeys = Object.keys(CIVS);
+  const raw = Array.isArray(cfg && cfg.oppCivs) ? cfg.oppCivs : [];
+  const used = new Set(cfg && cfg.civ ? [cfg.civ] : []);
+  const out = new Array(count);
+  for (let i = 0; i < count; i++) {
+    const c = raw[i];
+    if (c && c !== 'random' && CIVS[c]) { out[i] = c; used.add(c); }
+  }
+  for (let i = 0; i < count; i++) {
+    if (out[i]) continue;
+    let pool = civKeys.filter(k => !used.has(k));
+    if (!pool.length) pool = civKeys.filter(k => k !== (cfg && cfg.civ));
+    if (!pool.length) pool = civKeys;
+    const pick = pool[((rng ? rng() : Math.random()) * pool.length) | 0];
+    out[i] = pick;
+    used.add(pick);
+  }
+  return out;
+}
+function aiLeaderName(civ, rng, used) {
+  const r = rng || Math.random;
+  const list = (civ && AI_LEADERS[civ]) || AI_NAMES;
+  const avail = used ? list.filter(n => !used.has(n)) : list;
+  const pool = avail.length ? avail : (used ? AI_NAMES.filter(n => !used.has(n)) : list);
+  const src = pool.length ? pool : list;
+  return src[(r() * src.length) | 0] + '';
+}
 function launchFromSetup(cfg) {
   if (typeof applyRules === 'function') applyRules(cfg.rules || RULE_DEFAULTS);
   let spec;
@@ -191,26 +290,39 @@ function launchFromSetup(cfg) {
   const usedColors = new Set([cfg.color]);
   const nextColor = () => { for (let i = 0; i < PLAYER_COLORS.length; i++) if (!usedColors.has(i)) { usedColors.add(i); return i; } return 0; };
   const rng = mulberry32(cfg.seed + 99);
-  const civKeys = Object.keys(CIVS);
+  const usedNames = new Set([cfg.name]);
   if (cfg.mapType === 'custom') {
     spec = Editor.load(cfg.customMap);
     if (!spec) { alert('Custom map not found'); return; }
     const errs = Editor.validate(spec); if (errs.length) { alert('Map is not playable:\n' + errs.join('\n')); return; }
+    const fallbackCivs = resolveOppCivs(cfg, Math.max(0, spec.players.length - 1), rng);
     spec.players.forEach((sp, i) => {
       if (i === 0) players.push({ name: cfg.name, civ: cfg.civ, color: PLAYER_COLORS[cfg.color], human: true, team: sp.team || teamOf(cfg.teams, 0) });
-      else { const ci = sp.color !== undefined && !usedColors.has(sp.color) ? (usedColors.add(sp.color), sp.color) : nextColor(); players.push({ name: AI_NAMES[(rng() * AI_NAMES.length) | 0], civ: sp.civ || civKeys[(rng() * civKeys.length) | 0], color: PLAYER_COLORS[ci], human: false, team: sp.team || teamOf(cfg.teams, i) }); }
+      else {
+        const ci = sp.color !== undefined && !usedColors.has(sp.color) ? (usedColors.add(sp.color), sp.color) : nextColor();
+        const civ = (sp.civ && CIVS[sp.civ]) ? sp.civ : fallbackCivs[i - 1];
+        const name = aiLeaderName(civ, rng, usedNames);
+        usedNames.add(name);
+        players.push({ name, civ, color: PLAYER_COLORS[ci], human: false, team: sp.team || teamOf(cfg.teams, i) });
+      }
     });
   } else {
     const np = cfg.opponents + 1;
+    const oppCivs = resolveOppCivs(cfg, cfg.opponents, rng);
     spec = generateMapSpec({ size: cfg.size, seed: cfg.seed, mapType: cfg.mapType, numPlayers: np });
     for (let i = 0; i < np; i++) {
       if (i === 0) players.push({ name: cfg.name, civ: cfg.civ, color: PLAYER_COLORS[cfg.color], human: true, team: teamOf(cfg.teams, 0, np) });
-      else { const civ = civKeys[(rng() * civKeys.length) | 0]; players.push({ name: AI_NAMES[(rng() * AI_NAMES.length) | 0] + '', civ, color: PLAYER_COLORS[nextColor()], human: false, team: teamOf(cfg.teams, i, np) }); }
+      else {
+        const civ = oppCivs[i - 1];
+        const name = aiLeaderName(civ, rng, usedNames);
+        usedNames.add(name);
+        players.push({ name, civ, color: PLAYER_COLORS[nextColor()], human: false, team: teamOf(cfg.teams, i, np) });
+      }
     }
   }
   // unique names
   const seen = new Set(); for (const p of players) { while (seen.has(p.name)) p.name += '+'; seen.add(p.name); }
-  const settings = Object.assign({}, cfg, { players, seed: cfg.seed, mapLabel: { land: 'Highlands', coastal: 'Coastal', islands: 'Islands', custom: 'Custom: ' + cfg.customMap }[cfg.mapType] });
+  const settings = Object.assign({}, cfg, { players, seed: cfg.seed, mapLabel: { anatolia: 'Anatolia', mediterranean: 'Mediterranean', world: 'World', land: 'Highlands', coastal: 'Coastal', islands: 'Islands', custom: 'Custom: ' + cfg.customMap }[cfg.mapType] });
   startGame(spec, settings, cfg.mapType === 'custom' && UI.fromEditorName === cfg.customMap);
 }
 function startGame(spec, settings, fromEditor) {
@@ -240,6 +352,7 @@ function initHUD() {
     <div class="res" id="r-wood" title="Wood">🪵 <span>0</span></div>
     <div class="res" id="r-gold" title="Gold">🪙 <span>0</span></div>
     <div class="res" id="r-stone" title="Stone">🪨 <span>0</span></div>
+    <div class="res" id="r-coal" title="Coal — excavate a seam, then mine; used by industrial improvements">${RES_ICON.coal} <span>0</span></div>
     <div class="res" id="r-pop" title="Population / limit">👥 <span>0/0</span></div>
     <div class="res" id="r-vil" title="Idle villagers (press . to select)">💤 <span>0</span></div>
     <div id="age-label">Dark Age</div>
@@ -351,9 +464,9 @@ function commandsFor(sel) {
     if (b.type === 'tc') cmds.push({ key: 'B', icon: p.bell ? 'allclear' : 'bell', name: p.bell ? 'All Clear' : 'Ring Town Bell', desc: p.bell ? 'Villagers leave shelter and return to their previous work.' : 'Villagers nearby run into Town Centers, Towers and Castles for shelter; garrisoned villagers add arrows.', fn: () => { p.bell ? allClear(p) : ringBell(p); UI.panelKey = ''; } });
     if (d.garrison) cmds.push({ key: 'U', icon: 'ungarrison', name: `Ungarrison (${b.garrison.length}/${garrisonCap(b)})`, desc: 'Release all garrisoned units at the nearest free spot (or toward the rally point).', lock: b.garrison.length ? null : 'No units inside', fn: () => ungarrisonAll(b) });
     if (b.type === 'market') {
-      for (const [i, r] of ['food', 'wood', 'stone'].entries()) {
-        cmds.push({ key: 'ASD'[i], icon: r === 'food' ? 'food' : r === 'wood' ? 'woodi' : 'stone', name: `Buy 100 ${r}`, desc: `Costs ${Math.round(W.market[r])} gold. Prices rise when you buy.`, cost: { gold: Math.round(W.market[r]) }, fn: () => { const e = marketTrade(p, r, true); if (e) msg(e, '#fc8'); else Sound.play('coins'); } });
-        cmds.push({ key: 'ZXC'[i], icon: r === 'food' ? 'food' : r === 'wood' ? 'woodi' : 'stone', name: `Sell 100 ${r}`, desc: `Earns ${Math.round(W.market[r] * 0.7)} gold.`, cost: { [r]: 100 }, fn: () => { const e = marketTrade(p, r, false); if (e) msg(e, '#fc8'); else Sound.play('coins'); } });
+      for (const [i, r] of ['food', 'wood', 'stone', 'coal'].entries()) {
+        cmds.push({ key: 'ASDF'[i], icon: r === 'wood' ? 'woodi' : r, name: `Buy 100 ${r}`, desc: `Costs ${Math.round(W.market[r])} gold. Prices rise when you buy.`, cost: { gold: Math.round(W.market[r]) }, fn: () => { const e = marketTrade(p, r, true); if (e) msg(e, '#fc8'); else Sound.play('coins'); } });
+        cmds.push({ key: 'ZXCV'[i], icon: r === 'wood' ? 'woodi' : r, name: `Sell 100 ${r}`, desc: `Earns ${Math.round(W.market[r] * 0.7)} gold.`, cost: { [r]: 100 }, fn: () => { const e = marketTrade(p, r, false); if (e) msg(e, '#fc8'); else Sound.play('coins'); } });
       }
     }
     if (trains.length) cmds.push({ key: 'Y', icon: 'rally', name: 'Set Rally Point', desc: 'Click a location (or resource) where new units should go. You can also right-click with the building selected.', fn: () => { UI.mode = { t: 'rally' }; } });
@@ -452,7 +565,7 @@ function renderSelInfo() {
     if (e.type === 'monastery') lines.push(`Relics: ${e.relics.length} → +${(e.relics.length * 0.5).toFixed(1)} gold/s`);
     if (d.atk) lines.push(`Arrows: ${(e.type === 'castle' ? 4 : 1) + e.garrison.length} · Attack ${bldAtk(e)}`);
     if (d.pop && e.owner === W.humanId) lines.push(`Supports ${e.type === 'tc' && p.tcPop ? p.tcPop : d.pop} population`);
-  } else if (e.kind === 'res') { name = { tree: 'Tree', gold: 'Gold Mine', stone: 'Stone Mine', berry: 'Berry Bush', fish: 'Fish', carcass: 'Carcass', shrub: 'Shrub' }[e.type]; icon = e.type === 'gold' ? 'gold' : e.type === 'stone' ? 'stone' : e.type === 'fish' ? 'fish' : e.type === 'tree' ? 'woodi' : 'food'; if (e.type !== 'shrub') lines.push(`${resKind(e)}: ${Math.floor(e.amount)}`); }
+  } else if (e.kind === 'res') { name = { tree: 'Tree', gold: 'Gold Mine', stone: 'Stone Mine', coal: 'Coal Mine', berry: 'Berry Bush', fish: 'Fish', carcass: 'Carcass', shrub: 'Shrub' }[e.type]; icon = e.type === 'coal' ? 'coal' : e.type === 'gold' ? 'gold' : e.type === 'stone' ? 'stone' : e.type === 'fish' ? 'fish' : e.type === 'tree' ? 'woodi' : 'food'; if (e.type !== 'shrub') lines.push(`${resKind(e)}: ${Math.floor(e.amount)}`); }
   else if (e.kind === 'relic') { name = 'Relic'; icon = 'relicicon'; lines.push('Only monks can carry relics.'); }
   const hp = e.maxhp ? `<div class="hpbar"><i style="width:${Math.max(0, e.hp / e.maxhp * 100)}%"></i><span>${Math.ceil(e.hp)}/${e.maxhp}</span></div>` : '';
   let extra = '';
@@ -715,7 +828,7 @@ function drawOverlays(ctx) {
       const cx = o.x + s / 2, cy = o.y + s / 2;
       const gp = iso(cx, cy, BUILDINGS[type].water ? -0.35 : W.map.h(cx, cy));
       ctx.save(); ctx.globalAlpha = 0.6;
-      if (!BUILDINGS[type].farm) { const sp = bldSprite(type, Math.min(3, p.age), p.color); ctx.drawImage(sp.cv, gp.x - sp.ax, gp.y - sp.ay, sp.w, sp.h); }
+      if (!BUILDINGS[type].farm) { const sp = bldSprite(type, type === 'wonder' ? p.age : Math.min(3, p.age), p.color); ctx.drawImage(sp.cv, gp.x - sp.ax, gp.y - sp.ay, sp.w, sp.h); }
       ctx.restore();
       ctx.save(); ctx.translate(gp.x, gp.y);
       poly(ctx, [P(-s / 2, -s / 2, 0), P(s / 2, -s / 2, 0), P(s / 2, s / 2, 0), P(-s / 2, s / 2, 0)], err ? 'rgba(255,40,40,0.35)' : 'rgba(60,255,60,0.25)', err ? '#f44' : '#4f4', 1.5);

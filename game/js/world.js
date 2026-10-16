@@ -41,9 +41,9 @@ function isFriend(a, b) { return a === b || (a > 0 && b > 0 && W.players[a].stan
 class Player {
   constructor(id, o) {
     Object.assign(this, { id, name: o.name, civ: o.civ, color: o.color, human: !!o.human, team: o.team || 0 });
-    this.res = { food: 200, wood: 200, gold: 100, stone: 200 };
+    this.res = { food: 200, wood: 200, gold: 100, stone: 200, coal: 0 };
     this.age = 0; this.techs = new Set(); this.researching = new Set();
-    this.up = {}; this.carry = 10; this.gather = { food: 1, wood: 1, gold: 1, stone: 1, farm: 1, fish: 1 };
+    this.up = {}; this.carry = 10; this.gather = { food: 1, wood: 1, gold: 1, stone: 1, coal: 1, farm: 1, fish: 1 };
     this.farmFood = 175; this.bldLos = 0; this.bldAtk = 0; this.bldRange = 0; this.bldHp = 1; this.bldArmor = 0; this.towerLvl = 0;
     this.ballistics = false; this.monkRecharge = 1; this.sharedVision = false; this.tributeFee = 0.25; this.transportCap = 0;
     this.pop = 0; this.popCap = 0; this.alive = true; this.stance = []; this.bell = false;
@@ -59,7 +59,7 @@ function createWorld(spec, settings) {
   const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n'));
   const n = spec.n, map = new GameMap(n);
   map.ter.set(spec.ter); map.elev.set(spec.elev);
-  for (const k of ['bridge', 'tun', 'trench']) if (spec[k]) map[k] = new Uint8Array(spec[k]);
+  for (const k of ['bridge', 'tun', 'trench', 'excavated']) if (spec[k]) map[k] = new Uint8Array(spec[k]);
   const rng = mulberry32(settings.seed >>> 0 || 1);
   for (let i = 0; i < n * n; i++) map.deco[i] = (rng() * 256) | 0;
   map.computeVH(); map.computeRegions();
@@ -97,11 +97,11 @@ function createWorld(spec, settings) {
   const sr = { standard: { food: 200, wood: 200, gold: 100, stone: 200 }, medium: { food: 500, wood: 500, gold: 300, stone: 300 }, high: { food: 1000, wood: 1000, gold: 1000, stone: 1000 } }[settings.startRes] || { food: 200, wood: 200, gold: 100, stone: 200 };
   for (let i = 1; i <= np; i++) {
     const p = W.players[i];
-    p.res = Object.assign({}, sr);
+    p.res = Object.assign({ coal: 0 }, sr);
     if (p.civ === 'chinese') { p.res.food = Math.max(0, p.res.food - 150); for (let k = 0; k < 3; k++) spawnUnit('villager', i, p.startX + 3, p.startY - 1 + k); }
     if (p.civ === 'spanish') spawnUnit('villager', i, p.startX - 3, p.startY);
     const age = settings.startAge | 0;
-    for (let a = 1; a <= age; a++) { p.techs.add(['', 'feudal', 'castleage', 'imperial'][a]); p.age = a; }
+    for (let a = 1; a <= Math.min(age, AGES.length - 1); a++) { p.techs.add(AGE_TECHS[a]); p.age = a; }
     if (settings.difficulty === 'hardest' && !p.human) { for (const r of RES) p.res[r] += 200; }
   }
   // fog
@@ -129,16 +129,16 @@ function applyCivBonus(p) {
 function spawnFromSpec(o) {
   if (o.k === 'unit') return spawnUnit(o.t, o.o | 0, o.x + 0.5, o.y + 0.5);
   if (o.k === 'bld') return spawnBuilding(o.t, o.o | 0, o.x, o.y, true);
-  return spawnRes(o.k, o.x, o.y, o.v | 0);
+  return spawnRes(o.k, o.x, o.y, o.v | 0, o.depth || 0);
 }
 function newId() { return W.nextId++; }
 function addEnt(e) { W.ents.set(e.id, e); W.list.push(e); GameHooks.emit('entityAdded', e); return e; }
-function spawnRes(k, x, y, v = 0) {
+function spawnRes(k, x, y, v = 0, depth = 0) {
   const map = W.map; if (!map.inb(x, y)) return null;
-  const amounts = { tree: 100, gold: 800, stone: 350, berry: 125, fish: v ? 225 : 200, shrub: 0 };
+  const amounts = { tree: 100, gold: 800, stone: 350, coal: 900, berry: 125, fish: v ? 225 : 200, shrub: 0 };
   if (k === 'relic') return addEnt({ id: newId(), kind: 'relic', type: 'relic', x, y, owner: 0, carrier: 0, inBld: 0 });
-  const e = addEnt({ id: newId(), kind: 'res', type: k, x, y, v, amount: amounts[k] || 0, max: amounts[k] || 1, felled: false, owner: 0, gatherers: 0 });
-  if (k !== 'shrub') map.blk[map.idx(x, y)] = e.id;
+  const e = addEnt({ id: newId(), kind: 'res', type: k, x, y, v, depth, amount: amounts[k] || 0, max: amounts[k] || 1, felled: false, owner: 0, gatherers: 0 });
+  if (k !== 'shrub' && !depth) map.blk[map.idx(x, y)] = e.id;
   return e;
 }
 function statU(u, k) {
@@ -375,7 +375,7 @@ function nearestDrop(u, res) {
 function findNearestRes(u, types, x, y, maxD = 30, filter) {
   let best = null, bd = maxD;
   for (const e of W.list) {
-    if (e.kind !== 'res' || !types.includes(e.type) || e.amount <= 0) continue;
+    if (e.kind !== 'res' || !types.includes(e.type) || e.amount <= 0 || (typeof mineAccessible === 'function' && !mineAccessible(e))) continue;
     if (filter && !filter(e)) continue;
     const d = Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) + e.gatherers * 0.7;
     if (d < bd) {
@@ -524,8 +524,8 @@ function fireProjectile(src, t, type, dmgFn, extra = {}) {
   const p = W.players[src.owner];
   if (t.kind === 'unit' && t.path && t.pi < (t.path ? t.path.length : 0) && !(p && p.ballistics) && !UNITS[t.type].animal) { tx += (simRandom() - 0.5) * 0.8; ty += (simRandom() - 0.5) * 0.8; }
   const dist = Math.hypot(tx - s.x, ty - s.y);
-  const speed = { arrow: 9, javelin: 7, stone: 6, boulder: 5, bolt: 12, bullet: 20, fire: 6, axe: 7, jav: 7 }[type] || 8;
-  W.projs.push(Object.assign({ type, sx: s.x, sy: s.y, sz: src.kind === 'bld' ? 1.8 : 0.6, x: s.x, y: s.y, tx, ty, t: 0, dur: Math.max(0.1, dist / speed), target: t.id, src: src.id, owner: src.owner, dmg: dmgFn, arc: type === 'stone' || type === 'boulder' ? 0.4 : type === 'bullet' || type === 'fire' ? 0.02 : 0.15, dist }, extra));
+  const speed = { arrow: 9, javelin: 7, stone: 6, boulder: 5, bolt: 12, bullet: 20, shell: 11, laser: 35, plasma: 16, fire: 6, axe: 7, jav: 7 }[type] || 8;
+  W.projs.push(Object.assign({ type, sx: s.x, sy: s.y, sz: src.kind === 'bld' ? 1.8 : 0.6, x: s.x, y: s.y, tx, ty, t: 0, dur: Math.max(0.1, dist / speed), target: t.id, src: src.id, owner: src.owner, dmg: dmgFn, arc: type === 'stone' || type === 'boulder' ? 0.4 : ['bullet', 'fire', 'laser', 'plasma', 'shell'].includes(type) ? 0.02 : 0.15, dist }, extra));
 }
 function updateProjectiles(dt) {
   for (let i = W.projs.length - 1; i >= 0; i--) {
@@ -617,7 +617,7 @@ function effCost(p, id, isTech) {
   for (const r in base) c[r] = Math.round(base[r] * m);
   return c;
 }
-function canPay(p, c) { for (const r in c) if (p.res[r] < c[r]) return false; return true; }
+function canPay(p, c) { for (const r in c) if ((p.res[r] || 0) < c[r]) return false; return true; }
 function pay(p, c) { for (const r in c) p.res[r] -= c[r]; }
 function refund(p, q) { if (!p) return; for (const r in q.cost) p.res[r] += q.cost[r]; }
 function currentType(p, base) {
@@ -789,12 +789,13 @@ function runSimTimer(timer) {
 }
 function findTarget(src, range) {
   let best = null, bd = 1e9;
-  const cands = unitsNear(src.x, src.y, range + 1, u => !u.inside);
+  const cands = unitsNear(src.x, src.y, range + 1, u => !u.inside && !u.dying);
   for (const u of cands) {
     if (u.owner === src.owner) continue;
     if (u.owner === 0 ? u.type !== 'wolf' : !isEnemy(src.owner, u.owner)) continue;
     if (src.kind === 'bld' && UNITS[u.type].naval && false) continue;
-    const d = Math.hypot(u.x - src.x, u.y - src.y) + (u.type === 'villager' ? 0.5 : 0);
+    const hpRatio = u.maxhp > 0 ? u.hp / u.maxhp : 1;
+    const d = Math.hypot(u.x - src.x, u.y - src.y) + (u.type === 'villager' ? 0.8 : 0) - (1 - hpRatio) * 1.1 - (hasTag(u.type, 'siege') ? 0.6 : 0);
     if (d < bd) { bd = d; best = u; }
   }
   return best;
@@ -806,10 +807,20 @@ function findTargetFor(u, range) {
     if (!canAttack(u, t)) continue;
     if (t.owner === 0 && t.type !== 'wolf') continue;
     const dist = Math.hypot(t.x - u.x, t.y - u.y);
-    // prefer military over villagers, reachable
-    let score = dist + (t.type === 'villager' ? 1.5 : 0) + (hasTag(t.type, 'monk') ? 0 : 0);
     if (!d.naval && UNITS[t.type].naval && !(d.range > 0)) continue;
     if (!d.naval && !(d.range > 0) && W.map.landReg[W.map.idx(t.x | 0, t.y | 0)] !== W.map.landReg[W.map.idx(u.x | 0, u.y | 0)]) continue;
+    if (d.minRange && dist < d.minRange) continue;
+    // prefer military over villagers, counter bonuses, and wounded/high-threat targets
+    let bonusAdv = 0;
+    if (d.bonus && UNITS[t.type] && UNITS[t.type].tags) {
+      for (const k in d.bonus) if (UNITS[t.type].tags.includes(k)) bonusAdv += d.bonus[k];
+    }
+    const hpRatio = t.maxhp > 0 ? t.hp / t.maxhp : 1;
+    let score = dist
+      + (t.type === 'villager' ? 1.5 : 0)
+      - Math.min(2.5, bonusAdv * 0.12)
+      - (1 - hpRatio) * 1.1
+      - (t.type === 'monk' || hasTag(t.type, 'siege') ? 0.6 : 0);
     if (score < bd) { bd = score; best = t; }
   }
   if (!best && (d.onlyBld || d.naval || u.order && u.order.t === 'attackmove')) {
@@ -817,7 +828,8 @@ function findTargetFor(u, range) {
       if (e.kind !== 'bld' || !isEnemy(u.owner, e.owner)) continue;
       const dist = distTo(u, e); if (dist > range) continue;
       if (BUILDINGS[e.type].wall && !d.onlyBld) continue;
-      if (dist < bd) { bd = dist; best = e; }
+      const bScore = dist - (d.onlyBld && (e.type === 'castle' || e.type === 'tower' || e.type === 'tc') ? 2.5 : 0);
+      if (bScore < bd) { bd = bScore; best = e; }
     }
   }
   return best;
@@ -853,7 +865,7 @@ function updateUnit(u, dt) {
   u.idleT = 0;
   switch (o.t) {
     case 'move': {
-      if (followPath(u, dt)) setOrder(u, null);
+      if (followPath(u, dt)) setOrder(u, o.then || null);
       break;
     }
     case 'attackmove': {
@@ -865,6 +877,14 @@ function updateUnit(u, dt) {
     }
     case 'moveto': case 'follow': {
       const t = ent(o.id); if (!t || t.dead || (t.kind === 'unit' && t.inside)) { setOrder(u, null); break; }
+      if (o.t === 'follow' && u.type === 'monk' && !u.relic) {
+        u.scanT = (u.scanT || 0) - dt;
+        if (u.scanT <= 0) {
+          u.scanT = 0.8;
+          const ally = unitsNear(u.x, u.y, 7, a => a.hp < a.maxhp && !a.dying && isFriend(u.owner, a.owner) && a !== u && !hasTag(a.type, 'machine') && !UNITS[a.type].animal)[0];
+          if (ally) { setOrder(u, { t: 'heal', id: ally.id, then: { t: 'follow', id: o.id } }); break; }
+        }
+      }
       if (distTo(u, t) > (o.t === 'follow' ? 2 : 1)) { u.repathT = (u.repathT || 0) - dt; if (!u.path || u.repathT <= 0) { u.repathT = 1; pathTo(u, rectOf(t), 1); } followPath(u, dt); }
       else { u.anim = 'idle'; u.path = null; if (o.t === 'moveto') setOrder(u, null); }
       break;
@@ -930,7 +950,7 @@ function updateUnit(u, dt) {
     }
     case 'unload': transportUnload(u, dt); break;
     case 'heal': {
-      const t = ent(o.id); if (!t || t.dead || t.dying || t.inside || t.hp >= t.maxhp || !isFriend(u.owner, t.owner)) { setOrder(u, null); break; }
+      const t = ent(o.id); if (!t || t.dead || t.dying || t.inside || t.hp >= t.maxhp || !isFriend(u.owner, t.owner)) { setOrder(u, o.then || null); break; }
       if (distTo(u, t) > 4) { u.repathT = (u.repathT || 0) - dt; if (!u.path || u.repathT <= 0) { u.repathT = 1; pathTo(u, rectOf(t), 3); } followPath(u, dt); }
       else { u.path = null; faceTo(u, t); u.anim = 'work'; u.work = { kind: 'heal', tgt: t.id }; t.hp = Math.min(t.maxhp, t.hp + dt * 2); if (Math.random() < dt * 4) emitFx('heal', t.x, t.y, 1); }
       break;
@@ -984,8 +1004,8 @@ function separate(u, dt) {
 }
 
 // ---------- economy logic ----------
-function resKind(e) { if (e.kind === 'bld') return 'food'; return { tree: 'wood', gold: 'gold', stone: 'stone', berry: 'food', fish: 'food', carcass: 'food' }[e.type]; }
-function workKind(e) { if (e.kind === 'bld') return 'farm'; return { tree: 'chop', gold: 'mine', stone: 'mine', berry: 'forage', fish: 'fish', carcass: 'butcher' }[e.type]; }
+function resKind(e) { if (e.kind === 'bld') return 'food'; return { tree: 'wood', gold: 'gold', stone: 'stone', coal: 'coal', berry: 'food', fish: 'food', carcass: 'food' }[e.type]; }
+function workKind(e) { if (e.kind === 'bld') return 'farm'; return { tree: 'chop', gold: 'mine', stone: 'mine', coal: 'mine', berry: 'forage', fish: 'fish', carcass: 'butcher' }[e.type]; }
 function gatherRate(u, e) {
   const p = W.players[u.owner];
   let r = { tree: 0.52, gold: 0.5, stone: 0.46, berry: 0.44, fish: 0.56, carcass: 0.52 }[e.type] || 0.42;
@@ -1003,28 +1023,45 @@ function gatherLogic(u, dt) {
   const e = ent(o.id);
   const cap = carryCap(u);
   const naval = !!UNITS[u.type].naval;
+  if (e && typeof mineAccessible === 'function' && !mineAccessible(e)) { setOrder(u, null); return; }
   if (e && e.type === 'carcass' && !eatsMeat(u.owner, e.animal)) { setOrder(u, null); return; }
   if (!e || e.dead || (e.kind === 'res' && e.amount <= 0) || (e.kind === 'bld' && (!e.built || (e.farmer && e.farmer !== u.id)))) {
     // find replacement of same kind
     const type = o.rtype || (e ? e.type : null);
-    const prevKind = o.res;
     let next = null;
     if (o.t === 'farm' || type === 'farm') {
-      next = W.list.find(b => b.kind === 'bld' && b.type === 'farm' && b.owner === u.owner && b.built && !b.farmer && Math.hypot(b.x + 1.5 - u.x, b.y + 1.5 - u.y) < 12);
+      next = W.list.find(b => b.kind === 'bld' && b.type === 'farm' && b.owner === u.owner && b.built && !b.farmer && Math.hypot(b.x + 1.5 - u.x, b.y + 1.5 - u.y) < 14);
       if (next) { setOrder(u, { t: 'farm', id: next.id }); return; }
     } else if (type) {
-      const types = type === 'carcass' || type === 'berry' ? ['carcass', 'berry'] : type === 'gold' || type === 'stone' ? [type] : [type];
-      next = findNearestRes(u, types, u.x, u.y, 12);
-      if (next && next.type === 'carcass' && !eatsMeat(u.owner, next.animal)) next = findNearestRes(u, ['berry'], u.x, u.y, 12);
-      if (!next && type === 'carcass') { const sheep = W.list.find(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === u.owner && !s.dying && Math.hypot(s.x - u.x, s.y - u.y) < 14); if (sheep) { setOrder(u, { t: 'hunt', id: sheep.id }); return; } }
+      const types = type === 'carcass' || type === 'berry' ? ['carcass', 'berry'] : [type];
+      next = findNearestRes(u, types, u.x, u.y, 16);
+      if (next && next.type === 'carcass' && !eatsMeat(u.owner, next.animal)) next = findNearestRes(u, ['berry'], u.x, u.y, 16);
+      if (!next && type === 'carcass') {
+        const sheep = W.list.find(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === u.owner && !s.dying && Math.hypot(s.x - u.x, s.y - u.y) < 14);
+        if (sheep) { setOrder(u, { t: 'hunt', id: sheep.id }); return; }
+      }
+      if (!next && (type === 'carcass' || type === 'berry')) {
+        const openFarm = W.list.find(b => b.kind === 'bld' && b.type === 'farm' && b.owner === u.owner && b.built && !b.farmer && Math.hypot(b.x + 1.5 - u.x, b.y + 1.5 - u.y) < 14);
+        if (openFarm) { setOrder(u, { t: 'farm', id: openFarm.id }); return; }
+      }
     }
-    if (next) { setOrder(u, { t: 'gather', id: next.id, rtype: next.type }); return; }
+    if (next) {
+      if (u.carry && u.carry.amt >= cap * 0.6) {
+        const dsite = nearestDrop(u, u.carry.res);
+        if (dsite && distTo(u, dsite) + 2 < distTo(u, next)) { u.phase = 1; u.dropId = dsite.id; }
+      }
+      setOrder(u, { t: 'gather', id: next.id, rtype: next.type }); return;
+    }
     if (u.carry && u.carry.amt > 0) { const dsite = nearestDrop(u, u.carry.res); if (dsite) { setOrder(u, { t: 'dropoff', id: dsite.id }); return; } }
     setOrder(u, null); return;
   }
   o.rtype = e.kind === 'bld' ? 'farm' : e.type;
   const res = resKind(e);
-  if (u.carry && u.carry.res !== res && u.carry.amt > 0) u.carry = null;
+  if (u.carry && u.carry.res !== res && u.carry.amt > 0) {
+    const dsite = nearestDrop(u, u.carry.res);
+    if (dsite && distTo(u, dsite) <= 2.2) deposit(u);
+    else u.carry = null;
+  }
   // returning
   if (u.phase === 1) {
     const dsite = ent(u.dropId) && !ent(u.dropId).dead ? ent(u.dropId) : nearestDrop(u, res);
@@ -1151,12 +1188,21 @@ function completeBuilding(b) {
 function afterBuild(u, b) {
   const t = b.type;
   if (b.owner !== u.owner) { setOrder(u, null); return; }
+  // Automatically deposit carried resources when completing a matching drop-off building
+  if (u.carry && u.carry.amt > 0 && BUILDINGS[t] && BUILDINGS[t].drop && BUILDINGS[t].drop.includes(u.carry.res)) deposit(u);
   // find other foundation nearby
-  const other = W.list.find(e => e.kind === 'bld' && e.owner === u.owner && !e.built && Math.hypot(e.x - u.x, e.y - u.y) < 10 && BUILDINGS[e.type].wall && BUILDINGS[t].wall);
+  const other = W.list.find(e => e.kind === 'bld' && e.owner === u.owner && !e.built && Math.hypot(e.x - u.x, e.y - u.y) < 10 && ((BUILDINGS[e.type].wall && BUILDINGS[t].wall) || e.builders === 0));
   if (other) { setOrder(u, { t: 'build', id: other.id }); return; }
   if (t === 'farm' && !b.farmer) { setOrder(u, { t: 'farm', id: b.id }); return; }
-  const want = t === 'lumbercamp' ? ['tree'] : t === 'miningcamp' ? ['gold', 'stone'] : t === 'mill' ? ['berry'] : null;
-  if (want) { const r = findNearestRes(u, want, b.x + 1, b.y + 1, 10); if (r) { setOrder(u, { t: 'gather', id: r.id }); return; } }
+  const want = t === 'lumbercamp' ? ['tree'] : t === 'miningcamp' ? ['gold', 'stone', 'coal'] : t === 'mill' ? ['berry', 'carcass'] : null;
+  if (want) {
+    const r = findNearestRes(u, want, b.x + 1, b.y + 1, 10, e => e.type !== 'carcass' || eatsMeat(u.owner, e.animal));
+    if (r) { setOrder(u, { t: 'gather', id: r.id }); return; }
+    if (t === 'mill') {
+      const f = W.list.find(e => e.kind === 'bld' && e.type === 'farm' && e.owner === u.owner && e.built && !e.farmer && Math.hypot(e.x + 1.5 - u.x, e.y + 1.5 - u.y) < 10);
+      if (f) { setOrder(u, { t: 'farm', id: f.id }); return; }
+    }
+  }
   if (u.prevAfterBuild) { const o = u.prevAfterBuild; u.prevAfterBuild = null; setOrder(u, o); return; }
   setOrder(u, null);
 }

@@ -238,7 +238,7 @@ if (typeof generateMapSpec === 'function') {
   generateMapSpec = function (opts) {
     const spec = _gen(opts);
     try {
-      if (WMOD.rivers && opts.mapType !== 'islands') {
+      if (WMOD.rivers && opts.mapType !== 'islands' && !(typeof REAL_MAPS !== 'undefined' && REAL_MAPS[opts.mapType])) {
         if (wmCarveRivers(spec, opts.seed >>> 0) && typeof ensureConnectivity === 'function') ensureConnectivity(spec, true);
       }
       wmStockFresh(spec, opts.seed >>> 0);

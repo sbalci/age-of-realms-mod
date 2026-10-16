@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Kenney sprite baker</title>
+<link rel="icon" href="data:,">
 <script type="importmap">
 { "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
 </script>
@@ -27,7 +28,7 @@ const KITS = { town: '/assets/thirdparty/kenney/fantasy-town-kit/', castle: '/as
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(0x000000, 0);
 document.body.appendChild(renderer.domElement);
 
@@ -113,12 +114,17 @@ async function assemble(recipe, styleIdx) {
         if (opts.tint) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(opts.tint); } });
         if (opts.color) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.map = null; o.material.color = new THREE.Color(opts.color); } });
         m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material.metalness > 0) { o.material = o.material.clone(); o.material.metalness = 0; } } });
-        root.add(m);
+        return m;
       })());
     },
   };
   recipe.build(k);
-  await Promise.all(jobs);
+  // Preserve recipe order regardless of model load timing (overlapping surfaces otherwise vary per bake).
+  root.add(...await Promise.all(jobs));
+  // Three.js sorts opaque objects by material ID, which also depends on asynchronous loading.
+  // Explicit mesh order resolves coplanar kit panels consistently in both the color and depth passes.
+  let order = 1;
+  root.traverse(o => { if (o.isMesh) o.renderOrder = order++; });
   // buildings are squashed vertically so a Kenney storey matches the game's unit scale (resources are not)
   const sq = recipe.res ? 1 : 0.78, sc = recipe.scale || 1, c = (recipe.size || 1) / 2;
   const g = new THREE.Group(); g.add(root); root.position.set(-c, 0, -c); g.position.set(c, 0, c); g.scale.set(sc, sc * sq, sc);
@@ -164,6 +170,97 @@ async function render(recipe, styleIdx) {
   return out;
 }
 
+const GENERATED = [
+  { name: 'wonder_0', src: '/assets/generated/wonder_0.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'wonder_1', src: '/assets/generated/wonder_1.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'wonder_2', src: '/assets/generated/wonder_2.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'wonder_3', src: '/assets/generated/wonder_3.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'wonder_4', src: '/assets/generated/wonder_4.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'wonder_5', src: '/assets/generated/wonder_5.jpg', w: 326, ayFromBottom: 0.245 },
+  { name: 'tc_4', src: '/assets/generated/tc_4.jpg', w: 264, ayFromBottom: 0.245 },
+  { name: 'tc_5', src: '/assets/generated/tc_5.jpg', w: 264, ayFromBottom: 0.245 },
+  { name: 'ship_galley', src: '/assets/generated/ship_galley.jpg', w: 74, ayRatio: 0.76, holeMatte: true },
+  { name: 'ship_galleon', src: '/assets/generated/ship_galleon.jpg', w: 84, ayRatio: 0.78, holeMatte: true },
+  { name: 'ship_tradecog', src: '/assets/generated/ship_tradecog.jpg', w: 70, ayRatio: 0.78, holeMatte: true },
+];
+
+async function renderGenerated(spec) {
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = spec.src; });
+  const W = img.width, H = img.height;
+  const sc = document.createElement('canvas'); sc.width = W; sc.height = H;
+  const sg = sc.getContext('2d', { willReadFrequently: true }); sg.drawImage(img, 0, 0);
+  const id = sg.getImageData(0, 0, W, H), px = id.data;
+  const isBg = i => {
+    const r = px[i], g = px[i + 1], b = px[i + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    return mn >= 230 && (mx - mn) <= 22;
+  };
+  const isPureWhite = i => px[i] >= 248 && px[i + 1] >= 248 && px[i + 2] >= 248;
+  const bg = new Uint8Array(W * H), q = new Int32Array(W * H);
+  let qh = 0, qt = 0;
+  const push = idx => { if (!bg[idx] && isBg(idx * 4)) { bg[idx] = 1; q[qt++] = idx; } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  // For ships with enclosed rigging holes or Fusion Beacon rings, also seed large pure-white interior pockets
+  if (spec.holeMatte || spec.name === 'wonder_5') {
+    const vis = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      if (vis[i] || bg[i] || !isPureWhite(i * 4)) continue;
+      const comp = [i]; vis[i] = 1;
+      for (let ci = 0; ci < comp.length; ci++) {
+        const cur = comp[ci], cx = cur % W, cy = (cur / W) | 0;
+        for (const nb of [cx > 0 ? cur - 1 : -1, cx < W - 1 ? cur + 1 : -1, cy > 0 ? cur - W : -1, cy < H - 1 ? cur + W : -1]) {
+          if (nb >= 0 && !vis[nb] && isPureWhite(nb * 4)) { vis[nb] = 1; comp.push(nb); }
+        }
+      }
+      if (comp.length >= 18) for (const c of comp) push(c);
+    }
+  }
+  while (qh < qt) {
+    const cur = q[qh++], x = cur % W, y = (cur / W) | 0;
+    if (x > 0) push(cur - 1); if (x < W - 1) push(cur + 1);
+    if (y > 0) push(cur - W); if (y < H - 1) push(cur + W);
+  }
+  for (let i = 0; i < W * H; i++) {
+    if (bg[i]) { px[i * 4 + 3] = 0; continue; }
+    const x = i % W, y = (i / W) | 0;
+    const nearBg = (x > 0 && bg[i - 1]) || (x < W - 1 && bg[i + 1]) || (y > 0 && bg[i - W]) || (y < H - 1 && bg[i + W]);
+    if (nearBg) {
+      const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2], l = (r + g + b) / 3;
+      if (l > 195) {
+        const a = Math.max(0, Math.min(1, (250 - l) / 55));
+        px[i * 4 + 3] = Math.round(a * 255);
+        if (a > 0.05) {
+          px[i * 4] = Math.max(0, Math.round((r - 255 * (1 - a)) / a));
+          px[i * 4 + 1] = Math.max(0, Math.round((g - 255 * (1 - a)) / a));
+          px[i * 4 + 2] = Math.max(0, Math.round((b - 255 * (1 - a)) / a));
+        }
+      }
+    }
+  }
+  sg.putImageData(id, 0, 0);
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (px[(y * W + x) * 4 + 3] > 20) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  const bw = Math.max(1, x1 - x0 + 1), bh = Math.max(1, y1 - y0 + 1);
+  const pad = 2;
+  const w = spec.w, h = Math.round((w - pad * 2) * bh / bw) + pad * 2;
+  // Two-step downscale for crisp, alias-free supersampled output
+  const mid = document.createElement('canvas'); mid.width = Math.max(w * SC, Math.round(bw * 0.5)); mid.height = Math.max(h * SC, Math.round(bh * 0.5));
+  const mg = mid.getContext('2d'); mg.imageSmoothingEnabled = true; mg.imageSmoothingQuality = 'high';
+  mg.drawImage(sc, x0, y0, bw, bh, 0, 0, mid.width, mid.height);
+  const outCv = document.createElement('canvas'); outCv.width = w * SC; outCv.height = h * SC;
+  const og = outCv.getContext('2d'); og.imageSmoothingEnabled = true; og.imageSmoothingQuality = 'high';
+  og.drawImage(mid, 0, 0, mid.width, mid.height, pad * SC, pad * SC, (w - pad * 2) * SC, (h - pad * 2) * SC);
+  const ax = +(w / 2).toFixed(2);
+  const ay = spec.ayFromBottom ? +(h - pad - (w - pad * 2) * spec.ayFromBottom).toFixed(2) : +(h * (spec.ayRatio || 0.75)).toFixed(2);
+  return { png: outCv.toDataURL('image/png'), w, h, ax, ay, SC };
+}
+
 window.bakeAll = async (only) => {
   const res = {};
   for (const [name, r] of Object.entries(RECIPES)) {
@@ -171,6 +268,11 @@ window.bakeAll = async (only) => {
     const styles = r.styles || [0];
     for (const s of styles) res[r.styles ? name + '_' + s : name] = await render(r, s);
   }
+  for (const g of GENERATED) {
+    if (only && !only.includes(g.name)) continue;
+    try { res[g.name] = await renderGenerated(g); } catch (e) { console.warn('skip generated ' + g.name + ': ' + e.message); }
+  }
+  if (res.wonder_3 && (!only || only.includes('wonder'))) res.wonder = res.wonder_3;
   return res;
 };
 window.preview = async (only) => {

@@ -6,9 +6,9 @@ const MOD = {
   aging: true,
   veterans: true,
   lifeScale: 1,
-  vowShare: 0.2,       // one villager in five is destined for the cloister; the rest work until they drop
+  vowShare: 0.1,       // each villager has a one-in-ten chance of taking vows on becoming elderly
   // Lifespans in game seconds at normal speed (a 20 minute infantryman, etc.). Each unit gets a +-15% personal variance.
-  life: { villagerVows: 900, villager: 1500, monk: 1800, infantry: 1200, ranged: 1200, mounted: 1400, trade: 1500 },
+  life: { villagerVows: 1275, villager: 1500, monk: 1800, infantry: 1200, ranged: 1200, mounted: 1400, trade: 1500 },
   // Veteran ranks. Promotion needs the unit to survive a battle with enough accumulated XP.
   ranks: ['Recruit', 'Veteran', 'Elite', 'Champion'],
   xpNeeded: [6, 16, 34],        // cumulative XP to reach rank 1, 2, 3

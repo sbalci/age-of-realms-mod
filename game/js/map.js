@@ -30,6 +30,7 @@ function validateMapSpec(spec) {
   };
   layer('ter', 7); layer('elev', 4);
   for (const k of ['bridge', 'tun', 'trench']) layer(k, 1, true);
+  layer('excavated', 4, true);
   if (spec.name !== undefined && (typeof spec.name !== 'string' || spec.name.length > 120)) errors.push('Invalid map name.');
   if (!Array.isArray(spec.players) || spec.players.length < 2 || spec.players.length > 8) return errors.concat('Maps require 2 to 8 players.');
   const point = p => p && Number.isInteger(p.x) && Number.isInteger(p.y) && p.x >= 0 && p.y >= 0 && p.x < n && p.y < n;
@@ -43,14 +44,15 @@ function validateMapSpec(spec) {
       const defs = o.k === 'unit' ? UNITS : BUILDINGS;
       if (!own(defs, o.t) || !Number.isInteger(o.o) || o.o < 0 || o.o > spec.players.length) { errors.push('Unknown object type or owner.'); break; }
       if (o.k === 'bld' && (o.o === 0 || o.x + defs[o.t].size > n || o.y + defs[o.t].size > n)) { errors.push('Building has an invalid owner or extends beyond the map.'); break; }
-    } else if (!['tree', 'shrub', 'berry', 'gold', 'stone', 'fish', 'relic'].includes(o.k)) { errors.push('Unknown resource type.'); break; }
+    } else if (!['tree', 'shrub', 'berry', 'gold', 'stone', 'coal', 'fish', 'relic'].includes(o.k)) { errors.push('Unknown resource type.'); break; }
+    if (o.depth !== undefined && (!['coal', 'gold', 'stone'].includes(o.k) || !Number.isInteger(o.depth) || o.depth < 0 || o.depth > 4)) { errors.push('Invalid underground deposit depth.'); break; }
   }
   return errors;
 }
 
 function mapLayers(map) {
   const out = {};
-  for (const k of ['ter', 'elev', 'bridge', 'tun', 'trench']) if (map[k]) out[k] = Array.from(map[k]);
+  for (const k of ['ter', 'elev', 'bridge', 'tun', 'trench', 'excavated']) if (map[k]) out[k] = Array.from(map[k]);
   return out;
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -217,6 +219,7 @@ function generateMapSpec(opts) {
   const np = opts.numPlayers;
   const ter = new Uint8Array(n * n), elev = new Uint8Array(n * n);
   const type = opts.mapType;
+  const geo = typeof geographyTerrain === 'function' ? geographyTerrain(type, n, np) : null;
   // start positions
   const starts = [];
   const a0 = rng() * Math.PI * 2;
@@ -226,6 +229,7 @@ function generateMapSpec(opts) {
     const a = a0 + (i / np) * Math.PI * 2;
     starts.push({ x: Math.round(n / 2 + Math.cos(a) * rad), y: Math.round(n / 2 + Math.sin(a) * rad) });
   }
+  if (geo) starts.splice(0, starts.length, ...geo.starts);
   const water = new Uint8Array(n * n);
   const dStart = (x, y) => { let m = 1e9; for (const s of starts) m = Math.min(m, Math.hypot(x - s.x, y - s.y)); return m; };
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -246,7 +250,8 @@ function generateMapSpec(opts) {
       w = !(isl || small);
       if (x < 2 || y < 2 || x > n - 3 || y > n - 3) w = true;
     }
-    if (dStart(x, y) < 9) w = false;
+    if (geo) w = !!geo.water[i];
+    else if (dStart(x, y) < 9) w = false;
     water[i] = w ? 1 : 0;
   }
   // coastal: guarantee each player has water within ~14 tiles by carving small bay toward sea
@@ -285,16 +290,16 @@ function generateMapSpec(opts) {
     const hv = noise2(x / 18 + 100, y / 18 + 50, 3);
     let e = hv > 0.68 ? 3 : hv > 0.6 ? 2 : hv > 0.52 ? 1 : 0;
     if (dW[i] <= 2) e = Math.min(e, dW[i] - 1 < 0 ? 0 : dW[i] - 1);
-    elev[i] = e;
+    elev[i] = geo ? geo.elev[i] : e;
   }
   // flatten starts
   for (const s of starts) {
     const e0 = elev[s.y * n + s.x];
-    for (let y = s.y - 8; y <= s.y + 8; y++) for (let x = s.x - 8; x <= s.x + 8; x++) if (x >= 0 && y >= 0 && x < n && y < n && Math.hypot(x - s.x, y - s.y) < 8) elev[y * n + x] = e0;
+    for (let y = s.y - 8; y <= s.y + 8; y++) for (let x = s.x - 8; x <= s.x + 8; x++) if (x >= 0 && y >= 0 && x < n && y < n && !water[y * n + x] && Math.hypot(x - s.x, y - s.y) < 8) elev[y * n + x] = e0;
   }
   smoothElev(n, elev, water);
   // cliff mesas on land maps (a few, away from starts)
-  if (type !== 'islands') {
+  if (type !== 'islands' && !geo) {
     const count = type === 'land' ? 4 : 2;
     for (let k = 0; k < count; k++) {
       for (let tries = 0; tries < 30; tries++) {
@@ -358,7 +363,7 @@ function generateMapSpec(opts) {
   starts.forEach((s, pi) => {
     // TC
     for (let y = s.y - 5; y <= s.y + 5; y++) for (let x = s.x - 5; x <= s.x + 5; x++) if (x >= 0 && y >= 0 && x < n && y < n && occ[y * n + x] === 2) occ[y * n + x] = 0;
-    for (let y = s.y - 2; y <= s.y + 2; y++) for (let x = s.x - 2; x <= s.x + 2; x++) if (x >= 0 && y >= 0 && x < n && y < n && ter[y * n + x] !== T.SAND) ter[y * n + x] = T.DIRT;
+    for (let y = s.y - 2; y <= s.y + 2; y++) for (let x = s.x - 2; x <= s.x + 2; x++) if (x >= 0 && y >= 0 && x < n && y < n && !water[y * n + x] && ter[y * n + x] !== T.SAND) ter[y * n + x] = T.DIRT;
     const owner = pi + 1;
     put({ k: 'bld', t: 'tc', x: s.x - 2, y: s.y - 2, o: owner }, 4);
     for (let v = 0; v < 3; v++) objects.push({ k: 'unit', t: 'villager', x: s.x - 1 + v, y: s.y + 3, o: owner });
@@ -402,8 +407,16 @@ function generateMapSpec(opts) {
   for (let t = 0, c = 0; t < 800 && c < np * 2; t++) { const x = (rng() * n) | 0, y = (rng() * n) | 0; if (areaFree(x, y, 1) && dStart(x, y) > 18) { for (let k = 0; k < 3; k++) objects.push({ k: 'unit', t: 'deer', x: x + k % 2, y: y + (k >> 1), o: 0 }); c++; } }
   // shrubs (decor)
   for (let t = 0; t < n * 3; t++) { const x = (rng() * n) | 0, y = (rng() * n) | 0; if (free(x, y) && dStart(x, y) > 5) { objects.push({ k: 'shrub', x, y }); occ[y * n + x] = 1; } }
-  const spec = { name: 'Generated', n, ter: Array.from(ter), elev: Array.from(elev), objects, players };
-  ensureConnectivity(spec, type !== 'islands');
+  if (geo) {
+    const towns = objects.filter(o => o.k === 'bld' && o.t === 'tc');
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const o = objects[i];
+      if (o.k !== 'bld' && o.k !== 'fish' && (isWaterT(ter[o.y * n + o.x]) || (o.k !== 'unit' && towns.some(b => o.x >= b.x && o.x < b.x + 4 && o.y >= b.y && o.y < b.y + 4)))) objects.splice(i, 1);
+    }
+  }
+  const spec = { name: geo ? geo.name : 'Generated', n, ter: Array.from(ter), elev: Array.from(elev), objects, players };
+  if (geo) geographySupplies(spec, seed);
+  ensureConnectivity(spec, type !== 'islands' && !geo);
   return spec;
 }
 function bfsDist(n, isSrc) {

@@ -24,7 +24,7 @@ const TERRA_OPS = {
   trench: { name: 'Dig Trench', key: 'T', shape: 'line', desc: 'Drag a line. Units in a trench move slower and take 2 less pierce damage; cavalry, siege and carts cannot cross it.' },
   raise: { name: 'Raise Ground', key: 'R', shape: 'rect', desc: 'Drag an area. Raises it one level (10 stone per tile). Steep steps become cliffs.' },
   lower: { name: 'Lower Ground', key: 'L', shape: 'rect', desc: 'Drag an area. Lowers it one level and recovers 15 stone per tile. Good for ramps.' },
-  dig: { name: 'Dig Mountain', key: 'D', shape: 'rect', desc: 'Drag an area. Digs hills and mountains down to flat ground, recovering 15 stone per level.' },
+  dig: { name: 'Excavate / Dig Mountain', key: 'D', shape: 'rect', desc: 'Drag an area. Remove hills (15 stone per level), then dig shafts into buried coal, gold or stone. You can also right-click a seam with villagers to excavate and mine it.' },
   bridge: { name: 'Build Bridge', key: 'B', shape: 'line', desc: 'Drag a line across a river, canal or lake from bank to bank (15 wood per tile). Land units walk over it; ships sail under it. The banks must be within one level of each other.' },
   unbridge: { name: 'Remove Bridge', key: 'U', shape: 'line', desc: 'Drag over bridge tiles to take them down. Recovers 8 wood per tile; anyone still on the span falls in.' },
   tunnel: { name: 'Dig Tunnel', key: 'K', shape: 'line', only: 'sapper', desc: 'Sappers only. Drag a line (up to 12 tiles) through a mountain or ground. Units walk through it, unseen and straight through cliffs. 5 stone per tile.' },
@@ -57,7 +57,7 @@ function terraCheck(op, x, y, sim) {
   }
   if (op === 'trench') { if (!terraDry(t)) return 'Not dry land'; if (m.trench && m.trench[i]) return 'Already a trench'; return null; }
   if (op === 'raise') { if (!terraDry(t)) return 'Not dry land'; if (m.elev[i] >= TERRA.maxElev) return 'Already at the peak'; return null; }
-  if (op === 'lower' || op === 'dig') { if (!terraDry(t)) return 'Not dry land'; if (m.elev[i] <= 0) return 'Already level'; return null; }
+  if (op === 'lower' || op === 'dig') { if (!terraDry(t)) return 'Not dry land'; if (m.elev[i] <= 0 && !(op === 'dig' && typeof mineDigRemaining === 'function' && mineDigRemaining(x, y) > 0)) return 'Already level'; return null; }
   if (op === 'bridge') {
     if (m.bridge && m.bridge[i]) return 'Already a bridge';
     if (!isWaterT(t)) return 'Bridges span water';
@@ -162,7 +162,8 @@ function terraApply(op, x, y, p, sim) {
     if (p.res.stone < TERRA.raiseStone) return `Need ${TERRA.raiseStone} stone`;
     p.res.stone -= TERRA.raiseStone; m.elev[i] += 1;
   } else if (op === 'lower' || op === 'dig') {
-    m.elev[i] -= 1; p.res.stone += TERRA.digStone;
+    if (m.elev[i] > 0) { m.elev[i] -= 1; p.res.stone += TERRA.digStone; }
+    else { if (!m.excavated) m.excavated = new Uint8Array(n * n); m.excavated[i] = Math.min(4, m.excavated[i] + 1); }
     if (p.id === W.humanId && typeof emitFx === 'function') emitFx('goldspark', x + 0.5, y + 0.5, 1);
   } else if (op === 'bridge') {
     if (p.res.wood < TERRA.bridgeWood) return `Need ${TERRA.bridgeWood} wood`;
@@ -219,7 +220,7 @@ function terraLogic(u, dt) {
   if (!q) {
     q = terraNextTile(job, u);
     if (!q) {
-      if (!terraPending(job)) { setOrder(u, null); return; }
+      if (!terraPending(job)) { const mine = job.mineId && ent(job.mineId); setOrder(u, mine && u.type === 'villager' && mineAccessible(mine) ? { t: 'gather', id: mine.id } : null); return; }
       o.wait = (o.wait || 0) + dt; u.anim = 'idle';
       if (o.wait > 20) setOrder(u, null);
       return;
@@ -250,7 +251,7 @@ function terraLogic(u, dt) {
     if (u.owner === W.humanId && !job.msgd) { job.msgd = true; msg(err + '.', '#fc8'); }
     return;
   }
-  if ((job.op === 'dig') && W.map.elev[W.map.idx(q.x, q.y)] > 0) return;   // keep digging this tile
+  if (job.op === 'dig' && (W.map.elev[W.map.idx(q.x, q.y)] > 0 || (typeof mineDigRemaining === 'function' && mineDigRemaining(q.x, q.y) > 0))) return;
   q.done = true; q.by = 0; u.terraQ = null;
 }
 function terraOrder(units, op, tiles) {

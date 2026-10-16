@@ -1,0 +1,95 @@
+const { test, expect } = require('@playwright/test');
+
+const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined' && KART.on && Object.keys(KART.img).length + KART.failed.length === Object.keys(KENNEY_ART).length);
+
+test('CC0 art is the default and renders harvest stages without changing the match', async ({ page }) => {
+  const errors = [], external = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('request', r => { if (/^https?:/.test(r.url()) && !r.url().startsWith('http://127.0.0.1:8765/')) external.push(r.url()); });
+  await page.goto('/game/');
+  await waitForArt(page);
+  expect(await page.evaluate(() => KART.failed)).toEqual([]);
+  await expect(page.locator('#btn-art')).toHaveText('Classic Art');
+  await page.locator('#btn-tutorial').click();
+  const result = await page.evaluate(() => {
+    const g = __game; g.UI.paused = true;
+    const cv = document.createElement('canvas'); cv.width = 600; cv.height = 500;
+    const ctx = cv.getContext('2d'), p = g.W.players[1];
+    const before = JSON.stringify(g.MatchSave.snapshot().graph), mute = FX.mute;
+    FX.mute = 'all';
+    try {
+      for (const type of ['gold', 'stone', 'berry', 'shrub', 'tree']) for (const id of [2, 3]) {
+        drawRes(ctx, { id, type, x: 1, y: 1, amount: 50, max: 100, v: 0, felled: type === 'tree', fallDir: id === 2 ? -1 : 1 });
+      }
+      const stages = [];
+      for (const frac of [0.1, 0.4, 1]) {
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        drawFarm(ctx, { built: true, food: p.farmFood * frac, owner: 1 }, { x: 300, y: 300 });
+        stages.push(cv.toDataURL());
+      }
+      const tc = g.W.list.find(e => e.type === 'tc' && e.owner === 1);
+      const mill = { ...tc, type: 'mill', built: true, hp: tc.maxhp, relics: [] };
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      const c = center(mill), gp = iso(c.x, c.y, g.W.map.h(c.x, c.y));
+      ctx.translate(300 - gp.x, 300 - gp.y);
+      drawBuilding(ctx, mill, 0.25);
+      const pixels = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      let alpha = 0; for (let i = 3; i < pixels.length; i += 4) alpha = Math.max(alpha, pixels[i]);
+      return {
+        unchanged: before === JSON.stringify(g.MatchSave.snapshot().graph),
+        stages: new Set(stages).size, alpha, millType: mill.type,
+        staticSails: bldSprite('mill', 0, p.color).staticSails,
+        cached: ['berry_0|2', 'berry_1|2', 'shrub_0|0', 'shrub_1|0', 'felled_0|0', 'felled_1|0', 'farm_0', 'farm_1', 'farm_2'].every(k => KART.cache.has(k)),
+      };
+    } finally { FX.mute = mute; }
+  });
+  expect(result).toMatchObject({ unchanged: true, stages: 3, millType: 'mill', staticSails: true, cached: true });
+  expect(result.alpha).toBeGreaterThan(0); expect(result.alpha).toBeLessThanOrEqual(65);
+  expect(errors).toEqual([]); expect(external).toEqual([]);
+});
+
+test('classic art choice persists and invalid URL values do not overwrite it', async ({ page }) => {
+  await page.goto('/game/');
+  await Promise.all([page.waitForURL('**/game/?art=classic'), page.locator('#btn-art').click()]);
+  await expect(page.locator('#btn-art')).toHaveText('Kenney Art');
+  expect(await page.evaluate(() => KART.on)).toBe(false);
+  await page.goto('/game/?art=invalid');
+  expect(await page.evaluate(() => [KART.on, localStorage.getItem('aor.art')])).toEqual([false, 'classic']);
+  await Promise.all([page.waitForURL('**/game/?art=kenney'), page.locator('#btn-art').click()]);
+  await waitForArt(page);
+  expect(await page.evaluate(() => localStorage.getItem('aor.art'))).toBe('kenney');
+});
+
+test('missing sprites fall back to drawn art and play remains available', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/art/kenney/tc_*.png', route => route.abort());
+  await page.route('**/art/kenney/farm_*.png', route => route.abort());
+  await page.goto('/game/'); await waitForArt(page);
+  expect(await page.evaluate(() => KART.failed.length)).toBe(7);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  expect(await page.evaluate(() => {
+    const p = W.players[1], fallback = bldSprite('tc', p.age, p.color);
+    return fallback.cv.width > 0 && !kartKey('tc', p.age);
+  })).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('2.5D refreshes cached resource art after a delayed sprite arrives', async ({ page }) => {
+  test.setTimeout(90000);
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route('**/art/kenney/berry_0.png', async route => { await held; await route.continue(); });
+  await page.goto('/game/?renderer=three', { waitUntil: 'domcontentloaded' });
+  try {
+    await page.waitForFunction(() => window.__game?.T25D.stats.frames > 1 && Object.keys(KART.img).length === Object.keys(KENNEY_ART).length - 1);
+    await page.locator('#btn-tutorial').click();
+    await page.evaluate(() => {
+      __game.UI.paused = true;
+      window.artProbe = { id: 2001, kind: 'res', type: 'berry', x: 5, y: 5, amount: 100, max: 100 };
+      window.oldArt = __game.T25D.asset(artProbe);
+    });
+    release(); await waitForArt(page);
+    expect(await page.evaluate(() => __game.T25D.asset(artProbe) !== oldArt)).toBe(true);
+  } finally { release(); }
+});

@@ -195,14 +195,41 @@ if (typeof AIPlayer === 'function') {
         this.regroups = (this.regroups || 0) + 1;
       }
     } else this.waveStart = 0;
-    // 3. archers facing an enemy in the open take the nearest high ground within 3 tiles
+    // 3. archers facing an enemy in the open take nearby high ground or kite back between shots when melee closes in
+    const byDist = (x, y) => (a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y);
     for (const u of army) {
-      if (!tacIsRanged(u) || u.inside || (u.order && u.order.t !== 'attackmove' && u.order.t !== 'attack')) continue;
-      if (u._hgT && W.t - u._hgT < 8) continue;
-      const foe = unitsNear(u.x, u.y, 6, o => isEnemy(this.id, o.owner) && !o.dying && UNITS[o.type].atk > 0 && !tacIsRanged(o))[0];
+      if (!tacIsRanged(u) || hasTag(u.type, 'siege') || u.inside || (u.order && u.order.t !== 'attackmove' && u.order.t !== 'attack')) continue;
+      if (u._hgT && W.t - u._hgT < 5) continue;
+      const foe = unitsNear(u.x, u.y, 6, o => isEnemy(this.id, o.owner) && !o.dying && UNITS[o.type].atk > 0 && !tacIsRanged(o)).sort(byDist(u.x, u.y))[0];
       if (!foe) continue;
       const m = W.map, here = m.elevAt(u.x, u.y), hg = this.highGround(u.x, u.y, 3);
-      if (hg && m.elevAt(hg.x, hg.y) > here && m.elevAt(hg.x, hg.y) >= m.elevAt(foe.x, foe.y)) { u._hgT = W.t; setOrder(u, { t: 'move', x: hg.x, y: hg.y }); }
+      if (hg && m.elevAt(hg.x, hg.y) > here && m.elevAt(hg.x, hg.y) >= m.elevAt(foe.x, foe.y)) { u._hgT = W.t; setOrder(u, { t: 'move', x: hg.x, y: hg.y }); continue; }
+      const dist = Math.hypot(u.x - foe.x, u.y - foe.y);
+      if (dist < 2.1 && u.cd > 0.35 && (!u._kiteT || W.t - u._kiteT >= 4)) {
+        const dx = (u.x - foe.x) / (dist || 1), dy = (u.y - foe.y) / (dist || 1);
+        const kx = u.x + dx * 2.4, ky = u.y + dy * 2.4;
+        if (tilePassFor(u, kx, ky)) { u._kiteT = W.t; setOrder(u, { t: 'move', x: kx, y: ky, then: { t: 'attack', id: foe.id } }); }
+      }
+    }
+    // 4. combat monks: convert high-value enemy units when recharged, or heal wounded allies
+    const monks = this.mine(e => e.kind === 'unit' && e.type === 'monk' && !e.inside && !e.dying && !e.relic);
+    for (const m of monks) {
+      if (m.order && (m.order.t === 'relic' || m.order.t === 'deposit' || m.order.t === 'convert' || m.order.t === 'heal' || m.order.flee)) continue;
+      const followOrder = m.order && m.order.t === 'follow' ? { t: 'follow', id: m.order.id } : null;
+      if ((m.recharge || 0) <= 0) {
+        const hv = unitsNear(m.x, m.y, 9, o => isEnemy(this.id, o.owner) && !o.dying && !o.inside && !UNITS[o.type].animal && !UNITS[o.type].naval && !hasTag(o.type, 'siege') && (UNITS[o.type].cost && (UNITS[o.type].cost.gold || 0) >= 40 || hasTag(o.type, 'mounted') || hasTag(o.type, 'unique'))).sort(byDist(m.x, m.y))[0];
+        if (hv) { setOrder(m, { t: 'convert', id: hv.id }); continue; }
+      }
+      const wounded = unitsNear(m.x, m.y, 8, o => isFriend(this.id, o.owner) && o !== m && !o.dying && !o.inside && o.hp < o.maxhp * 0.85 && !hasTag(o.type, 'machine') && !UNITS[o.type].animal).sort((a, b) => a.hp / a.maxhp - b.hp / b.maxhp)[0];
+      if (wounded) setOrder(m, { t: 'heal', id: wounded.id, then: followOrder });
+    }
+    // 5. siege escort: intercept enemy melee units attacking our siege engines
+    const sieges = army.filter(u => hasTag(u.type, 'siege'));
+    for (const s of sieges) {
+      const raider = unitsNear(s.x, s.y, 4.5, o => isEnemy(this.id, o.owner) && !o.dying && !tacIsRanged(o) && UNITS[o.type].atk > 0).sort(byDist(s.x, s.y))[0];
+      if (!raider) continue;
+      const guards = army.filter(u => !hasTag(u.type, 'siege') && !tacIsRanged(u) && (!u.order || u.order.t === 'attackmove' || u.order.t === 'move') && Math.hypot(u.x - s.x, u.y - s.y) < 8).sort(byDist(s.x, s.y)).slice(0, 2);
+      for (const g of guards) if (canAttack(g, raider)) setOrder(g, { t: 'attack', id: raider.id, then: g.order && g.order.t === 'attackmove' ? Object.assign({}, g.order) : null });
     }
   };
 }

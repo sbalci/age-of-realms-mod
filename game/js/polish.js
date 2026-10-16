@@ -71,7 +71,7 @@ if (typeof vicRenderScore === 'function') {
 
 // ---------- top bar: pause button and gatherer counts per resource ----------
 function polishGatherers(pid) {
-  const c = { food: 0, wood: 0, gold: 0, stone: 0, build: 0 };
+  const c = { food: 0, wood: 0, gold: 0, stone: 0, coal: 0, build: 0 };
   for (const u of W.list) {
     if (u.kind !== 'unit' || u.owner !== pid || u.dying || u.inside || !u.order) continue;
     if (u.type !== 'villager' && u.type !== 'fishingship' && u.type !== 'sapper') continue;
@@ -100,7 +100,7 @@ if (typeof updateTopbar === 'function') {
     if (Math.abs(W.t - (W._gcT || -9)) < 1) return; W._gcT = W.t;   // counts change slowly
     const p = W.spectate ? (W.players[W.watchId] || W.players[W.humanId]) : W.players[W.humanId]; if (!p) return;
     const c = polishGatherers(p.id);
-    for (const r of ['food', 'wood', 'gold', 'stone']) {
+    for (const r of RES) {
       const el = document.querySelector('#r-' + r); if (!el) continue;
       let s = el.querySelector('.gc'); if (!s) { s = document.createElement('small'); s.className = 'gc'; el.appendChild(s); }
       const txt = c[r] ? String(c[r]) : '';

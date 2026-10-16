@@ -1,0 +1,11 @@
+Original actor model recipes in actor-models.js (historical clothing, headwear, weapons,
+shields, the deer, the tank and the fusion walker) and their rendered derivatives are
+dedicated to the public domain under Creative Commons Zero 1.0 Universal (CC0-1.0).
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The base character and animal rigs retain their authors' CC0 notices:
+Kenney — assets/thirdparty/kenney/mini-characters/License.txt
+Quaternius — assets/thirdparty/quaternius/animals/License.txt
+Wolf: https://opengameart.org/content/animated-animales-low-poly (CC0, by Quaternius).
+
+The model recipes are stylized interpretations, not archaeological reconstructions.

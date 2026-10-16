@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>Animated actor baker</title><link rel="icon" href="data:,">
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<body style="background:#18262b;color:#fff;font:14px sans-serif">
+<script type="module">
+import * as T from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { human, animal, vehicle, THEMES, ROLES, ANIMALS, ACTIONS } from './actor-models.js';
+const CELL=128, FRAMES=4, SCALE=2, AX=32, AY=55, PPU=44;
+const renderer=new T.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
+renderer.outputColorSpace=T.SRGBColorSpace; renderer.setSize(CELL,CELL); renderer.setClearColor(0,0);
+document.body.appendChild(renderer.domElement);
+const scene=new T.Scene(), camera=new T.OrthographicCamera(-AX/PPU,(64-AX)/PPU,AY/PPU,(AY-64)/PPU,.1,30);
+camera.position.set(6,Math.sqrt(24),6);camera.lookAt(0,0,0);
+scene.add(new T.HemisphereLight(0xfff2d9,0x546471,2));const sun=new T.DirectionalLight(0xffffff,2.4);sun.position.set(-3,6,5);scene.add(sun);
+const black=new T.MeshBasicMaterial({color:0x000000,side:T.DoubleSide}),white=new T.MeshBasicMaterial({color:0xffffff,side:T.DoubleSide});
+window.actorKeys=THEMES.flatMap(t=>ROLES.map(r=>t+'-'+r)).concat(['modern-tank','future-walker'],ANIMALS.map(a=>'animals-'+a));
+window.bakeActor=async key=>{
+  const [theme,role]=key.split('-');
+  const actor=theme==='animals'?await animal(role):['tank','walker'].includes(role)?vehicle(theme,role):await human(theme,role);
+  scene.add(actor.root);
+  const color=document.createElement('canvas'),mask=document.createElement('canvas');color.width=mask.width=CELL*FRAMES;color.height=mask.height=CELL*ACTIONS.length*4;
+  const cg=color.getContext('2d'),mg=mask.getContext('2d'),tmp=document.createElement('canvas');tmp.width=tmp.height=CELL;const tg=tmp.getContext('2d',{willReadFrequently:true});
+  const meshes=[];actor.root.traverse(o=>{if(o.isMesh)meshes.push([o,o.material]);});
+  let nonEmpty=0;
+  for(let a=0;a<ACTIONS.length;a++)for(let d=0;d<4;d++)for(let f=0;f<FRAMES;f++){
+    actor.pose(ACTIONS[a],f/FRAMES);actor.root.rotation.y=[Math.PI/2,0,Math.PI,Math.PI*1.5][d];actor.root.updateMatrixWorld(true);
+    const x=f*CELL,y=(a*4+d)*CELL;
+    for(const [o,m]of meshes)o.material=m;
+    renderer.render(scene,camera);cg.drawImage(renderer.domElement,x,y);
+    for(const [o]of meshes)o.material=o.userData.team?white:black;
+    renderer.render(scene,camera);tg.clearRect(0,0,CELL,CELL);tg.drawImage(renderer.domElement,0,0);
+    const pixels=tg.getImageData(0,0,CELL,CELL);
+    for(let i=0;i<pixels.data.length;i+=4){pixels.data[i+3]=Math.round(pixels.data[i]*pixels.data[i+3]/255);pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=255;}
+    tg.putImageData(pixels,0,0);mg.drawImage(tmp,x,y);
+    const data=cg.getImageData(x,y,CELL,CELL).data;
+    if(data.some((v,i)=>i%4===3&&v>10))nonEmpty++;
+  }
+  for(const [o,m]of meshes)o.material=m;
+  actor.root.removeFromParent();
+  return {png:color.toDataURL(),mask:mask.toDataURL(),nonEmpty,sourceClips:actor.sourceClips,bones:actor.bones,frames:FRAMES,cell:CELL,scale:SCALE,ax:AX,ay:AY,actions:ACTIONS,directions:4};
+};
+window.exportAnimal=async kind=>{
+  const a=await animal(kind);a.pose('idle',0);const buffer=await new GLTFExporter().parseAsync(a.root,{binary:true});
+  const bytes=new Uint8Array(buffer);let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);
+};
+window.ready=true;
+</script>

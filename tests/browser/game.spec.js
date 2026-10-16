@@ -7,14 +7,19 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => expect(page.errors).toEqual([]));
 
-test('setup exposes presets and starts with their chosen rules', async ({ page }) => {
+test('setup exposes presets and per-AI nation selectors and starts with chosen nations and rules', async ({ page }) => {
   await page.locator('#btn-sp').click();
   await page.locator('#rule-preset').selectOption('beginner');
   await expect(page.locator('#rule-aging')).not.toBeChecked();
   await expect(page.locator('#rule-thirst')).not.toBeChecked();
+  await expect(page.locator('#s-opp-civ-1')).toBeVisible();
+  await expect(page.locator('#s-opp-civ-2')).toBeVisible();
+  await page.locator('#s-opp-civ-1').selectOption('turks');
+  await page.locator('#s-opp-civ-2').selectOption('japanese');
   await page.locator('#s-start').click();
   await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => __game.W.settings.rules.thirst)).toBe(false);
+  expect(await page.evaluate(() => [__game.W.players[2].civ, __game.W.players[3].civ])).toEqual(['turks', 'japanese']);
 });
 test('tutorial responds to selecting a villager', async ({ page }) => {
   await page.locator('#btn-tutorial').click();
@@ -75,8 +80,8 @@ test('nested dialogs return to the game menu without trapping the match in pause
   await page.locator('#b-menu').click();
   await page.getByRole('button', { name: 'Controls', exact: true }).click();
   await page.getByRole('button', { name: 'Back to Game Menu', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await expect(page.locator('#modal').getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await page.locator('#modal').getByRole('button', { name: 'Resume', exact: true }).click();
   expect(await page.evaluate(() => __game.UI.paused)).toBe(false);
 });
 

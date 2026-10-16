@@ -52,18 +52,28 @@ function leanTo(k, side, x0, y0, len, z, depth = 1) {
 export const RECIPES = {
   house: { size: 2, styles: AGES, scale: 0.85, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e1: 'win', s1: 'win' });
-    roof(k, 0, 0, 2, 2, 1);
+    roof(k, 0, 0, 2, 2, 1, k.style >= 2);
     if (k.style >= 1) k.add('town', 'chimney', 0.5, 0.5, 1.2, 90);
+    if (k.style >= 2) {
+      k.add('town', 'roof-gable', 1.4, 1.5, 1.15, 0, [0.55, 0.55, 0.55]);
+      k.add('town', 'hedge', 1.55, 1.92, 0, 0, 0.55);
+    }
+    k.add('town', 'lantern', 0.2, 1.92, 0, 0, 0.65);
   } },
   tc: { size: 4, styles: AGES, scale: 0.92, build(k) {
     // a two-storey hall with a steep roof, a corner tower and a porch on the visible side
     walls(k, 0.5, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' });
     walls(k, 0.5, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' });
-    roof(k, 0.5, 0.5, 3, 2, 2);
+    roof(k, 0.5, 0.5, 3, 2, 2, k.style >= 2);
     walls(k, 3, 2.5, 1, 1, 0, { s0: 'win', e0: 'door' }); walls(k, 3, 2.5, 1, 1, 1, { s0: 'win', e0: 'win' }); walls(k, 3, 2.5, 1, 1, 2, { s0: 'win', e0: 'win' });
     k.add('town', 'roof-high-point', 3.5, 3, 3);
+    if (k.style >= 2) {
+      walls(k, 0.5, 2.5, 1, 1, 0, { s0: 'win', w0: 'win' }); walls(k, 0.5, 2.5, 1, 1, 1, { s0: 'win' });
+      k.add('town', 'roof-point', 1.0, 3.0, 2);
+    }
     leanTo(k, 's', 0.5, 2.5, 2, 0.7, 0.9); pillars(k, [[0.6, 3.35], [1.5, 3.35], [2.45, 3.35]], 0, 0.72, k.S.stone ? 'pillar-stone' : 'pillar-wood');
     if (k.style >= 1) k.add('town', 'chimney', 1, 0.9, 2.5, 90);
+    if (k.style >= 2) k.add('town', 'fountain-round', 2.25, 3.55, 0, 0, 0.34);
     k.add('town', 'lantern', 0.3, 3.7, 0, 0, 0.8); k.add('town', 'cart', 1.2, 3.9, 0, 90, 0.6);
   } },
   mill: { size: 2, styles: AGES, scale: 0.9, build(k) {
@@ -113,7 +123,13 @@ export const RECIPES = {
   university: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
     walls(k, 0, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
-    roof(k, 0, 0.5, 3, 2, 2);
+    roof(k, 0, 0.5, 3, 2, 2, true);
+    walls(k, 1, 0.5, 1, 1, 2, { s0: 'wall-window-round', e0: 'wall-window-round' }, 'wall');
+    k.add('town', 'roof-high-point', 1.5, 1.0, 3);
+    leanTo(k, 's', 0.5, 2.45, 2, 0.75, 0.5);
+    pillars(k, [[0.55, 2.9], [1.45, 2.9], [2.45, 2.9]], 0, 0.75, 'pillar-stone');
+    k.add('town', 'fountain-round', 2.45, 2.65, 0, 0, 0.28);
+    k.add('town', 'hedge', 0.35, 2.75, 0, 0, 0.55);
   } },
   monastery: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 2, 3, 0, { s0: 'wall-doorway-round', e1: 'wall-window-round', e0: 'wall-window-round', e2: 'wall-window-round' }, 'wall');
@@ -122,32 +138,56 @@ export const RECIPES = {
     walls(k, 2, 2, 1, 1, 0, { s0: 'wall-window-round' }, 'wall'); walls(k, 2, 2, 1, 1, 1, { s0: 'wall-window-round', e0: 'wall-window-round' }, 'wall'); walls(k, 2, 2, 1, 1, 2, { s0: 'wall-window-small', e0: 'wall-window-small' }, 'wall');
     k.add('town', 'roof-high-point', 2.5, 2.5, 3);
     k.add('nature', 'tree_cone', 2.5, 0.6, 0, 0, 0.8);
+    k.add('town', 'fountain-round', 2.45, 1.35, 0, 0, 0.28);
   } },
   barracks: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e1: 'win' });
-    roof(k, 0, 0, 3, 2, 1);
+    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
+    if (k.style >= 2) {
+      walls(k, 2, 0, 1, 1, 1, { s0: 'win', e0: 'win' });
+      k.add('town', 'roof-point', 2.5, 0.5, 2);
+    }
     for (let i = 0; i < 3; i++) k.add('town', 'fence', i + 0.5, 2.5, 0, ROT.s);
     k.add('town', 'fence', 2.5, 2.5, 0, ROT.e); k.add('town', 'banner-red', 2.5, 1.5, 0, 0, 0.9);
+    k.add('town', 'lantern', 1.4, 2.1, 0, 0, 0.7);
   } },
   range: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e0: 'win', e1: 'win' });
-    roof(k, 0, 0, 2, 2, 1);
+    roof(k, 0, 0, 2, 2, 1, k.style >= 2);
+    leanTo(k, 'e', 2, 0, 2, 0.68, 0.55);
     for (let i = 0; i < 3; i++) k.add('town', 'fence', i + 0.5, 2.5, 0, ROT.s);
     for (let j = 0; j < 2; j++) k.add('town', 'fence', 2.5, j + 0.5, 0, ROT.e);
     k.add('town', 'wheel', 2.5, 1.2, 0, 0, 1.3); k.add('town', 'stall-bench', 1.2, 2.4, 0, 90);
+    k.add('town', 'banner-green', 0.4, 2.35, 0, 0, 0.85);
   } },
   stable: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'wall-wood-doorway-square-wide', s2: 'wall-wood-doorway-square-wide', s1: 'win', e1: 'win' }, 'wall-wood');
-    roof(k, 0, 0, 3, 2, 1);
+    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
+    leanTo(k, 's', 0, 2, 3, 0.65, 0.5);
     for (let i = 0; i < 3; i++) k.add('town', i === 1 ? 'fence-gate' : 'fence', i + 0.5, 2.5, 0, ROT.s);
     k.add('town', 'fence', 2.5, 2.5, 0, ROT.e); k.add('town', 'fence', 0.5, 2.5, 0, ROT.w);
+    k.add('nature', 'log_stack', 2.35, 2.35, 0, 45, 0.65, { tint: '#e4be58' });
   } },
   siege: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'poles', s1: 'poles', s2: 'poles', e0: 'poles', e1: 'poles' }, 'wall-wood');
-    roof(k, 0, 0, 3, 2, 1);
+    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
     k.add('castle', 'siege-ram', 1.6, 1.0, 0, 0, 0.7);
     k.add('castle', 'siege-catapult', 1.1, 2.5, 0, -30, 0.55);
+    if (k.style >= 2) k.add('castle', 'siege-ballista', 2.4, 2.35, 0, 20, 0.52);
   } },
+  // ---- 3D siege engine unit sprites from Kenney CC0 Castle Kit ----
+  unit_ram: { size: 1, res: true, build(k) { k.add('castle', 'siege-ram', 0.5, 0.5, 0, 45, 0.62); } },
+  unit_cappedram: { size: 1, res: true, build(k) {
+    k.add('castle', 'siege-ram', 0.5, 0.5, 0, 45, 0.66, { tint: '#b8c4d0' });
+    k.add('castle', 'flag-pennant', 0.35, 0.65, 0.55, 45, 0.45);
+  } },
+  unit_mangonel: { size: 1, res: true, build(k) { k.add('castle', 'siege-catapult', 0.5, 0.5, 0, 45, 0.58); } },
+  unit_onager: { size: 1, res: true, build(k) {
+    k.add('castle', 'siege-catapult', 0.5, 0.5, 0, 45, 0.64, { tint: '#c8b294' });
+    k.add('castle', 'flag-pennant', 0.32, 0.68, 0.45, 45, 0.45);
+  } },
+  unit_scorpion: { size: 1, res: true, build(k) { k.add('castle', 'siege-ballista', 0.5, 0.5, 0, 45, 0.62); } },
+  unit_trebuchet: { size: 1, res: true, build(k) { k.add('castle', 'siege-trebuchet', 0.5, 0.5, 0, 45, 0.58); } },
   tower: { size: 1, styles: [0, 2], scale: 0.8, build(k) {
     if (k.style < 2) { // wooden watch tower
       pillars(k, [[0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]], 0, 1.6);
@@ -179,7 +219,41 @@ export const RECIPES = {
     k.add('castle', 'tower-square-top-roof-high', 2.5, 2.5, 4.08, 0, [1.7, 1.5, 1.7]);
     for (const [x, y] of [[0.5, 0.5], [4.5, 0.5], [0.5, 4.5], [4.5, 4.5]]) { k.add('castle', 'tower-hexagon-base', x, y, 0); k.add('castle', 'tower-hexagon-roof', x, y, 1.31); }
   } },
-  // ---- resources (trees, mines) ----
+  // Wheat fields use the same Nature Kit as the surrounding scenery. Separate harvest stages
+  // keep food depletion visible without generating a new sprite for every farm.
+  farm: { size: 3, res: true, styles: [0, 1, 2], build(k) {
+    for (let row = 0; row < 6; row++) {
+      const y = 0.25 + row * 0.5;
+      for (let col = 0; col < 3; col++) k.add('nature', 'crops_dirtRow', col + 0.5, y, 0, 0, [1, 0.7, 0.7], { color: '#705132' });
+      for (let col = 0; col < 6; col++) {
+        const x = 0.25 + col * 0.5;
+        if (k.style === 0 && (row + col) % 3) continue;
+        k.add('nature', k.style === 2 ? 'crops_wheatStageB' : 'crops_wheatStageA', x, y, 0.035, 0, k.style === 0 ? [0.55, 0.3, 0.55] : 0.72, { tint: k.style === 2 ? '#e6b63c' : '#8ca650' });
+      }
+    }
+  } },
+  // ---- resources (trees, mines, understory and felled timber) ----
+  tree_anatolian_0: { size: 1, res: true, build(k) { k.add('nature', 'tree_cone', .5, .5, 0, 0, [.8, 1.7, .8], { leaf: '#3e6742' }); } },
+  tree_anatolian_1: { size: 1, res: true, build(k) { k.add('nature', 'tree_thin', .5, .5, 0, 70, 1.2, { leaf: '#6d8053' }); } },
+  tree_anatolian_2: { size: 1, res: true, build(k) { k.add('nature', 'tree_pineTallA', .5, .5, 0, 20, 1.15, { leaf: '#506b49' }); } },
+  berry_0: { size: 1, res: true, build(k) {
+    k.add('nature', 'plant_bushDetailed', 0.45, 0.5, 0, 0, 1.6, { color: '#456e32' });
+    k.add('nature', 'plant_bushSmall', 0.8, 0.65, 0, 30, 1.4, { color: '#587e39' });
+  } },
+  berry_1: { size: 1, res: true, build(k) {
+    k.add('nature', 'plant_bushDetailed', 0.55, 0.5, 0, 70, 1.6, { color: '#4c7535' });
+    k.add('nature', 'plant_bushSmall', 0.25, 0.6, 0, 0, 1.4, { color: '#5a813e' });
+  } },
+  shrub_0: { size: 1, res: true, build(k) { k.add('nature', 'plant_bushSmall', 0.5, 0.5, 0, 25, 1.2, { color: '#557a39' }); } },
+  shrub_1: { size: 1, res: true, build(k) { k.add('nature', 'grass_leafs', 0.5, 0.5, 0, 65, 0.8, { color: '#768d42' }); } },
+  felled_0: { size: 1, res: true, build(k) {
+    k.add('nature', 'stump_roundDetailed', 0.3, 0.4, 0, 0, 1.2);
+    k.add('nature', 'log', 0.65, 0.65, 0, 55, 1.5);
+  } },
+  felled_1: { size: 1, res: true, build(k) {
+    k.add('nature', 'stump_squareDetailed', 0.3, 0.4, 0, 20, 1.2);
+    k.add('nature', 'log_large', 0.7, 0.65, 0, 65, 1.1);
+  } },
   tree_0: { size: 1, res: true, build(k) { k.add('nature', 'tree_oak', 0.5, 0.5, 0, 0, 1.46, { leaf: '#4f8f2f' }); } },
   tree_1: { size: 1, res: true, build(k) { k.add('nature', 'tree_default', 0.5, 0.5, 0, 40, 1.46, { leaf: '#5a9a34' }); } },
   tree_2: { size: 1, res: true, build(k) { k.add('nature', 'tree_fat', 0.5, 0.5, 0, 80, 1.33, { leaf: '#3f7f2c' }); } },

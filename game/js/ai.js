@@ -6,6 +6,18 @@ const AI_DIFF = {
   hard: { gatherMul: 1.15, attackAt: 480, wave: 12, maxVill: 55, react: 1 },
   hardest: { gatherMul: 1.35, attackAt: 390, wave: 14, maxVill: 65, react: 0.7 },
 };
+const AI_CIV_UNITS = {
+  franks: { barracks: ['spearman', 'militia'], range2: ['skirmisher', 'archer'], stable2: ['knight', 'knight', 'knight', 'scout'] },
+  teutons: { barracks: ['militia', 'militia', 'spearman'], range2: ['skirmisher', 'archer'], stable2: ['knight', 'knight', 'scout'] },
+  spanish: { barracks: ['militia', 'spearman'], range2: ['cavarcher', 'archer', 'skirmisher'], stable2: ['knight', 'knight', 'scout'] },
+  italians: { barracks: ['spearman', 'militia'], range2: ['archer', 'archer', 'archer', 'skirmisher'], stable2: ['knight', 'scout'] },
+  japanese: { barracks: ['militia', 'militia', 'spearman'], range2: ['archer', 'archer', 'cavarcher'], stable2: ['knight', 'scout'] },
+  chinese: { barracks: ['spearman', 'militia'], range2: ['archer', 'archer', 'skirmisher'], stable2: ['knight', 'scout'] },
+  byzantines: { barracks: ['spearman', 'spearman', 'militia'], range2: ['skirmisher', 'skirmisher', 'cavarcher'], stable2: ['knight', 'knight', 'scout'] },
+  vikings: { barracks: ['militia', 'militia', 'militia', 'spearman'], range2: ['archer', 'skirmisher'], stable2: ['scout', 'knight'] },
+  saracens: { barracks: ['spearman', 'militia'], range2: ['cavarcher', 'cavarcher', 'archer'], stable2: ['knight', 'scout', 'scout'] },
+  turks: { barracks: ['spearman', 'militia'], range2: ['cavarcher', 'cavarcher', 'skirmisher'], stable2: ['scout', 'scout', 'knight'] },
+};
 class AIPlayer {
   constructor(p, diff) {
     this.p = p; this.cfg = AI_DIFF[diff] || AI_DIFF.standard; this.gatherMul = this.cfg.gatherMul;
@@ -45,8 +57,9 @@ class AIPlayer {
     this.manageBell(tcs);
     if (p.bell) return;
     // villagers (pause briefly to save food for the next Age)
-    const nextAgeId = ['feudal', 'castleage', 'imperial'][p.age];
-    const minV = [15, 24, 32][p.age] || 99;
+    const ageTech = AGE_TECHS[p.age + 1];
+    const nextAgeId = TECHS[ageTech] ? ageTech : null;
+    const minV = [15, 24, 32, 38, 42][p.age] || 99;
     // Age-up planning. Villagers now age and some become monks, so the workforce hovers below the old fixed target;
     // after a while in an age the AI saves for the next one anyway, and it saves gold as well as food.
     if (this.ageSeen !== p.age) { this.ageSeen = p.age; this.ageSince = this.t; }
@@ -59,7 +72,7 @@ class AIPlayer {
     // herd owned sheep home
     for (const s of W.list) if (s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.order && Math.hypot(s.x - home.x, s.y - home.y) > 7) setOrder(s, { t: 'move', x: home.x + 3 + simRandom() * 2, y: home.y + 3 + simRandom() * 2 });
     // assign idle villagers
-    const counts = { food: 0, wood: 0, gold: 0, stone: 0, build: 0 };
+    const counts = { food: 0, wood: 0, gold: 0, stone: 0, coal: 0, build: 0 };
     for (const v of vills) { const k = this.vTask(v); if (k) counts[k]++; }
     counts.food += Math.floor(this.mine(e => e.kind === 'unit' && e.type === 'fishingship').length * 0.8);
     const want = this.ratios();
@@ -161,8 +174,19 @@ class AIPlayer {
       if (nextAge && this.enoughVills && !techLocked(p, nextAge) && canPay(p, effCost(p, nextAge, true))) { tc.queue.filter(q => q.kind === 'unit').forEach(() => cancelQueue(tc, tc.queue.findIndex(q => q.kind === 'unit'))); queueTech(tc, nextAge); }
       else if (!p.techs.has('loom') && age >= 0 && nV > 12 && p.res.gold >= 50) queueTech(tc, 'loom');
     }
-    // economy techs when surplus
+    // economy and military techs when surplus (prioritize combat upgrades when fielding an army)
+    if (this.army().length >= 6) {
+      this.research(['fletching', 'forging', 'scalemail', 'paddedarcher', 'scalebarding', 'bodkin', 'ironcasting', 'chainmail', 'up_manatarms', 'up_crossbow', 'up_pikeman', 'up_longsword', 'up_lightcav', 'up_cavalier', 'up_arbalest'], 120);
+    }
     this.research(['herbalmedicine', 'sanitation', 'wheelbarrow', 'doublebit', 'horsecollar', 'goldmining', 'forging', 'fletching', 'scalemail', 'paddedarcher', 'scalebarding', 'bowsaw', 'heavyplow', 'up_manatarms', 'up_crossbow', 'up_pikeman', 'handcart', 'ironcasting', 'bodkin', 'chainmail', 'up_longsword', 'up_lightcav', 'masonry', 'ballistics', 'gillnets', 'up_wargalley', 'careening', 'sanctity', 'fervor', 'up_cavalier', 'up_arbalest', 'up_twohanded', 'chemistry', 'up_galleon', 'elite_uu', 'guardtower', 'murderholes', 'keep', 'up_eskirm', 'townwatch'], 300);
+    // repair damaged fortifications and Town Centers between raids
+    if (!this.underThreat() && p.res.wood > 80) {
+      const dmgBld = this.mine(e => e.kind === 'bld' && e.built && e.hp < e.maxhp * 0.85 && (e.type === 'tc' || e.type === 'castle' || e.type === 'wonder' || e.type === 'tower'))[0];
+      if (dmgBld && !vills.some(v => v.order && v.order.t === 'repair' && v.order.id === dmgBld.id)) {
+        const repV = vills.filter(v => !v.order || this.vTask(v) === 'wood').sort((a, b) => distTo(a, dmgBld) - distTo(b, dmgBld))[0];
+        if (repV && distTo(repV, dmgBld) < 25) setOrder(repV, { t: 'repair', id: dmgBld.id });
+      }
+    }
     // fishing ships
     const docks = this.mine(e => e.kind === 'bld' && e.type === 'dock' && e.built);
     if (docks.length) {
@@ -207,12 +231,12 @@ class AIPlayer {
   }
   ratios() {
     const a = this.p.age;
-    let r = [{ food: 0.5, wood: 0.44, gold: 0.06, stone: 0 }, { food: 0.42, wood: 0.42, gold: 0.13, stone: 0.03 }, { food: 0.38, wood: 0.36, gold: 0.2, stone: 0.06 }, { food: 0.36, wood: 0.32, gold: 0.25, stone: 0.07 }][a];
+    let r = [{ food: 0.5, wood: 0.44, gold: 0.06, stone: 0 }, { food: 0.42, wood: 0.42, gold: 0.13, stone: 0.03 }, { food: 0.38, wood: 0.36, gold: 0.2, stone: 0.06 }, { food: 0.36, wood: 0.32, gold: 0.25, stone: 0.07 }][Math.min(a, 3)];
     if (a === 0 && W.list.filter(e => e.owner === this.id && e.type === 'villager').length < 12) r = { food: 0.62, wood: 0.38, gold: 0, stone: 0 };
     // adapt to stockpiles: starve what is hoarded, feed what is missing
-    r = Object.assign({}, r); const R0 = this.p.res;
+    r = Object.assign({ coal: a >= 3 && this.p.res.coal < 900 ? 0.12 : 0 }, r); const R0 = this.p.res;
     for (const k of RES) { if (!r[k]) continue; if (R0[k] > 1500) r[k] *= 0.3; else if (R0[k] > 700) r[k] *= 0.6; else if (R0[k] < 120) r[k] *= 1.6; }
-    const sum = RES.reduce((s, k) => s + r[k], 0) || 1; for (const k of RES) r[k] /= sum;
+    const sum = RES.reduce((s, k) => s + (r[k] || 0), 0) || 1; for (const k of RES) r[k] = (r[k] || 0) / sum;
     if (this.p.res.stone > 800) r = Object.assign({}, r, { stone: 0, wood: r.wood + r.stone });
     if (this.p.res.gold > 1500) r = Object.assign({}, r, { gold: r.gold * 0.4, food: r.food + r.gold * 0.6 });
     return r;
@@ -228,10 +252,19 @@ class AIPlayer {
   assign(v, res) {
     const home = this.home();
     if (res === 'food') {
-      const sheep = W.list.filter(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.dying && Math.hypot(s.x - home.x, s.y - home.y) < 14);
-      const carc = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 5 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14 && e.gatherers < 4);
+      const sheep = W.list.filter(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.dying && Math.hypot(s.x - home.x, s.y - home.y) < 14)
+        .sort((a, b) => Math.hypot(a.x - home.x, a.y - home.y) - Math.hypot(b.x - home.x, b.y - home.y));
+      const carc = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 10 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14 && e.gatherers < 5);
       if (carc) { setOrder(v, { t: 'gather', id: carc.id }); return true; }
-      if (sheep.length) { setOrder(v, { t: 'hunt', id: sheep[0].id }); return true; }
+      // Slaughter one sheep at a time so carcasses do not rot simultaneously
+      const activeCarc = W.list.some(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 10 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14);
+      const huntedSheep = sheep.find(s => W.list.some(u => u.kind === 'unit' && u.owner === this.id && u.order && u.order.t === 'hunt' && u.order.id === s.id));
+      if (huntedSheep) {
+        const hunters = W.list.filter(u => u.kind === 'unit' && u.owner === this.id && u.order && u.order.t === 'hunt' && u.order.id === huntedSheep.id).length;
+        if (hunters < 4) { setOrder(v, { t: 'hunt', id: huntedSheep.id }); return true; }
+      } else if (!activeCarc && sheep.length) {
+        setOrder(v, { t: 'hunt', id: sheep[0].id }); return true;
+      }
       const farm = W.list.find(f => f.kind === 'bld' && f.type === 'farm' && f.owner === this.id && f.built && !f.farmer);
       if (farm) { setOrder(v, { t: 'farm', id: farm.id }); return true; }
       const berry = findNearestRes(v, ['berry'], home.x, home.y, 20);
@@ -241,13 +274,14 @@ class AIPlayer {
       const unfinished = W.list.find(f => f.kind === 'bld' && f.type === 'farm' && f.owner === this.id && !f.built);
       if (unfinished) { setOrder(v, { t: 'build', id: unfinished.id }); return true; }
       if (this.p.res.wood >= 60 && hasBuilt(this.p, 'mill')) { const b = this.build('farm', home, 2, 9, true, [v]); if (b) return true; }
+      if (sheep.length) { setOrder(v, { t: 'hunt', id: sheep[0].id }); return true; }
       return false;
     }
     const type = res === 'wood' ? 'tree' : res;
-    // prefer resources near own drop sites
+    // prefer resources near own drop sites and avoid crowding a single tile
     const drops = this.mine(e => e.kind === 'bld' && e.built && BUILDINGS[e.type].drop && BUILDINGS[e.type].drop.includes(res) && e.type !== 'dock');
     let best = null, bd = 1e9;
-    for (const d of drops) { const c = center(d); const r = findNearestRes(v, [type], c.x, c.y, 10); if (r) { const dd = Math.hypot(r.x - c.x, r.y - c.y) + r.gatherers * 1.5; if (dd < bd) { bd = dd; best = r; } } }
+    for (const d of drops) { const c = center(d); const r = findNearestRes(v, [type], c.x, c.y, 10); if (r) { const dd = Math.hypot(r.x - c.x, r.y - c.y) + Math.hypot(r.x - v.x, r.y - v.y) * 0.25 + r.gatherers * 1.8; if (dd < bd) { bd = dd; best = r; } } }
     if (!best) best = findNearestRes(v, [type], home.x, home.y, 40);
     if (best) { setOrder(v, { t: 'gather', id: best.id }); return true; }
     return false;
@@ -274,6 +308,7 @@ class AIPlayer {
     if (check('wood', 'lumbercamp')) { this.buildCooldown = 5; return; }
     if (check('gold', 'miningcamp')) { this.buildCooldown = 5; return; }
     if (check('stone', 'miningcamp')) { this.buildCooldown = 5; return; }
+    if (check('coal', 'miningcamp')) { this.buildCooldown = 5; return; }
     if (check('food', 'mill')) { this.buildCooldown = 5; return; }
   }
   // find a spot and start construction
@@ -394,9 +429,10 @@ class AIPlayer {
     const raid = this.saving && this.underThreat() ? (() => { const h = this.home(); return unitsNear(h.x, h.y, 16, u => isEnemy(this.id, u.owner) && !UNITS[u.type].animal && UNITS[u.type].atk > 0 && u.type !== 'villager').length; })() : 0;
     const defend = this.underThreat() && (!this.saving || armySize < raid * 1.5 + 2);
     if (armySize < maxArmy && ((econOK && !this.saving) || defend)) {
-      trainAt('barracks', enemyCav > 3 ? ['spearman', 'spearman', 'militia'] : ['militia', 'spearman']);
-      trainAt('range', enemyArch > 4 ? ['skirmisher', 'archer'] : age >= 2 ? ['archer', 'archer', 'cavarcher'] : ['archer', 'archer', 'skirmisher']);
-      trainAt('stable', age >= 2 ? ['knight', 'knight', 'scout'] : ['scout']);
+      const cu = AI_CIV_UNITS[p.civ] || {};
+      trainAt('barracks', enemyCav > 3 ? ['spearman', 'spearman', 'militia'] : (cu.barracks || ['militia', 'spearman']));
+      trainAt('range', enemyArch > 4 ? ['skirmisher', 'archer'] : age >= 2 ? (cu.range2 || ['archer', 'archer', 'cavarcher']) : ['archer', 'archer', 'skirmisher']);
+      trainAt('stable', age >= 2 ? (cu.stable2 || ['knight', 'knight', 'scout']) : ['scout']);
       trainAt('castle', ['__uu', '__uu', 'trebuchet']);
       if (this.army().filter(u => hasTag(u.type, 'siege')).length < 3) trainAt('siege', ['ram', 'mangonel', 'scorpion']);
     }
@@ -465,24 +501,27 @@ class AIPlayer {
   pressAttack(army) {
     const tp = this.targetPlayer(); if (!tp) { this.state = 'boom'; return; }
     const cx = army.reduce((s, u) => s + u.x, 0) / army.length, cy = army.reduce((s, u) => s + u.y, 0) / army.length;
-    // nearest enemy building (non wall), prefer TC/castle
-    let tgt = null, bd = 1e9;
+    // nearest enemy building (non wall), prefer TC/castle, and track nearby fortifications for siege
+    let tgt = null, bd = 1e9, fortTgt = null, fbd = 1e9;
     for (const e of W.list) {
       if (e.owner !== tp || e.dead) continue;
       if (e.kind === 'bld' && (BUILDINGS[e.type].wall)) continue;
       if (e.kind === 'unit' && (e.inside || UNITS[e.type].naval)) continue;
-      const c = center(e); const d = Math.hypot(c.x - cx, c.y - cy) - (e.type === 'tc' ? 4 : 0) + (e.kind === 'unit' ? 6 : 0);
+      const c = center(e), dist = Math.hypot(c.x - cx, c.y - cy);
+      const d = dist - (e.type === 'tc' || e.type === 'castle' ? 4 : 0) + (e.kind === 'unit' ? 6 : 0);
       if (d < bd) { bd = d; tgt = e; }
+      if (e.kind === 'bld' && (e.type === 'castle' || e.type === 'tower' || e.type === 'tc') && dist < fbd) { fbd = dist; fortTgt = e; }
     }
     if (!tgt) return;
     const tc = center(tgt);
     const myReg = W.map.landReg[W.map.idx(cx | 0, cy | 0)], tReg = W.map.landReg[W.map.idx(tc.x | 0, tc.y | 0)];
     if (W.map.isWater(tc.x | 0, tc.y | 0) || myReg !== tReg) { this.ferry(army, tc); return; }
     if (typeof this.stageAttack === 'function' && this.stageAttack(army, tc)) return;
+    const siegeBld = (fortTgt && Math.hypot(center(fortTgt).x - tc.x, center(fortTgt).y - tc.y) < 12) ? fortTgt : (tgt.kind === 'bld' ? tgt : null);
     for (const u of army) {
       if (u.order && (u.order.t === 'attack' || u.order.t === 'board')) continue;
       if (u.order && u.order.t === 'attackmove' && Math.hypot(u.order.x - tc.x, u.order.y - tc.y) < 3) continue;
-      if (UNITS[u.type].onlyBld && tgt.kind === 'bld') setOrder(u, { t: 'attack', id: tgt.id });
+      if ((UNITS[u.type].onlyBld || u.type === 'trebuchet') && siegeBld) setOrder(u, { t: 'attack', id: siegeBld.id });
       else setOrder(u, { t: 'attackmove', x: tc.x + (simRandom() - 0.5) * 2, y: tc.y + (simRandom() - 0.5) * 2 });
     }
   }

@@ -26,7 +26,7 @@ function runUntil(fn,secs){ let t=0; while(t<secs && !fn()){ worldTick(0.05); t+
 mk('land','large',11,2); for(let i=0;i<60;i++) worldTick(0.05);`);
 // ---- monk share
 const M = run(`(() => { let v=0, n=400; for(let i=0;i<n;i++){ const u=spawnUnit('villager',1,5.5,5.5); if(modLimits(u).vows>0) v++; removeEnt(u); } return {share:v/n}; })()`);
-ok('about one villager in five is destined for vows', M.share > 0.14 && M.share < 0.26, M);
+ok('about one villager in ten is destined for vows', M.share > 0.05 && M.share < 0.15, M);
 const M2 = run(`(() => { const a=spawnUnit('villager',1,5.5,5.5); a.lifeK=1; a.vows=true; a.bornT=W.t-(MOD.life.villagerVows+100); modAgeTick(a);
   const b=spawnUnit('villager',1,6.5,5.5); b.lifeK=1; b.vows=false; b.bornT=W.t-(MOD.life.villagerVows+100); modAgeTick(b); return {a:a.type,b:b.type}; })()`);
 ok('vow-bound villager becomes a monk, others keep working', M2.a === 'monk' && M2.b === 'villager', M2);

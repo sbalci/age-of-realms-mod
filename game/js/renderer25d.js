@@ -136,6 +136,8 @@ const T25D = {
     this.mesh(group, this.box, stone, 0, 0.065, 0, s * 0.98, 0.13, s * 0.98);
     if (b.type === 'farm') {
       for (let k = -3; k <= 3; k++) this.mesh(group, this.box, this.material('#758148'), k * s / 8, 0.15, 0, 0.12, 0.12, s * 0.85);
+    } else if (b.type === 'wonder' && typeof wonderMesh === 'function') {
+      wonderMesh(this, group, age, pc);
     } else if (['wall', 'palisade', 'gate'].includes(b.type)) {
       const mask = t25dWallMask(b), alongX = mask & 3 || !(mask & 12);
       const wall = this.mesh(group, this.box, b.type === 'palisade' ? timber : stone, 0, height * 0.45, 0, alongX ? s : 0.28, height * 0.9, alongX ? 0.28 : s);
@@ -315,7 +317,7 @@ const T25D = {
   },
   asset(e) {
     const unit=e.kind==='unit', d=unit?UNITS[e.type]:null, variant=e.id%12;
-    const key=unit ? uhdKey(e,d,e.animT,W.t,1,pcolor(e.owner).c).key+':rank'+(e.rank||0)+':die'+Math.min(12,Math.floor((e.dieT||0)*8)) : `${e.kind}:${e.type}:${e.v||0}:${variant}:${!!e.felled}:${Math.ceil((e.amount/e.max||0)*4)}:${!!e.sap}`;
+    const key=unit ? uhdKey(e,d,e.animT,W.t,1,pcolor(e.owner).c).key+':rank'+(e.rank||0)+':die'+Math.min(12,Math.floor((e.dieT||0)*8)) : `${e.kind}:${e.type}:${e.v||0}:${variant}:${!!e.felled}:${Math.ceil((e.amount/e.max||0)*4)}:${!!e.sap}:mine${e.depth ? mineAccessible(e) : ''}:art${typeof KART !== 'undefined' ? KART.revision : 0}`;
     let a=this.assets.get(key); if(a) { a.frame=this.frame;return a; }
     const THREE=this.lib, width=192,height=160, ax=96,ay=128, cv=document.createElement('canvas');cv.width=width*2;cv.height=height*2;
     const g=cv.getContext('2d'), c=unit?e:center(e), h=unit&&d.naval || e.type==='fish' ? -0.35 : W.map.h(c.x,c.y), origin=iso(c.x,c.y,h);

@@ -207,8 +207,12 @@ function exSpectateBegin(settings) {
   const p = W.players[W.humanId];
   W.spectate = true;
   if (p.name === settings.name || p.name === 'Player') {
-    const pool = (typeof AI_NAMES !== 'undefined' ? AI_NAMES : ['Observer']).filter(n => !W.players.some(q => q && q.name === n));
-    p.name = pool.length ? pool[(simRandom() * pool.length) | 0] : p.name + ' (AI)';
+    const used = new Set(W.players.filter(q => q && q !== p).map(q => q.name));
+    if (typeof aiLeaderName === 'function') p.name = aiLeaderName(p.civ, simRandom, used);
+    else {
+      const pool = (typeof AI_NAMES !== 'undefined' ? AI_NAMES : ['Observer']).filter(n => !used.has(n));
+      p.name = pool.length ? pool[(simRandom() * pool.length) | 0] : p.name + ' (AI)';
+    }
   }
   p.ai = new AIPlayer(p, settings.difficulty || 'standard');
   W.revealAll = true; W.noFog = true; p.explored.fill(1);

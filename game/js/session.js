@@ -94,6 +94,8 @@ const MatchSave = {
     if (!(w.map.ter instanceof Uint8Array) || !(w.map.elev instanceof Uint8Array) || !(w.map.blk instanceof Int32Array) || !(w.map.deco instanceof Uint8Array) || w.map.deco.length !== w.n * w.n) throw new Error('Invalid saved map layers.');
     if (!data.ui || !Array.isArray(data.ui.selection) || !data.ui.groups || Object.values(data.ui.groups).some(ids => !Array.isArray(ids) || ids.some(id => !Number.isInteger(id)))) throw new Error('Invalid saved selection or groups.');
     for (const [i, p] of w.players.slice(1).entries()) {
+      if (p.res && p.res.coal === undefined) p.res.coal = 0;
+      if (p.gather && p.gather.coal === undefined) p.gather.coal = 1;
       if (p.id !== i + 1 || typeof p.name !== 'string' || p.name.length > 120 || !p.color || ['c', 'd', 'l'].some(k => !/^#[\da-f]{3,8}$/i.test(p.color[k]))) throw new Error('Invalid saved player identity.');
       if (!(p instanceof Player) || !(p.techs instanceof Set) || !(p.researching instanceof Set) || !p.explored || p.explored.length !== w.n * w.n || !p.visible || p.visible.length !== w.n * w.n || !p.res || RES.some(k => !Number.isFinite(p.res[k]) || p.res[k] < 0) || !p.color || !/^#[\da-f]{3,8}$/i.test(p.color.c)) throw new Error('Invalid player state.');
       if (p.ai && (!(p.ai instanceof AIPlayer) || p.ai.p !== p)) throw new Error('Invalid AI state.');
@@ -105,6 +107,7 @@ const MatchSave = {
       const defs = e.kind === 'unit' ? UNITS : e.kind === 'bld' ? BUILDINGS : null;
       if (defs ? !Object.prototype.hasOwnProperty.call(defs, e.type) : !['res', 'relic'].includes(e.kind)) throw new Error('Unknown saved entity.');
       if (defs && (!Number.isFinite(e.hp) || !Number.isFinite(e.maxhp))) throw new Error('Invalid entity health.');
+      if (e.depth !== undefined && (!Number.isInteger(e.depth) || e.depth < 0 || e.depth > 4 || (e.depth && !(e.kind === 'res' && ['coal', 'gold', 'stone'].includes(e.type))))) throw new Error('Invalid saved mine depth.');
       if (e.kind === 'unit' && (!Array.isArray(e.cargo) || (e.queue !== undefined && !Array.isArray(e.queue)) || (e.order && !['move', 'attack', 'attackmove', 'gather', 'farm', 'hunt', 'build', 'repair', 'garrison', 'board', 'heal', 'convert', 'relic', 'deposit', 'trade', 'unload', 'moveto', 'follow', 'dropoff', 'guard', 'terra'].includes(e.order.t)))) throw new Error('Invalid unit orders.');
       if (e.kind === 'bld' && (!Array.isArray(e.queue) || !Array.isArray(e.garrison) || !Array.isArray(e.relics))) throw new Error('Invalid building state.');
       if (e.kind === 'bld' && e.queue.some(q => !q || !['unit', 'tech'].includes(q.kind) || !Object.prototype.hasOwnProperty.call(q.kind === 'unit' ? UNITS : TECHS, q.id) || !Number.isFinite(q.t) || q.t < 0)) throw new Error('Invalid production queue.');
