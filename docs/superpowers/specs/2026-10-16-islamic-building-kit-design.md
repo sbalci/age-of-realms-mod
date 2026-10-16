@@ -21,11 +21,13 @@ This is the pilot for the per-civilization building sets in [ASSET_PLAN.md](../.
 - The monastery starts at age 2 because it is not buildable before then (`BUILDINGS.monastery.age = 2`).
 - Sprite keys are `<type>_<civ>_<age>`, for example `house_turks_0`, `tc_saracens_2` and `monastery_turks_3`.
 
+The sprites appear in the default Canvas 2D view.
+
 **Not in scope**
 - Ages 4–5. They show the civ's age-3 sprite plus the existing modern/future overlay, which is what every building does today.
 - Other buildings and other civs.
 - Units.
-- The 2.5D renderer.
+- The 2.5D renderer. It is an opt-in prototype (`?renderer=three` or `localStorage.aor_renderer`) that builds its own procedural meshes, and it stays unchanged.
 - `?art=classic`.
 
 ## Art direction
@@ -74,6 +76,7 @@ This is the pilot for the per-civilization building sets in [ASSET_PLAN.md](../.
 - Wall panels sit on the cell's +x edge, facing +x.
 - glTF is Y-up.
 - Material names are exactly the slot names listed above.
+- Every material is exported with metallic 0 and roughness 1.0. That matches the Kenney town and castle kits, which set metallic 0 and leave roughness at the glTF default of 1.0, so the new pieces don't catch sun highlights the Kenney pieces lack.
 
 **Pieces (about 14):**
 
@@ -97,6 +100,12 @@ Props reused from the Kenney kits:
   - Add `islamic: '/assets/original/islamic/'` to `KITS`.
   - In `k.add`, for meshes from the `islamic` kit, replace each material's colour using the slot→palette map for the recipe's civ and the current style.
   - Kenney pieces placed in the same recipe keep their own colours.
+  - The same branch forces roughness 1 and metalness 0. It also multiplies colours by a single `SHADE` factor (default 1.0) in `islamic-recipes.js`. The civ_art palettes were tuned for 2D drawn art, so light walls such as `#f2deb8` may wash out under the bake lights; `SHADE` is tuned once at review point 1. The palette table itself keeps the source values.
+- **New merge mode in `bake-kenney.mjs`: `--only <recipe,…>`.**
+  - It bakes only the named recipes and writes only their PNGs.
+  - It merges their entries into the existing `manifest.js` instead of replacing the file.
+  - Today every bake rewrites all 109 PNGs and the whole manifest. All work in this spec uses `--only`, so existing sprites stay byte-identical. `git diff --stat` after each bake must list only new or changed `*_turks_*` and `*_saracens_*` files plus `manifest.js`.
+  - A plain full bake (no `--only`) keeps its current behaviour.
 - **New `tools/art/islamic-recipes.js`:**
   - `PALETTES = { turks: [4 ages], saracens: [4 ages] }`, copied from civ_art.js.
   - Six recipes: `house_turks`, `tc_turks`, `monastery_turks`, `house_saracens`, `tc_saracens`, `monastery_saracens`.
@@ -152,4 +161,6 @@ The sprite cache key already includes `civ`, so it needs no change.
 - **Style mismatch.** Original pieces may read as "different game" next to Kenney neighbours. Mitigation: review point 1 compares against Kenney sprites before more work is done.
 - **Recolour scope.** Recolouring by material name must not touch Kenney props placed in the same recipe. Mitigation: apply it only to meshes loaded from the `islamic` kit.
 - **Palette drift.** The palette is duplicated between civ_art.js and the recipes. Mitigation: the equality test above.
-- **Whole-manifest rewrite.** `manifest.js` is rewritten on every bake, so the new keys must come from recipes, never from hand-added PNGs.
+- **Whole-manifest rewrite.** A full bake rewrites `manifest.js` and every PNG. Mitigations:
+  - The new keys come from recipes, never from hand-added PNGs, so a later full bake reproduces them.
+  - This work uses only `--only` merge bakes, so the existing 109 sprites aren't churned.
