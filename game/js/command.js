@@ -466,7 +466,7 @@ function cmdShouldResign(ai) {
 if (typeof AIPlayer === 'function') {
   const _aiUpdate = AIPlayer.prototype.update;
   AIPlayer.prototype.update = function (dt) {
-    if (CMD.autoresign && this.p.alive && W.t > 60) {
+    if (CMD.autoresign && (!this.p.human || W.spectate) && this.p.alive && W.t > 60) {
       this._rsT = (this._rsT || 0) + dt;
       if (this._rsT >= 5) { this._rsT = 0; if (cmdShouldResign(this)) { cmdResign(this.id); return; } }
     }

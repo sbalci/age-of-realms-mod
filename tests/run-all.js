@@ -1,6 +1,6 @@
 // --quick runs focused regressions; --full loads the existing module integration suites.
 const { spawnSync } = require('child_process'), fs = require('fs'), path = require('path');
-const quick = new Set(['geography-geology.test.js', 'actors.test.js', 'reliability.test.js', 'timing.test.js', 'engineering.test.js', 'eras.test.js', 'extras.test.js', 'terrain.test.js', 'fx.test.js', 'units_hd.test.js', 'polish.test.js', 'tactics.test.js', 'hud.test.js']);
+const quick = new Set(['assist.test.js', 'geography-geology.test.js', 'actors.test.js', 'reliability.test.js', 'timing.test.js', 'engineering.test.js', 'eras.test.js', 'extras.test.js', 'terrain.test.js', 'fx.test.js', 'units_hd.test.js', 'polish.test.js', 'tactics.test.js', 'hud.test.js']);
 let failed = 0, passed = 0;
 for (const file of fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js') && (!process.argv.includes('--quick') || quick.has(f))).sort()) {
   const result = spawnSync(process.execPath, [path.join(__dirname, file)], { encoding: 'utf8', timeout: 900000, maxBuffer: 4e6, env: { ...process.env, ...(process.argv.includes('--full') ? { AOR_FULL: '1' } : {}) } });

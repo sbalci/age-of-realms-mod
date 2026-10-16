@@ -1236,8 +1236,8 @@ function convertLogic(u, dt) {
   if (simRandom() < chance || u.convT > 10) {
     const old = t.owner;
     t.owner = u.owner; setOrder(t, null);
-    t.queue = []; t.stance = undefined; t.defHome = null; t.buildQueue = null;
-    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) { cu.owner = u.owner; cu.queue = []; cu.stance = undefined; cu.defHome = null; } }
+    t.queue = []; t.stance = undefined; t.defHome = null; t.buildQueue = null; delete t.assistControl;
+    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) { cu.owner = u.owner; cu.queue = []; cu.stance = undefined; cu.defHome = null; delete cu.assistControl; } }
     recalcPop();
     emitFx('convert', t.x, t.y, 12); Sound.play('converted', t.x, t.y);
     if (u.owner === W.humanId) msg(`Converted an enemy ${UNITS[t.type].name}!`, '#dfb');
@@ -1274,13 +1274,13 @@ function ungarrisonOne(b, id) {
   b.garrison.splice(i, 1); const u = ent(id); if (u) ejectUnit(u, b);
 }
 // Town Bell
-function ringBell(p) {
+function ringBell(p, mayControl = () => true) {
   if (p.bell) return;
   p.bell = true;
   const tcs = W.list.filter(e => e.kind === 'bld' && e.owner === p.id && e.built && BUILDINGS[e.type].garrison);
   const load = new Map(tcs.map(b => [b.id, b.garrison.length]));
   for (const u of W.list) {
-    if (u.kind !== 'unit' || u.owner !== p.id || u.type !== 'villager' || u.inside || u.dying) continue;
+    if (u.kind !== 'unit' || u.owner !== p.id || u.type !== 'villager' || u.inside || u.dying || !mayControl(u)) continue;
     let best = null, bd = 30;
     for (const b of tcs) { if (!canGarrisonIn(u, b) || load.get(b.id) >= garrisonCap(b)) continue; const d = distTo(u, b); if (d < bd) { bd = d; best = b; } }
     u.bellPrev = u.order ? Object.assign({}, u.order) : null;
@@ -1292,16 +1292,16 @@ function ringBell(p) {
   if (p.id === W.humanId) { msg('Town Bell rung! Villagers take shelter.', '#fd8'); }
   Sound.bell();
 }
-function allClear(p) {
+function allClear(p, mayControl = () => true) {
   if (!p.bell) return;
   p.bell = false;
   for (const b of W.list) {
     if (b.kind !== 'bld' || b.owner !== p.id || !b.garrison.length) continue;
-    const vills = b.garrison.filter(id => { const u = ent(id); return u && u.bellRung; });
+    const vills = b.garrison.filter(id => { const u = ent(id); return u && u.bellRung && mayControl(u); });
     for (const id of vills) ungarrisonOne(b, id);
   }
   for (const u of W.list) {
-    if (u.kind !== 'unit' || u.owner !== p.id || !u.bellRung) continue;
+    if (u.kind !== 'unit' || u.owner !== p.id || !u.bellRung || !mayControl(u)) continue;
     u.bellRung = false; u.bellWait = false;
     const prev = u.bellPrev; u.bellPrev = null;
     if (u.bellCarry) u.carry = u.bellCarry;

@@ -36,6 +36,8 @@ A small black window opens and, after a moment, the game appears in your web bro
 
 Click **Learn to Play** for five short interactive lessons, or **Single Player** → **Start Game**. Press **F1** in a game for help. Sound starts after your first click.
 
+**AI-assisted play:** enable **AI Assist — share control of your realm** in Game Setup, or click **AI Assist: Off** in the game toolbar. The computer gathers resources, builds, trains and fights for you. Select units and right-click to give your own commands; these take priority, including Shift-queued orders. The AI resumes after the orders finish. Gathering and other continuous tasks remain yours until you change them or click **Return to AI** in the selection panel. **Stop** and combat stances keep units under your control until you return them to the AI. You can toggle assistance at any time; current orders continue when it is off. Assistance and player overrides are saved with the match. It runs locally without an account or internet connection.
+
 **Getting a newer version:** download the ZIP again (step 1) and use the new folder. Saved matches live in your browser, so they stay available as long as you use the same browser.
 
 **Something wrong?**

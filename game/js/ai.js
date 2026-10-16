@@ -27,6 +27,16 @@ class AIPlayer {
     for (let i = 1; i < W.players.length; i++) this.attitude[i] = 0;
   }
   get id() { return this.p.id; }
+  isAssist() { return !!(this.p && this.p.human && !(typeof W !== 'undefined' && W && W.spectate)); }
+  canControl(u) {
+    if (!u || u.dead || u.dying) return false;
+    if (!this.isAssist()) return true;
+    if (u.manualLock) return false;
+    if (u.manualHoldUntil && W.t < u.manualHoldUntil) return false;
+    if (u.queue && u.queue.length > 0) return false;
+    if (u.order && u.order.user) return false;
+    return true;
+  }
   mine(filter) { return W.list.filter(e => e.owner === this.id && filter(e)); }
   tc() { return W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc' && e.built) || W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc'); }
   home() { const tc = this.tc(); if (tc) return center(tc); const any = W.list.find(e => e.owner === this.id && e.kind === 'bld'); if (any) return center(any); return { x: this.p.startX, y: this.p.startY }; }
@@ -79,7 +89,7 @@ class AIPlayer {
     if (saving) { want.food += 0.15; want.wood -= 0.1; want.gold = Math.max(0, want.gold - 0.05); if (p.age >= 1 && p.res.gold < 200) { want.gold += 0.1; want.food -= 0.05; want.wood -= 0.05; } }
     const tot = vills.length || 1;
     for (const v of vills) {
-      if (v.order || v.inside) continue;
+      if (v.order || v.inside || !this.canControl(v)) continue;
       let best = 'food', bd = -1e9;
       for (const r of RES) { const deficit = want[r] - counts[r] / tot; if (deficit > bd) { bd = deficit; best = r; } }
       if (this.assign(v, best)) counts[best]++;
@@ -92,7 +102,7 @@ class AIPlayer {
       this.rebT = 0;
       let over = null, under = null, om = 0.06, um = 0.06;
       for (const r of RES) { const d = counts[r] / tot - want[r]; if (d > om) { om = d; over = r; } if (-d > um) { um = -d; under = r; } }
-      if (over && under) { const v = vills.find(v => this.vTask(v) === over && !(v.carry && v.carry.amt > 5)); if (v) this.assign(v, under); }
+      if (over && under) { const v = vills.find(v => this.canControl(v) && this.vTask(v) === over && !(v.carry && v.carry.amt > 5)); if (v) this.assign(v, under); }
     }
     // houses
     const houseBuilding = this.mine(e => e.kind === 'bld' && e.type === 'house' && !e.built).length;
@@ -290,7 +300,7 @@ class AIPlayer {
     const p = this.p;
     const drops = t => this.mine(e => e.kind === 'bld' && (e.type === t || e.type === 'tc'));
     const check = (res, btype, types) => {
-      const gatherers = vills.filter(v => this.vTask(v) === res && v.order && v.order.t === 'gather');
+      const gatherers = vills.filter(v => this.canControl(v) && this.vTask(v) === res && v.order && v.order.t === 'gather');
       if (gatherers.length < 3) return false;
       // average distance to drop
       let far = 0;
@@ -324,7 +334,7 @@ class AIPlayer {
       if (canPlace(p, type, x, y, true)) continue;
       if (!tight && !this.margin(x, y, s)) continue;
       if (!this.reachable(x, y, s, near)) continue;
-      const vs = builders || this.pickBuilders(x, y, type === 'castle' || type === 'tc' ? 4 : type === 'farm' ? 1 : 2);
+      const vs = (builders || this.pickBuilders(x, y, type === 'castle' || type === 'tc' ? 4 : type === 'farm' ? 1 : 2)).filter(v => this.canControl(v));
       if (!vs.length) return null;
       const b = placeBuilding(p, type, x, y, vs);
       if (typeof b === 'object') { for (const v of vs) v.prevAfterBuild = null; return b; }
@@ -339,7 +349,7 @@ class AIPlayer {
   reachable(x, y, s, near) { const map = W.map; const r0 = map.landReg[map.idx(Math.max(0, Math.min(W.n - 1, near.x | 0)), Math.max(0, Math.min(W.n - 1, near.y | 0)))]; return map.landReg[map.idx(x, y)] === r0; }
   pickBuilders(x, y, n, reg) {
     if (!reg) reg = W.map.landReg[W.map.idx(x, y)];
-    const vills = this.mine(e => e.kind === 'unit' && e.type === 'villager' && !e.inside && !e.dying && W.map.landReg[W.map.idx(e.x | 0, e.y | 0)] === reg);
+    const vills = this.mine(e => e.kind === 'unit' && e.type === 'villager' && !e.inside && !e.dying && this.canControl(e) && W.map.landReg[W.map.idx(e.x | 0, e.y | 0)] === reg);
     vills.sort((a, b) => (this.vTask(a) === 'build') - (this.vTask(b) === 'build') || (this.vTask(a) === 'wood' ? -1 : 0) || Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
     return vills.slice(0, n);
   }

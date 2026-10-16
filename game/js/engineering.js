@@ -37,7 +37,7 @@ function aiTunnelPlan(map, start, target) {
 AIPlayer.prototype.engineer = function () {
   if (!TERRA.enabled || this.p.age < 1 || this.p.bell || W.t < (this.nextEngineering || 90)) return;
   this.nextEngineering = W.t + 30;
-  const own = this.mine(e => e.kind === 'unit' && !e.inside && !e.dying);
+  const own = this.mine(e => e.kind === 'unit' && !e.inside && !e.dying && this.canControl(e));
   if (own.some(e => e.order && e.order.t === 'terra')) return;
   const home = this.home(), map = W.map, p = this.p;
   const targets = W.list.filter(e => e.kind === 'bld' && e.owner && isEnemy(this.id, e.owner) && !BUILDINGS[e.type].water && !BUILDINGS[e.type].wall);

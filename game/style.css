@@ -148,6 +148,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   #topbar .res { min-width: 48px; }
   #topbar .res .gc { margin-left: 0; font-size: 10px; }
 }
+/* Keep the shared-control toggle and game menu reachable alongside the resource counters. */
+@media (min-width: 1251px) and (max-width: 1700px) {
+  #topbar { gap: 5px; font-size: 13px; }
+  #topbar .res { min-width: 48px; }
+  #clock { min-width: 55px; }
+  #topbar .tb-btns .btn { font-size: 12px; padding: 4px 6px; }
+  #topbar .res .gc { margin-left: 0; font-size: 10px; }
+}
+@media (max-width: 1250px) {
+  #topbar .tb-btns { position: absolute; top: 36px; right: 8px; }
+  #msgs { max-width: 40vw; top: 74px; }
+  #tipbox { top: 74px; }
+}
+#b-assist[aria-pressed="true"] { border-color: #9fd; color: #cfe; }
+#assist-control { margin-top: 4px; }
+#assist-control .btn { padding: 2px 6px; font-size: 11px; }
 /* --- polish pass --- */
 #cmds { flex: none; grid-auto-rows: 47px; }
 .cmd { height: 47px; }
