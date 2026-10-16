@@ -78,8 +78,65 @@ function buildChunk(cx, cy) {
   const cv = document.createElement('canvas'); cv.width = Math.ceil((maxX - minX) * S); cv.height = Math.ceil((maxY - minY) * S);
   const g = cv.getContext('2d');
   g.setTransform(S, 0, 0, S, -minX * S, -minY * S);
-  for (let y = y0; y < Math.min(n, y0 + CH); y++) for (let x = x0; x < Math.min(n, x0 + CH); x++) { drawTile(g, map, x, y); if (typeof GameHooks === 'object') GameHooks.emit('tileDrawn', g, map, x, y); }
+  for (let y = y0; y < Math.min(n, y0 + CH); y++) for (let x = x0; x < Math.min(n, x0 + CH); x++) { drawTile(g, map, x, y); drawMountainCrag(g, map, x, y); if (typeof GameHooks === 'object') GameHooks.emit('tileDrawn', g, map, x, y); }
   return { cv, minX, minY, S };
+}
+function drawMountainCrag(g, map, x, y) {
+  const n = map.n, i = y * n + x, el = map.elev[i];
+  if (map.ter[i] !== T.ROCK || el < 3 || map.blk[i] || (map.tun && map.tun[i])) return;
+  const rng = mulberry32((i * 1103515245 + 12345) >>> 0);
+  if (el === 3 && rng() > 0.68) return;
+  const hc = map.h(x + 0.5, y + 0.5);
+  const ox = (rng() - 0.5) * 0.22, oy = (rng() - 0.5) * 0.22;
+  const base = iso(x + 0.5 + ox, y + 0.5 + oy, hc);
+  const bx = base.x, by = base.y;
+  const w = (el >= 4 ? 14 : 10) + rng() * 6;
+  const h = (el >= 4 ? 16 : 9) + rng() * (el >= 4 ? 11 : 6);
+  const peakX = bx + (rng() - 0.5) * 5, peakY = by - h;
+  // Ground shadow
+  g.fillStyle = 'rgba(20,18,15,0.26)';
+  g.beginPath(); g.ellipse(bx + 3, by + 2, w * 0.95, w * 0.42, 0, 0, 6.28); g.fill();
+  // Sunlit left/NW rock facet
+  g.fillStyle = el >= 4 ? '#9e968b' : '#8f877c';
+  g.beginPath();
+  g.moveTo(peakX, peakY);
+  g.lineTo(bx - w, by + 1);
+  g.lineTo(bx - w * 0.15, by + w * 0.38);
+  g.closePath(); g.fill();
+  // Mid SW/SE rock facet
+  g.fillStyle = el >= 4 ? '#7c756c' : '#706960';
+  g.beginPath();
+  g.moveTo(peakX, peakY);
+  g.lineTo(bx - w * 0.15, by + w * 0.38);
+  g.lineTo(bx + w * 0.45, by + w * 0.28);
+  g.closePath(); g.fill();
+  // Shadowed right/NE rock facet
+  g.fillStyle = '#575149';
+  g.beginPath();
+  g.moveTo(peakX, peakY);
+  g.lineTo(bx + w * 0.45, by + w * 0.28);
+  g.lineTo(bx + w, by);
+  g.closePath(); g.fill();
+  // Snow / frost cap on high summits
+  if (el >= 4 || (el === 3 && h > 13.5)) {
+    const sf = el >= 4 ? 0.46 : 0.32;
+    const lX = peakX + (bx - w - peakX) * sf, lY = peakY + (by + 1 - peakY) * sf;
+    const mX = peakX + (bx - w * 0.15 - peakX) * (sf + 0.08), mY = peakY + (by + w * 0.38 - peakY) * (sf + 0.08);
+    const r2X = peakX + (bx + w * 0.45 - peakX) * sf, r2Y = peakY + (by + w * 0.28 - peakY) * sf;
+    const rX = peakX + (bx + w - peakX) * (sf - 0.04), rY = peakY + (by - peakY) * (sf - 0.04);
+    g.fillStyle = '#edf3f8';
+    g.beginPath(); g.moveTo(peakX, peakY); g.lineTo(lX, lY); g.lineTo(mX, mY); g.closePath(); g.fill();
+    g.fillStyle = '#d4e0ea';
+    g.beginPath(); g.moveTo(peakX, peakY); g.lineTo(mX, mY); g.lineTo(r2X, r2Y); g.closePath(); g.fill();
+    g.fillStyle = '#b4c4d4';
+    g.beginPath(); g.moveTo(peakX, peakY); g.lineTo(r2X, r2Y); g.lineTo(rX, rY); g.closePath(); g.fill();
+  }
+  // Ridge line highlight & crevice
+  g.strokeStyle = 'rgba(35,30,25,0.45)'; g.lineWidth = 0.9;
+  g.beginPath();
+  g.moveTo(peakX, peakY); g.lineTo(bx - w * 0.15, by + w * 0.38);
+  g.moveTo(peakX, peakY); g.lineTo(bx + w * 0.45, by + w * 0.28);
+  g.stroke();
 }
 function drawTile(g, map, x, y) {
   if (R.hd && R.hd(g, map, x, y)) return; // HD terrain hook (terrain.js)
@@ -167,7 +224,7 @@ function drawTerrain(ctx) {
     if (!c) { if (built > 60) continue; c = buildChunk(cx, cy); R.chunks.set(key, c); built++; }
     ctx.drawImage(c.cv, c.minX, c.minY, c.cv.width / c.S, c.cv.height / c.S);
   }
-  if (R.chunks.size > 260) { let k = 0; for (const key of R.chunks.keys()) { if (k++ > 60) break; R.chunks.delete(key); } }
+  if (R.chunks.size > 680) { let k = 0; for (const key of R.chunks.keys()) { if (k++ > 120) break; R.chunks.delete(key); } }
 }
 
 // ---------- drawing helpers ----------
@@ -266,32 +323,32 @@ function drawBuildingArt(g, type, st, pc, t) {
   const bricks = stoneAge;
   switch (type) {
     case 'house': {
-      box(g, 0, 0, 0.72, 0.62, 0, 8, S.base, { bricks: true });
-      box(g, 0, 0, 0.68, 0.58, 8, st ? 12 : 10, walls, { beams: S.beams });
-      doorAt(g, -0.1, 0.58, 8, 'l'); windowAt(g, 0.68, 0.1, 13, 'r');
-      if (st) windowAt(g, 0.35, 0.58, 13, 'l');
-      gableX(g, 0, 0, 0.68, 0.58, st ? 20 : 18, st ? 16 : 14, roof);
-      if (st >= 2) box(g, 0.35, -0.2, 0.08, 0.08, 26, 12, '#8a7a6a');
-      flag(g, -0.55, 0.45, 24, pc.c, t, 0.6);
+      box(g, 0, 0, 0.58, 0.50, 0, 6, S.base, { bricks: true });
+      box(g, 0, 0, 0.54, 0.46, 6, st ? 10 : 8, walls, { beams: S.beams });
+      doorAt(g, -0.08, 0.46, 6, 'l', 0.12, 8); windowAt(g, 0.54, 0.08, 10, 'r');
+      if (st) windowAt(g, 0.28, 0.46, 10, 'l');
+      gableX(g, 0, 0, 0.54, 0.46, st ? 16 : 14, st ? 12 : 10, roof);
+      if (st >= 2) box(g, 0.28, -0.16, 0.07, 0.07, 20, 9, '#8a7a6a');
+      flag(g, -0.45, 0.36, 19, pc.c, t, 0.5);
       break;
     }
     case 'tc': {
-      box(g, 0, 0, 1.85, 1.85, 0, 5, st >= 5 ? '#546878' : '#9a8c74', { bricks: true });
+      box(g, 0, 0, 1.9, 1.9, 0, 6, st >= 5 ? '#546878' : '#9a8c74', { bricks: true });
       // wings
-      box(g, 0.9, -0.6, 0.75, 0.9, 5, 18, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
-      gableY(g, 0.9, -0.6, 0.75, 0.9, 23, 14, st >= 5 ? '#35596b' : roof);
-      box(g, -0.6, 0.9, 0.9, 0.75, 5, 18, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
-      gableX(g, -0.6, 0.9, 0.9, 0.75, 23, 14, st >= 5 ? '#35596b' : roof);
+      box(g, 0.92, -0.62, 0.8, 0.95, 6, 22, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
+      gableY(g, 0.92, -0.62, 0.8, 0.95, 28, 16, st >= 5 ? '#35596b' : roof);
+      box(g, -0.62, 0.92, 0.95, 0.8, 6, 22, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
+      gableX(g, -0.62, 0.92, 0.95, 0.8, 28, 16, st >= 5 ? '#35596b' : roof);
       // central keep
-      box(g, -0.3, -0.3, 0.95, 0.95, 5, stoneAge ? 42 : 34, st >= 5 ? '#c4d6e0' : stoneAge ? S.stone : walls, { beams: S.beams, bricks });
-      doorAt(g, -0.3, 0.65, 5, 'l', 0.25, 14);
-      windowAt(g, -0.6, 0.65, 26, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.0, 0.65, 26, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.65, -0.3, 26, 'r', st >= 4 ? '#64d8f0' : '#2a1f18');
-      if (stoneAge) { crenel(g, -0.3, -0.3, 0.95, 0.95, 47, st >= 5 ? '#9ab4c4' : S.stone); pyramid(g, -0.3, -0.3, 0.7, 0.7, 47, 26, st >= 5 ? '#48b8d0' : roof); }
-      else pyramid(g, -0.3, -0.3, 1.05, 1.05, 39, 28, roof);
+      box(g, -0.3, -0.3, 1.0, 1.0, 6, stoneAge ? 48 : 38, st >= 5 ? '#c4d6e0' : stoneAge ? S.stone : walls, { beams: S.beams, bricks });
+      doorAt(g, -0.3, 0.7, 6, 'l', 0.25, 14);
+      windowAt(g, -0.6, 0.7, 30, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.0, 0.7, 30, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.7, -0.3, 30, 'r', st >= 4 ? '#64d8f0' : '#2a1f18');
+      if (stoneAge) { crenel(g, -0.3, -0.3, 1.0, 1.0, 54, st >= 5 ? '#9ab4c4' : S.stone); pyramid(g, -0.3, -0.3, 0.76, 0.76, 54, 28, st >= 5 ? '#48b8d0' : roof); }
+      else pyramid(g, -0.3, -0.3, 1.08, 1.08, 44, 30, roof);
       // bell / clock / sensor tower
-      if (st >= 1) { box(g, 1.2, 1.2, 0.3, 0.3, 5, 34, st >= 5 ? '#9ab4c4' : S.stone, { bricks: true }); cone(g, 1.2, 1.2, 0.34, 39, 20, st >= 5 ? '#64e9ff' : roof); }
-      flag(g, -0.3, -0.3, stoneAge ? 72 : 67, pc.c, t, 1.1);
-      flag(g, 1.5, -1.4, 5, pc.c, t, 0.8); flag(g, -1.4, 1.5, 5, pc.c, t, 0.8);
+      if (st >= 1) { box(g, 1.22, 1.22, 0.32, 0.32, 6, 40, st >= 5 ? '#9ab4c4' : S.stone, { bricks: true }); cone(g, 1.22, 1.22, 0.36, 46, 22, st >= 5 ? '#64e9ff' : roof); }
+      flag(g, -0.3, -0.3, stoneAge ? 80 : 72, pc.c, t, 1.15);
+      flag(g, 1.5, -1.4, 6, pc.c, t, 0.8); flag(g, -1.4, 1.5, 6, pc.c, t, 0.8);
       break;
     }
     case 'mill': {
@@ -304,8 +361,8 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'lumbercamp': {
-      box(g, -0.25, -0.25, 0.55, 0.55, 0, 14, walls, { beams: S.beams });
-      gableX(g, -0.25, -0.25, 0.55, 0.55, 14, 10, roof);
+      box(g, -0.22, -0.22, 0.46, 0.46, 0, 11, walls, { beams: S.beams });
+      gableX(g, -0.22, -0.22, 0.46, 0.46, 11, 8, roof);
       // log piles
       for (let k = 0; k < 3; k++) for (let j = 0; j < 3 - k; j++) {
         const p = P(0.35 + j * 0.22 + k * 0.11, 0.6, 3 + k * 4.5); g.fillStyle = '#7a4f28'; g.beginPath(); g.ellipse(p[0], p[1], 3.6, 3.6, 0, 0, 6.3); g.fill(); g.fillStyle = '#d9b27a'; g.beginPath(); g.ellipse(p[0] - 0.5, p[1], 2.3, 2.3, 0, 0, 6.3); g.fill();
@@ -315,22 +372,25 @@ function drawBuildingArt(g, type, st, pc, t) {
     }
     case 'miningcamp': {
       // open shed on posts
-      for (const [x, y] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) box(g, x, y, 0.06, 0.06, 0, 16, '#5e3f22');
-      gableY(g, 0, 0, 0.7, 0.7, 16, 10, roof);
+      for (const [x, y] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) box(g, x, y, 0.05, 0.05, 0, 12, '#5e3f22');
+      gableY(g, 0, 0, 0.58, 0.58, 12, 8, roof);
       box(g, -0.2, 0.2, 0.25, 0.2, 0, 5, '#6a4a2a'); // cart
       const w1 = P(-0.35, 0.42, 2); g.fillStyle = '#3a2a1a'; g.beginPath(); g.arc(w1[0], w1[1], 2.5, 0, 6.3); g.fill();
       for (let k = 0; k < 4; k++) { const p = P(0.3 + (k % 2) * 0.2, 0.2 + (k >> 1) * 0.25, 1.5); g.fillStyle = k % 2 ? '#e0c040' : '#9a948c'; g.beginPath(); g.ellipse(p[0], p[1], 3.5, 2.5, 0, 0, 6.3); g.fill(); }
       break;
     }
     case 'barracks': {
-      box(g, 0, 0, 1.3, 1.2, 0, 5, S.base, { bricks: true });
-      box(g, -0.2, 0, 1.0, 1.0, 5, 22, walls, { beams: S.beams, bricks });
-      gableX(g, -0.2, 0, 1.0, 1.0, 27, 16, roof);
-      doorAt(g, -0.2, 1.0, 5, 'l', 0.25, 13); windowAt(g, -0.8, 1.0, 16, 'l'); windowAt(g, 0.4, 1.0, 16, 'l');
+      box(g, 0, 0, 1.35, 1.25, 0, 6, S.base, { bricks: true });
+      box(g, -0.18, 0, 1.05, 1.05, 6, 26, walls, { beams: S.beams, bricks });
+      // 2nd-storey command loft & corner watch turret
+      box(g, -0.35, -0.25, 0.72, 0.72, 32, 12, stoneAge ? S.stone : walls, { beams: S.beams, bricks });
+      gableX(g, -0.18, 0, 1.05, 1.05, 32, 16, roof);
+      gableY(g, -0.35, -0.25, 0.72, 0.72, 44, 13, roof);
+      doorAt(g, -0.18, 1.05, 6, 'l', 0.25, 13); windowAt(g, -0.8, 1.05, 18, 'l'); windowAt(g, 0.4, 1.05, 18, 'l');
       // weapon rack
       for (let k = 0; k < 4; k++) { const a = P(1.1, -0.6 + k * 0.3, 0), b = P(1.1, -0.6 + k * 0.3, 18); g.strokeStyle = '#6a5040'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.fillStyle = '#c8c8d0'; g.beginPath(); g.moveTo(b[0] - 1.5, b[1] + 1); g.lineTo(b[0], b[1] - 4); g.lineTo(b[0] + 1.5, b[1] + 1); g.fill(); }
       const s = P(1.15, 0.8, 7); g.fillStyle = pc.c; g.beginPath(); g.arc(s[0], s[1], 4.5, 0, 6.3); g.fill(); g.strokeStyle = '#ddd'; g.lineWidth = 1; g.stroke();
-      flag(g, -1.1, -0.9, 38, pc.c, t);
+      flag(g, -1.1, -0.9, 52, pc.c, t);
       break;
     }
     case 'range': {
@@ -376,42 +436,42 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'university': {
-      box(g, 0, 0, 1.25, 1.25, 0, 5, S.base, { bricks: true });
-      box(g, 0, 0, 1.05, 1.05, 5, 24, S.stone, { bricks: true });
-      for (let k = 0; k < 4; k++) { const a = P(-0.8 + k * 0.5, 1.12, 5), b = P(-0.8 + k * 0.5, 1.12, 29); g.strokeStyle = '#f0ece0'; g.lineWidth = 3; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
-      const c = P(0, 0, 29); g.fillStyle = shade(roof, 1.1); g.beginPath(); g.ellipse(c[0], c[1], 34, 17, 0, Math.PI, 0); g.ellipse(c[0], c[1] - 2, 28, 26, 0, 0, Math.PI, true); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.stroke();
-      const top = P(0, 0, 54); g.fillStyle = '#e8c860'; g.beginPath(); g.arc(top[0], top[1], 3, 0, 6.3); g.fill();
-      flag(g, 1.0, -1.0, 29, pc.c, t);
+      box(g, 0, 0, 1.32, 1.32, 0, 6, S.base, { bricks: true });
+      box(g, 0, 0, 1.12, 1.12, 6, 30, S.stone, { bricks: true });
+      for (let k = 0; k < 4; k++) { const a = P(-0.85 + k * 0.55, 1.18, 6), b = P(-0.85 + k * 0.55, 1.18, 36); g.strokeStyle = '#f0ece0'; g.lineWidth = 3; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+      const c = P(0, 0, 36); g.fillStyle = shade(roof, 1.1); g.beginPath(); g.ellipse(c[0], c[1], 36, 18, 0, Math.PI, 0); g.ellipse(c[0], c[1] - 2, 30, 30, 0, 0, Math.PI, true); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.stroke();
+      const top = P(0, 0, 64); g.fillStyle = '#e8c860'; g.beginPath(); g.arc(top[0], top[1], 3.5, 0, 6.3); g.fill();
+      flag(g, 1.05, -1.05, 36, pc.c, t);
       break;
     }
     case 'monastery': {
-      box(g, 0, 0, 1.3, 1.3, 0, 3, '#9a8f7c', { bricks: true });
+      box(g, 0, 0, 1.34, 1.34, 0, 4, '#9a8f7c', { bricks: true });
       // nave
-      box(g, -0.3, 0.1, 0.55, 1.1, 3, 26, S.stone, { bricks: true });
-      gableY(g, -0.3, 0.1, 0.55, 1.1, 29, 16, '#7a3a2a');
+      box(g, -0.3, 0.1, 0.62, 1.15, 4, 30, S.stone, { bricks: true });
+      gableY(g, -0.3, 0.1, 0.62, 1.15, 34, 18, '#7a3a2a');
       // rose window & door on front gable
-      const rw = P(-0.3, 1.2, 20); g.fillStyle = '#6aa0d8'; g.beginPath(); g.arc(rw[0], rw[1], 4, 0, 6.3); g.fill(); g.strokeStyle = '#e8c860'; g.lineWidth = 1; g.stroke();
-      doorAt(g, -0.3, 1.2, 3, 'l', 0.18, 12);
+      const rw = P(-0.3, 1.25, 24); g.fillStyle = '#6aa0d8'; g.beginPath(); g.arc(rw[0], rw[1], 4.5, 0, 6.3); g.fill(); g.strokeStyle = '#e8c860'; g.lineWidth = 1; g.stroke();
+      doorAt(g, -0.3, 1.25, 4, 'l', 0.18, 12);
       // bell tower
-      box(g, 0.75, -0.75, 0.3, 0.3, 3, 46, S.stone, { bricks: true });
-      const bw = P(0.75, -0.45, 38); g.fillStyle = '#2a1f18'; g.fillRect(bw[0] - 3, bw[1] - 6, 5, 7);
-      cone(g, 0.75, -0.75, 0.36, 49, 22, '#4a5a6a');
+      box(g, 0.78, -0.78, 0.34, 0.34, 4, 52, S.stone, { bricks: true });
+      const bw = P(0.78, -0.44, 44); g.fillStyle = '#2a1f18'; g.fillRect(bw[0] - 3, bw[1] - 6, 5, 7);
+      cone(g, 0.78, -0.78, 0.4, 56, 24, '#4a5a6a');
       // cross
-      const cr = P(0.75, -0.75, 72); g.strokeStyle = '#e8c860'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(cr[0], cr[1]); g.lineTo(cr[0], cr[1] - 10); g.moveTo(cr[0] - 3.5, cr[1] - 7); g.lineTo(cr[0] + 3.5, cr[1] - 7); g.stroke();
-      const cr2 = P(-0.3, 1.2, 45); g.beginPath(); g.moveTo(cr2[0], cr2[1]); g.lineTo(cr2[0], cr2[1] - 8); g.moveTo(cr2[0] - 3, cr2[1] - 5.5); g.lineTo(cr2[0] + 3, cr2[1] - 5.5); g.stroke();
+      const cr = P(0.78, -0.78, 82); g.strokeStyle = '#e8c860'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(cr[0], cr[1]); g.lineTo(cr[0], cr[1] - 10); g.moveTo(cr[0] - 3.5, cr[1] - 7); g.lineTo(cr[0] + 3.5, cr[1] - 7); g.stroke();
+      const cr2 = P(-0.3, 1.25, 52); g.beginPath(); g.moveTo(cr2[0], cr2[1]); g.lineTo(cr2[0], cr2[1] - 8); g.moveTo(cr2[0] - 3, cr2[1] - 5.5); g.lineTo(cr2[0] + 3, cr2[1] - 5.5); g.stroke();
       // cloister garden
-      const gp = P(0.8, 0.7, 3.2); g.fillStyle = '#5a8a3a'; g.beginPath(); g.ellipse(gp[0], gp[1], 12, 6, 0, 0, 6.3); g.fill();
-      flag(g, 1.1, 1.1, 3, pc.c, t, 0.7);
+      const gp = P(0.8, 0.7, 4.2); g.fillStyle = '#5a8a3a'; g.beginPath(); g.ellipse(gp[0], gp[1], 12, 6, 0, 0, 6.3); g.fill();
+      flag(g, 1.1, 1.1, 4, pc.c, t, 0.7);
       break;
     }
     case 'siege': {
-      for (const [x, y] of [[-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]]) box(g, x, y, 0.08, 0.08, 0, 24, '#5e3f22');
-      gableX(g, 0, 0, 1.2, 1.2, 24, 16, roof);
-      box(g, -0.5, -0.5, 0.7, 0.5, 0, 18, walls, { beams: S.beams });
+      for (const [x, y] of [[-1.15, -1.15], [1.15, -1.15], [-1.15, 1.15], [1.15, 1.15]]) box(g, x, y, 0.09, 0.09, 0, 30, '#5e3f22');
+      gableX(g, 0, 0, 1.25, 1.25, 30, 18, roof);
+      box(g, -0.5, -0.5, 0.75, 0.55, 0, 22, walls, { beams: S.beams });
       // half built catapult
       const b = P(0.4, 0.5, 4); g.strokeStyle = '#6a4424'; g.lineWidth = 3; g.beginPath(); g.moveTo(b[0] - 14, b[1]); g.lineTo(b[0] + 12, b[1] - 3); g.moveTo(b[0], b[1]); g.lineTo(b[0] + 8, b[1] - 18); g.stroke();
       g.fillStyle = '#3a2a1a'; g.beginPath(); g.arc(b[0] - 10, b[1] + 3, 4, 0, 6.3); g.arc(b[0] + 9, b[1] + 1, 4, 0, 6.3); g.fill();
-      flag(g, -1.1, -1.1, 30, pc.c, t);
+      flag(g, -1.15, -1.15, 38, pc.c, t);
       break;
     }
     case 'tower': {
@@ -426,21 +486,20 @@ function drawBuildingArt(g, type, st, pc, t) {
     }
     case 'castle': {
       const c = '#b0a894';
-      box(g, 0, 0, 1.9, 1.9, 0, 4, '#8a8272', { bricks: true });
+      box(g, 0, 0, 1.94, 1.94, 0, 5, '#8a8272', { bricks: true });
       // curtain walls
-      box(g, 0, 0, 1.55, 1.55, 4, 30, c, { bricks: true });
-      crenel(g, 0, 0, 1.55, 1.55, 34, c);
+      box(g, 0, 0, 1.6, 1.6, 5, 34, c, { bricks: true });
+      crenel(g, 0, 0, 1.6, 1.6, 39, c);
       // keep
-      box(g, -0.3, -0.3, 0.8, 0.8, 34, 30, shade(c, 1.05).replace('rgb', 'rgb'), { bricks: true });
-      box(g, -0.3, -0.3, 0.8, 0.8, 34, 30, '#bdb5a2', { bricks: true });
-      crenel(g, -0.3, -0.3, 0.8, 0.8, 64, '#bdb5a2');
+      box(g, -0.3, -0.3, 0.85, 0.85, 39, 36, '#bdb5a2', { bricks: true });
+      crenel(g, -0.3, -0.3, 0.85, 0.85, 75, '#bdb5a2');
       // corner towers
-      for (const [x, y] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) { cyl(g, x, y, 0.42, 4, 42, '#a8a08c'); cone(g, x, y, 0.48, 46, 20, '#3f5670'); }
+      for (const [x, y] of [[-1.54, -1.54], [1.54, -1.54], [-1.54, 1.54], [1.54, 1.54]]) { cyl(g, x, y, 0.44, 5, 48, '#a8a08c'); cone(g, x, y, 0.5, 53, 22, '#3f5670'); }
       // gate
-      const gp = [P(-0.3, 1.55, 4), P(0.3, 1.55, 4), P(0.3, 1.55, 22), P(-0.3, 1.55, 22)]; poly(g, gp, '#3a2616', 'rgba(0,0,0,0.5)');
+      const gp = [P(-0.3, 1.6, 5), P(0.3, 1.6, 5), P(0.3, 1.6, 24), P(-0.3, 1.6, 24)]; poly(g, gp, '#3a2616', 'rgba(0,0,0,0.5)');
       // banners hanging
-      for (const x of [-0.9, 0.9]) { const a = P(x, 1.56, 30); g.fillStyle = pc.c; g.beginPath(); g.moveTo(a[0] - 4, a[1]); g.lineTo(a[0] + 4, a[1] - 4); g.lineTo(a[0] + 4, a[1] + 14); g.lineTo(a[0], a[1] + 20); g.lineTo(a[0] - 4, a[1] + 18); g.fill(); }
-      flag(g, -0.3, -0.3, 68, pc.c, t, 1.3);
+      for (const x of [-0.9, 0.9]) { const a = P(x, 1.61, 34); g.fillStyle = pc.c; g.beginPath(); g.moveTo(a[0] - 4, a[1]); g.lineTo(a[0] + 4, a[1] - 4); g.lineTo(a[0] + 4, a[1] + 14); g.lineTo(a[0], a[1] + 20); g.lineTo(a[0] - 4, a[1] + 18); g.fill(); }
+      flag(g, -0.3, -0.3, 79, pc.c, t, 1.35);
       break;
     }
     case 'palisade': {
@@ -483,14 +542,14 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'outpost': {
-      for (const [x, y] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) { const a = P(x, y, 0), b = P(x * 0.6, y * 0.6, 34); g.strokeStyle = '#6a4424'; g.lineWidth = 2; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
-      box(g, 0, 0, 0.3, 0.3, 34, 3, '#8a6038');
-      const f = P(0, 0, 40); g.fillStyle = '#ffb030'; g.beginPath(); g.ellipse(f[0], f[1], 2.5, 4, 0, 0, 6.3); g.fill();
+      for (const [x, y] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) { const a = P(x, y, 0), b = P(x * 0.6, y * 0.6, 28); g.strokeStyle = '#6a4424'; g.lineWidth = 2; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+      box(g, 0, 0, 0.26, 0.26, 28, 3, '#8a6038');
+      const f = P(0, 0, 34); g.fillStyle = '#ffb030'; g.beginPath(); g.ellipse(f[0], f[1], 2.5, 4, 0, 0, 6.3); g.fill();
       break;
     }
   }
 }
-const BLD_H = { house: 50, tc: 110, mill: 60, lumbercamp: 40, miningcamp: 36, barracks: 70, range: 60, stable: 50, blacksmith: 60, market: 50, university: 80, monastery: 110, siege: 55, tower: 90, castle: 120, palisade: 30, wall: 34, gate: 44, dock: 40, outpost: 48, farm: 10 };
+const BLD_H = { house: 38, tc: 126, mill: 58, lumbercamp: 32, miningcamp: 30, barracks: 84, range: 60, stable: 54, blacksmith: 60, market: 56, university: 98, monastery: 120, siege: 70, tower: 92, castle: 138, palisade: 28, wall: 34, gate: 46, dock: 44, outpost: 40, farm: 10 };
 function bldSprite(type, st, pc) {
   const key = type + '|' + st + '|' + pc.c;
   let s = R.spriteCache.get(key); if (s) return s;
@@ -1118,7 +1177,7 @@ function drawUnit(ctx, u, sel) {
   drawUnitFigure(ctx, u, t);
   ctx.restore();
 }
-const US = 1.3;
+const US = 0.95;
 function unitHeight(u) { const d = UNITS[u.type]; if (d.naval) return 40 * US; if (d.tags.includes('mounted')) return 36 * US; if (d.animal) return 16 * US; if (d.tags.includes('siege')) return 34 * US; return 28 * US; }
 
 // ---------- fx & projectiles ----------
@@ -1291,7 +1350,12 @@ function renderMinimap(cv, editor) {
     MM.base = document.createElement('canvas'); MM.base.width = n; MM.base.height = n; MM.baseVer = W.map.version;
     const bg = MM.base.getContext('2d'), img = bg.createImageData(n, n);
     for (let i = 0; i < n * n; i++) {
-      const c = TER_COL[W.map.ter[i]]; const v = parseInt(c.slice(1), 16); const e = 1 + W.map.elev[i] * 0.06;
+      const t = W.map.ter[i], el = W.map.elev[i];
+      const c = (t === T.ROCK && el >= 4) ? '#dce4ec' : (t === T.ROCK && el === 3) ? '#9a9288' : TER_COL[t];
+      const v = parseInt(c.slice(1), 16);
+      const x = i % n, y = (i / n) | 0;
+      const cliff = (x + 1 < n && Math.abs(el - W.map.elev[i + 1]) >= 2) || (y + 1 < n && Math.abs(el - W.map.elev[i + n]) >= 2);
+      const e = (1 + el * 0.07) * (cliff ? 0.68 : 1);
       img.data[i * 4] = Math.min(255, ((v >> 16) & 255) * e); img.data[i * 4 + 1] = Math.min(255, ((v >> 8) & 255) * e); img.data[i * 4 + 2] = Math.min(255, (v & 255) * e); img.data[i * 4 + 3] = 255;
     }
     bg.putImageData(img, 0, 0);

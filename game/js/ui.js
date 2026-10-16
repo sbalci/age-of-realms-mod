@@ -129,6 +129,8 @@ function buildSetup() {
         <h3>Map</h3>
         <label>Map type <select id="s-map">
           <option value="land" ${s.mapType === 'land' ? 'selected' : ''}>Highlands (land, hills & cliffs)</option>
+          <option value="alpine" ${s.mapType === 'alpine' ? 'selected' : ''}>Alpine Mountains (massive peaks, passes & gorges)</option>
+          <option value="rivers" ${s.mapType === 'rivers' ? 'selected' : ''}>Great Rivers (wide rivers, tributaries & fords)</option>
           <option value="coastal" ${s.mapType === 'coastal' ? 'selected' : ''}>Coastal (mixed land & inland sea)</option>
           <option value="islands" ${s.mapType === 'islands' ? 'selected' : ''}>Islands (naval, transports needed)</option>
           <option value="anatolia" ${s.mapType === 'anatolia' ? 'selected' : ''}>Anatolia (real coastline)</option>
@@ -188,16 +190,21 @@ function buildSetup() {
   };
   const preview = () => {
     const cv = $('#s-preview'), g = cv.getContext('2d'); g.fillStyle = '#111'; g.fillRect(0, 0, cv.width, cv.height);
-    const mt = $('#s-map').value;
+    const mt = $('#s-map').value, sz = $('#s-size').value;
+    const prevSize = (sz === 'huge' || sz === 'gigantic' || sz === 'large') ? 'medium' : 'small';
     let spec;
     try {
       if (mt === 'custom') spec = Editor.load($('#s-custom').value);
-      else spec = generateMapSpec({ size: 'tiny', seed: +$('#s-seed').value, mapType: mt, numPlayers: +$('#s-opp').value + 1 });
+      else spec = generateMapSpec({ size: prevSize, seed: +$('#s-seed').value, mapType: mt, numPlayers: +$('#s-opp').value + 1 });
     } catch (e) { return; }
     if (!spec) return;
     const n = spec.n, k = cv.width / (n * 2);
     g.save(); g.setTransform(k, k / 2, -k, k / 2, cv.width / 2, 0);
-    for (let i = 0; i < n * n; i++) { g.fillStyle = TER_COL[spec.ter[i]]; g.fillRect(i % n, (i / n) | 0, 1.05, 1.05); }
+    for (let i = 0; i < n * n; i++) {
+      const t = spec.ter[i], el = spec.elev ? spec.elev[i] : 0;
+      g.fillStyle = (t === T.ROCK && el >= 4) ? '#dce4ec' : (t === T.ROCK && el === 3) ? '#9a9288' : TER_COL[t];
+      g.fillRect(i % n, (i / n) | 0, 1.05, 1.05);
+    }
     for (const o of spec.objects) if (o.k === 'tree') { g.fillStyle = '#244a1c'; g.fillRect(o.x, o.y, 1, 1); } else if (o.k === 'bld') { g.fillStyle = '#fff'; g.fillRect(o.x, o.y, 4, 4); }
     g.restore();
   };
@@ -218,6 +225,7 @@ function buildSetup() {
   $('#s-opp').onchange = () => { oppList(); preview(); };
   $('#s-teams').onchange = oppList;
   $('#s-map').onchange = () => { $('#lab-custom').classList.toggle('hidden', $('#s-map').value !== 'custom'); preview(); };
+  $('#s-size').onchange = preview;
   $('#s-custom').onchange = preview; $('#s-seed').onchange = preview;
   $('#s-reseed').onclick = () => { $('#s-seed').value = (Math.random() * 1e6) | 0; preview(); };
   $('#s-back').onclick = () => showScreen('menu');
@@ -322,7 +330,7 @@ function launchFromSetup(cfg) {
   }
   // unique names
   const seen = new Set(); for (const p of players) { while (seen.has(p.name)) p.name += '+'; seen.add(p.name); }
-  const settings = Object.assign({}, cfg, { players, seed: cfg.seed, mapLabel: { anatolia: 'Anatolia', mediterranean: 'Mediterranean', world: 'World', land: 'Highlands', coastal: 'Coastal', islands: 'Islands', custom: 'Custom: ' + cfg.customMap }[cfg.mapType] });
+  const settings = Object.assign({}, cfg, { players, seed: cfg.seed, mapLabel: { anatolia: 'Anatolia', mediterranean: 'Mediterranean', world: 'World', land: 'Highlands', alpine: 'Alpine Mountains', rivers: 'Great Rivers', coastal: 'Coastal', islands: 'Islands', custom: 'Custom: ' + cfg.customMap }[cfg.mapType] });
   startGame(spec, settings, cfg.mapType === 'custom' && UI.fromEditorName === cfg.customMap);
 }
 function startGame(spec, settings, fromEditor) {

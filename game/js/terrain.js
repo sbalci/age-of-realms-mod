@@ -53,7 +53,7 @@ const HDT_BASE = [
   [134, 126, 112, 1],  // ROCK
   [116, 102, 84, 1],   // 8: cliff face rock
 ];
-function hdtPerTile(n) { return n >= 110 ? 16 : n >= 90 ? 18 : n >= 72 ? 20 : 24; }
+function hdtPerTile(n) { return n >= 180 ? 10 : n >= 140 ? 12 : n >= 110 ? 16 : n >= 90 ? 18 : n >= 72 ? 20 : 24; }
 function hdtBuildPatches() {
   const PS = HDT.PS, out = [];
   for (let t = 0; t < HDT_BASE.length; t++) {

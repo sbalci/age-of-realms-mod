@@ -63,4 +63,79 @@ test('one in ten villagers rolls vows and converts only on becoming elderly, inc
 test('Wonders have six age forms and advance without resetting construction, health or victory time',()=>{
   assert.equal(run(`(()=>{make();const p=W.players[1],w=spawnBuilding('wonder',1,14,14,true);w.hp=1500;w.wonderT=123;const names=new Set(),styles=new Set();for(let age=0;age<6;age++){p.age=age;names.add(wonderName(p));styles.add(bldStyle(w));}const before=w.wonderT;p.age=3;completeTech(p,'modernage');return names.size===6&&styles.size===6&&bldStyle(w)===4&&w.wonderT===before&&w.hp===1500&&BUILDINGS.wonder.age===0;})()`),true);
 });
+test('huge (160x160) and gigantic (200x200) maps, Alpine Mountains and Great Rivers generate mountain peaks, cliffs, rivers with fords and connected starts',()=>{
+  assert.equal(run(`(()=>{
+    if(MAP_SIZES.huge!==160||MAP_SIZES.gigantic!==200)return false;
+    for(const [mapType,size,np] of [['alpine','huge',4],['rivers','huge',4],['land','gigantic',6]]){
+      const spec=generateMapSpec({mapType,size,numPlayers:np,seed:17});
+      if(validateMapSpec(spec).length||spec.n!==MAP_SIZES[size]||spec.players.length!==np)return false;
+      const m=new GameMap(spec.n);m.ter.set(spec.ter);m.elev.set(spec.elev);m.computeVH();m.computeRegions();
+      let peaks=0,summits=0,cliffs=0,shallows=0,water=0;
+      for(let y=0;y<m.n;y++)for(let x=0;x<m.n;x++){
+        const i=y*m.n+x,t=m.ter[i],e=m.elev[i];
+        if(t===T.ROCK&&e>=3)peaks++;
+        if(t===T.ROCK&&e>=4)summits++;
+        if(t===T.SHALLOW)shallows++;
+        if(isWaterT(t))water++;
+        if((x+1<m.n&&Math.abs(e-m.elev[i+1])>=2)||(y+1<m.n&&Math.abs(e-m.elev[i+m.n])>=2))cliffs++;
+      }
+      if(peaks<80||summits<15||cliffs<100||shallows<12||water<40)return false;
+      const r0=m.landReg[spec.players[0].start.y*m.n+spec.players[0].start.x];
+      if(!spec.players.every(p=>m.landReg[p.start.y*m.n+p.start.x]===r0))return false;
+      const s0=spec.players[0].start,s1=spec.players[Math.floor(np/2)].start;
+      const path=findPath(m,s0.x+3,s0.y+1,s1.x+3,s1.y+1,false);
+      if(!path||path.length<10)return false;
+    }
+    return true;
+  })()`),true);
+});
+test('all 10 civilizations and 6 ages have unique architecture, 60 Wonder names, cultural Kenney landmarks/ships, and distinct unit keys',()=>{
+  const fs=require('fs'),path=require('path');
+  const manifestSrc=fs.readFileSync(path.join(__dirname,'../game/art/kenney/manifest.js'),'utf8');
+  for(const k of ['castle_east','castle_med','castle_nordic','ship_longship','ship_junk','ship_dromon']){
+    assert.equal(manifestSrc.includes(`"${k}"`),true);
+    assert.equal(fs.existsSync(path.join(__dirname,'../game/art/kenney',k+'.png')),true);
+  }
+  assert.equal(run(`(()=>{
+    make();
+    const civs=Object.keys(CIVS),blds=Object.keys(BUILDINGS),units=Object.keys(UNITS).filter(k=>!UNITS[k].animal);
+    if(civs.length!==10||blds.length!==23||units.length<40)return false;
+    const noop=()=>{},grad={addColorStop:noop};
+    const g=new Proxy({fillStyle:'#000',strokeStyle:'#000',lineWidth:1,font:'',textAlign:'center',globalAlpha:1,globalCompositeOperation:'source-over',createLinearGradient:()=>grad,createRadialGradient:()=>grad,createPattern:()=>({})},{get:(t,k)=>k in t?t[k]:noop});
+    // 1. 60 unique Wonder names across 10 civs x 6 ages, and all 23 buildings advance bldStyle 0..5 & render cleanly
+    const wonderNames=new Set();
+    for(const civ of civs){
+      if(!CIV_ARCH[civ]||CIV_ARCH[civ].ages.length!==6)return false;
+      for(let age=0;age<6;age++)wonderNames.add(wonderName({civ,age}));
+    }
+    if(wonderNames.size!==60)return false;
+    const p=W.players[1];
+    const savedHDBld=HD.buildings;HD.buildings=false;
+    try{
+      for(const bt of blds){
+        const styles=new Set();
+        for(let age=0;age<6;age++){
+          p.age=age;
+          styles.add(bldStyle({type:bt,owner:1}));
+          if(bt!=='farm'){HDB.civ=civs[age%civs.length];drawBuildingArt(g,bt,age,p.color,0.3);HDB.civ=null;}
+        }
+        if(styles.size!==6)return false;
+      }
+    }finally{HD.buildings=savedHDBld;}
+    // 2. All 43 player units produce distinct uhdKey per (civ, age, unit) across all 10 civs x 6 ages & render cleanly
+    const uKeys=new Set();
+    for(const civ of civs){
+      p.civ=civ;
+      for(let age=0;age<6;age++){
+        p.age=age;
+        for(const ut of units){
+          const d=UNITS[ut],u={id:7,type:ut,owner:1,civ,age,anim:'idle',animT:0.2,face:1,cargo:[],carry:null,work:null};
+          uKeys.add(uhdKey(u,d,0.2,0.2,2,p.color.c).key);
+          drawUnitFigure(g,u,0.2);
+        }
+      }
+    }
+    return uKeys.size===civs.length*6*units.length;
+  })()`),true);
+});
 console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;

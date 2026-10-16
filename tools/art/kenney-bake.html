@@ -125,8 +125,8 @@ async function assemble(recipe, styleIdx) {
   // Explicit mesh order resolves coplanar kit panels consistently in both the color and depth passes.
   let order = 1;
   root.traverse(o => { if (o.isMesh) o.renderOrder = order++; });
-  // buildings are squashed vertically so a Kenney storey matches the game's unit scale (resources are not)
-  const sq = recipe.res ? 1 : 0.78, sc = recipe.scale || 1, c = (recipe.size || 1) / 2;
+  // buildings use recipe.sq for vertical stature so small cottages are low while cathedrals, TCs, Castles and Wonders tower
+  const sq = recipe.res ? 1 : (recipe.sq || 0.88), sc = recipe.scale || 1, c = (recipe.size || 1) / 2;
   const g = new THREE.Group(); g.add(root); root.position.set(-c, 0, -c); g.position.set(c, 0, c); g.scale.set(sc, sc * sq, sc);
   return g;
 }
@@ -171,17 +171,23 @@ async function render(recipe, styleIdx) {
 }
 
 const GENERATED = [
-  { name: 'wonder_0', src: '/assets/generated/wonder_0.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'wonder_1', src: '/assets/generated/wonder_1.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'wonder_2', src: '/assets/generated/wonder_2.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'wonder_3', src: '/assets/generated/wonder_3.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'wonder_4', src: '/assets/generated/wonder_4.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'wonder_5', src: '/assets/generated/wonder_5.jpg', w: 326, ayFromBottom: 0.245 },
-  { name: 'tc_4', src: '/assets/generated/tc_4.jpg', w: 264, ayFromBottom: 0.245 },
-  { name: 'tc_5', src: '/assets/generated/tc_5.jpg', w: 264, ayFromBottom: 0.245 },
-  { name: 'ship_galley', src: '/assets/generated/ship_galley.jpg', w: 74, ayRatio: 0.76, holeMatte: true },
-  { name: 'ship_galleon', src: '/assets/generated/ship_galleon.jpg', w: 84, ayRatio: 0.78, holeMatte: true },
-  { name: 'ship_tradecog', src: '/assets/generated/ship_tradecog.jpg', w: 70, ayRatio: 0.78, holeMatte: true },
+  { name: 'wonder_0', src: '/assets/generated/wonder_0.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'wonder_1', src: '/assets/generated/wonder_1.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'wonder_2', src: '/assets/generated/wonder_2.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'wonder_3', src: '/assets/generated/wonder_3.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'wonder_4', src: '/assets/generated/wonder_4.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'wonder_5', src: '/assets/generated/wonder_5.jpg', w: 384, ayFromBottom: 0.245 },
+  { name: 'tc_4', src: '/assets/generated/tc_4.jpg', w: 288, ayFromBottom: 0.245 },
+  { name: 'tc_5', src: '/assets/generated/tc_5.jpg', w: 288, ayFromBottom: 0.245 },
+  { name: 'castle_east', src: '/assets/generated/castle_east.jpg', w: 304, ayFromBottom: 0.245 },
+  { name: 'castle_med', src: '/assets/generated/castle_med.jpg', w: 304, ayFromBottom: 0.245 },
+  { name: 'castle_nordic', src: '/assets/generated/castle_nordic.jpg', w: 304, ayFromBottom: 0.245 },
+  { name: 'ship_galley', src: '/assets/generated/ship_galley.jpg', w: 78, ayRatio: 0.76, holeMatte: true },
+  { name: 'ship_galleon', src: '/assets/generated/ship_galleon.jpg', w: 92, ayRatio: 0.78, holeMatte: true },
+  { name: 'ship_tradecog', src: '/assets/generated/ship_tradecog.jpg', w: 74, ayRatio: 0.78, holeMatte: true },
+  { name: 'ship_longship', src: '/assets/generated/ship_longship.jpg', w: 82, ayRatio: 0.76, holeMatte: true },
+  { name: 'ship_junk', src: '/assets/generated/ship_junk.jpg', w: 84, ayRatio: 0.78, holeMatte: true },
+  { name: 'ship_dromon', src: '/assets/generated/ship_dromon.jpg', w: 82, ayRatio: 0.76, holeMatte: true },
 ];
 
 async function renderGenerated(spec) {

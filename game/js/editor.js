@@ -91,7 +91,7 @@ const Editor = {
     E.innerHTML = `<div id="ed-side" class="panel">
       <h2>Map Editor</h2>
       <div class="ed-sec"><b>File</b><div class="row">
-        <select id="ed-gtype"><option value="land">Highlands</option><option value="coastal" selected>Coastal</option><option value="islands">Islands</option><option value="anatolia">Anatolia</option><option value="mediterranean">Mediterranean</option><option value="world">World</option></select>
+        <select id="ed-gtype"><option value="land">Highlands</option><option value="alpine">Alpine Mountains</option><option value="rivers">Great Rivers</option><option value="coastal" selected>Coastal</option><option value="islands">Islands</option><option value="anatolia">Anatolia</option><option value="mediterranean">Mediterranean</option><option value="world">World</option></select>
         <select id="ed-gsize">${Object.keys(MAP_SIZES).map(k => `<option ${k === 'small' ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
         <div class="row"><button class="btn small" id="ed-gen">New generated</button><button class="btn small" id="ed-blank">New blank</button></div>
         <div class="row"><input id="ed-name" value="My Map" maxlength="30"><button class="btn small" id="ed-save">Save</button></div>

@@ -125,15 +125,27 @@ if (typeof GameMap === 'function') {
 }
 
 // ---------- river generation ----------
-function wmCarveRivers(spec, seed) {
+function wmCarveRivers(spec, seed, mapType) {
   const n = spec.n, rng = mulberry32((seed ^ 0x51ed) >>> 0);
   const ter = spec.ter, elev = spec.elev;
   const starts = spec.players.map(p => p.start).filter(Boolean);
   const dStart = (x, y) => { let m = 1e9; for (const s of starts) m = Math.min(m, Math.hypot(x - s.x, y - s.y)); return m; };
-  const count = n >= 100 ? 2 : 1;
+  const isRiverMap = mapType === 'rivers';
+  const count = isRiverMap
+    ? (n >= 160 ? 4 : n >= 100 ? 3 : 2)
+    : (n >= 180 ? 4 : n >= 140 ? 3 : n >= 100 ? 2 : 1);
   const carved = new Uint8Array(n * n);
+  const fordTiles = new Set();
   const kill = new Set(['tree', 'gold', 'stone', 'berry', 'shrub', 'relic', 'unit']);
+  const keep = new Set();
+  for (const o of spec.objects) if (o.k === 'coal' || o.k === 'bld') {
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const xx = o.x + ox, yy = o.y + oy;
+      if (xx >= 0 && yy >= 0 && xx < n && yy < n) keep.add(yy * n + xx);
+    }
+  }
   const dropAt = new Set();
+  const mainPaths = [];
   for (let r = 0; r < count; r++) {
     let path = [];
     for (let attempt = 0; attempt < 8 && path.length < 25; attempt++) {
@@ -168,42 +180,114 @@ function wmCarveRivers(spec, seed) {
       solid.push(b);
     }
     path = solid;
-    // fords: 2-3 shallow crossings, never at the very ends
+    mainPaths.push(path);
+    // fords: 2-4 shallow crossings, never at the very ends
     const fords = new Set();
-    const nf = path.length > 70 ? 3 : 2;
+    const nf = path.length > 140 ? 4 : path.length > 70 ? 3 : 2;
+    const fordSpan = (isRiverMap || n >= 140) ? 2 : 1;
     for (let f = 0; f < nf; f++) {
       const c = Math.round(path.length * ((f + 0.5) / nf + (rng() - 0.5) * 0.12));
-      for (let k = -1; k <= 1; k++) if (path[c + k]) fords.add(c + k);
+      for (let k = -fordSpan; k <= fordSpan; k++) if (path[c + k]) fords.add(c + k);
     }
+    const wideRiver = isRiverMap || (n >= 140 && r === 0);
     for (let k = 0; k < path.length; k++) {
-      const [px, py] = path[k], w = k > path.length * 0.55 ? 2 : 1;
+      const [px, py] = path[k];
+      const w = wideRiver ? (k > path.length * 0.45 ? 3 : 2) : (k > path.length * 0.55 ? 2 : 1);
+      const isFord = fords.has(k);
       for (let oy = 0; oy < w; oy++) for (let ox = 0; ox < w; ox++) {
         const xx = px + ox, yy = py + oy; if (xx < 1 || yy < 1 || xx >= n - 1 || yy >= n - 1) continue;
         if (dStart(xx, yy) < 10) continue;
         const i = yy * n + xx;
-        if (ter[i] === T.WATER || ter[i] === T.DEEP) continue;
-        ter[i] = fords.has(k) ? T.SHALLOW : T.WATER; elev[i] = 0; carved[i] = 1; dropAt.add(i);
+        if (keep.has(i)) continue;
+        if (!isFord && (ter[i] === T.WATER || ter[i] === T.DEEP)) continue;
+        ter[i] = isFord ? T.SHALLOW : T.WATER; elev[i] = 0; carved[i] = 1; dropAt.add(i);
+        if (isFord) fordTiles.add(i);
+      }
+    }
+  }
+  // Tributary streams on 'rivers' preset and huge/gigantic maps
+  const tribCount = (isRiverMap ? 2 : n >= 160 ? 2 : n >= 140 ? 1 : 0);
+  if (tribCount > 0 && mainPaths.length > 0) {
+    const tRng = mulberry32((seed ^ 0x771b) >>> 0);
+    for (let t = 0; t < tribCount; t++) {
+      const targetPath = mainPaths[t % mainPaths.length];
+      const joinIdx = Math.floor(targetPath.length * (0.3 + tRng() * 0.4));
+      const [jx, jy] = targetPath[joinIdx];
+      const ang0 = tRng() * Math.PI * 2;
+      const len = Math.round(n * (0.22 + tRng() * 0.16));
+      let sx = Math.max(4, Math.min(n - 5, Math.round(jx + Math.cos(ang0) * len)));
+      let sy = Math.max(4, Math.min(n - 5, Math.round(jy + Math.sin(ang0) * len)));
+      if (dStart(sx, sy) < 15) continue;
+      const tPath = [];
+      let cx = sx, cy = sy;
+      for (let step = 0; step < len * 2; step++) {
+        const dx = jx - cx, dy = jy - cy, dist = Math.hypot(dx, dy);
+        if (dist < 1.5) { tPath.push([jx, jy]); break; }
+        let ang = Math.atan2(dy, dx) + (tRng() - 0.5) * 0.45;
+        cx += Math.cos(ang); cy += Math.sin(ang);
+        const xi = Math.round(cx), yi = Math.round(cy);
+        if (xi < 2 || yi < 2 || xi >= n - 2 || yi >= n - 2) break;
+        if (dStart(xi, yi) < 12) break;
+        tPath.push([xi, yi]);
+        if (carved[yi * n + xi]) break;
+      }
+      if (tPath.length < 14) continue;
+      const solidT = [tPath[0]];
+      for (let k = 1; k < tPath.length; k++) {
+        const a = tPath[k - 1], b = tPath[k];
+        if (a[0] !== b[0] && a[1] !== b[1]) solidT.push([b[0], a[1]]);
+        solidT.push(b);
+      }
+      const midFord = Math.floor(solidT.length * 0.5);
+      for (let k = 0; k < solidT.length; k++) {
+        const [px, py] = solidT[k];
+        const isFord = Math.abs(k - midFord) <= 1;
+        for (let oy = 0; oy < (k > solidT.length * 0.6 ? 2 : 1); oy++) for (let ox = 0; ox < (k > solidT.length * 0.6 ? 2 : 1); ox++) {
+          const xx = px + ox, yy = py + oy;
+          if (xx < 1 || yy < 1 || xx >= n - 1 || yy >= n - 1) continue;
+          if (dStart(xx, yy) < 10) continue;
+          const i = yy * n + xx;
+          if (keep.has(i)) continue;
+          if (!isFord && (ter[i] === T.WATER || ter[i] === T.DEEP)) continue;
+          ter[i] = isFord ? T.SHALLOW : T.WATER; elev[i] = 0; carved[i] = 1; dropAt.add(i);
+          if (isFord) fordTiles.add(i);
+        }
       }
     }
   }
   if (!dropAt.size) return 0;
-  // banks: sand at the water's edge, gentle slopes, no objects in the bed
-  const bank = new Uint8Array(n * n);
+  // banks: sand at the water's edge, flat alluvial valley floor near water, while preserving rocky mountain cliffs/canyons
   for (const i of dropAt) {
     const cx = i % n, cy = (i / n) | 0;
-    for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) {
+    for (let oy = -3; oy <= 3; oy++) for (let ox = -3; ox <= 3; ox++) {
       const xx = cx + ox, yy = cy + oy; if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
       const j = yy * n + xx; if (carved[j]) continue;
       const d = Math.max(Math.abs(ox), Math.abs(oy));
-      if (d === 1) { if (ter[j] === T.GRASS || ter[j] === T.DIRT) ter[j] = T.SAND; elev[j] = Math.min(elev[j], 0); }
-      else elev[j] = Math.min(elev[j], 1);
-      bank[j] = 1;
+      if (d === 1) {
+        if (ter[j] === T.GRASS || ter[j] === T.DIRT) ter[j] = T.SAND;
+        elev[j] = 0;
+      } else if (d === 2) {
+        elev[j] = (ter[j] === T.ROCK && elev[j] >= 3) ? 2 : 0;
+      } else if (d === 3) {
+        if (!(ter[j] === T.ROCK && elev[j] >= 3)) elev[j] = Math.min(elev[j], 1);
+      }
+    }
+  }
+  // Ensure every ford has a smooth, walkable approach ramp (|Δelev| <= 1) out to 4 tiles
+  for (const i of fordTiles) {
+    const cx = i % n, cy = (i / n) | 0;
+    for (let oy = -4; oy <= 4; oy++) for (let ox = -4; ox <= 4; ox++) {
+      const xx = cx + ox, yy = cy + oy; if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
+      const j = yy * n + xx; if (carved[j]) continue;
+      const d = Math.max(Math.abs(ox), Math.abs(oy));
+      const maxE = d <= 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : 3;
+      if (elev[j] > maxE) {
+        elev[j] = maxE;
+        if (ter[j] === T.ROCK && maxE <= 1) ter[j] = T.DIRT;
+      }
     }
   }
   spec.objects = spec.objects.filter(o => !(kill.has(o.k) && dropAt.has(o.y * n + o.x)));
-  const flags = new Uint8Array(n * n);
-  for (let i = 0; i < n * n; i++) flags[i] = ter[i] === T.WATER || ter[i] === T.DEEP ? 1 : 0;
-  smoothElev(n, elev, flags);
   return dropAt.size;
 }
 // Stock rivers and lakes with fish (the base generator only seeds shore fish near bases and deep-sea fish).
@@ -239,7 +323,7 @@ if (typeof generateMapSpec === 'function') {
     const spec = _gen(opts);
     try {
       if (WMOD.rivers && opts.mapType !== 'islands' && !(typeof REAL_MAPS !== 'undefined' && REAL_MAPS[opts.mapType])) {
-        if (wmCarveRivers(spec, opts.seed >>> 0) && typeof ensureConnectivity === 'function') ensureConnectivity(spec, true);
+        if (wmCarveRivers(spec, opts.seed >>> 0, opts.mapType) && typeof ensureConnectivity === 'function') ensureConnectivity(spec, true);
       }
       wmStockFresh(spec, opts.seed >>> 0);
     } catch (err) { console.warn('water mod: generation step failed', err); }

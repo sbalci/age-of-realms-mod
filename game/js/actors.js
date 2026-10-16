@@ -191,8 +191,10 @@ if (typeof drawUnitFigure === 'function') {
     const key = UnitArt.key(u); UnitArt.ensure(key);
     const asset = UnitArt.loaded.get(key);
     if (!asset) return fallback.apply(this, arguments);
+    const d = UNITS[u.type], asc = d.tags.includes('siege') || d.tags.includes('vehicle') ? 0.92 : d.tags.includes('mounted') ? 0.76 : d.animal ? 0.74 : 0.68;
     const m = ACTOR_ART[key], f = actorFrame(u, t, m), sx = f.frame * m.cell, sy = (f.action * m.directions + f.direction) * m.cell;
     const w = m.cell / m.scale, h = w, face = (u.face || 1) < 0 ? -1 : 1;
+    g.save(); g.scale(asc, asc);
     g.save(); g.scale(face, 1); // source directions already include both facings
     g.drawImage(asset.base, sx, sy, m.cell, m.cell, -m.ax, -m.ay, w, h);
     if (u.owner && typeof document !== 'undefined') {
@@ -204,13 +206,14 @@ if (typeof drawUnitFigure === 'function') {
     }
     g.restore();
     // Preserve the worker's visible task and cargo on top of the animated body.
-    if (UNITS[u.type].draw === 'villager') {
+    if (d.draw === 'villager') {
       if (u.anim === 'work' && u.work) {
         const item = { chop: 'axe', mine: 'pick', farm: 'hoe', build: 'hammer', repair: 'hammer', butcher: 'knife', forage: 'basket' }[u.work.kind];
         if (item) { g.save(); g.translate(7, -15); g.rotate(-.7 + Math.sin(t * 7) * .8); ITEMS[item](g); g.restore(); }
       } else if (u.carry && u.carry.amt > .5) { g.save(); g.translate(4, -12); ITEMS.basket(g); g.restore(); }
     }
     actorUnitOverlay(g, u, t);
+    g.restore();
   };
 }
 if (typeof treeSprite === 'function') {

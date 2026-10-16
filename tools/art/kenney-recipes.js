@@ -50,17 +50,17 @@ function leanTo(k, side, x0, y0, len, z, depth = 1) {
 }
 
 export const RECIPES = {
-  house: { size: 2, styles: AGES, scale: 0.85, build(k) {
-    walls(k, 0, 0, 2, 2, 0, { s0: 'door', e1: 'win', s1: 'win' });
-    roof(k, 0, 0, 2, 2, 1);
-    if (k.style >= 1) k.add('town', 'chimney', 0.5, 0.5, 1.2, 90);
+  house: { size: 2, styles: AGES, scale: 0.72, sq: 0.80, build(k) {
+    walls(k, 0.1, 0.1, 2, 2, 0, { s0: 'door', e1: 'win', s1: 'win' });
+    roof(k, 0.1, 0.1, 2, 2, 1);
+    if (k.style >= 1) k.add('town', 'chimney', 0.55, 0.55, 1.2, 90);
     if (k.style >= 2) {
       k.add('town', 'hedge', 1.55, 1.92, 0, 0, 0.55);
     }
     k.add('town', 'lantern', 0.2, 1.92, 0, 0, 0.65);
   } },
-  tc: { size: 4, styles: AGES, scale: 0.92, build(k) {
-    // a two-storey hall with a steep roof, a corner tower and a porch on the visible side
+  tc: { size: 4, styles: AGES, scale: 1.06, sq: 1.02, build(k) {
+    // a grand two-storey town hall with a steep roof, a 3.5-storey corner keep tower and a colonnaded porch
     walls(k, 0.5, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' });
     walls(k, 0.5, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' });
     roof(k, 0.5, 0.5, 3, 2, 2);
@@ -71,14 +71,14 @@ export const RECIPES = {
     if (k.style >= 2) k.add('town', 'fountain-round', 2.25, 3.55, 0, 0, 0.34);
     k.add('town', 'lantern', 0.3, 3.7, 0, 0, 0.8); k.add('town', 'cart', 1.2, 3.9, 0, 90, 0.6);
   } },
-  mill: { size: 2, styles: AGES, scale: 0.9, build(k) {
+  mill: { size: 2, styles: AGES, scale: 0.82, sq: 0.94, build(k) {
     walls(k, 0.5, 0.5, 1, 1, 0, { s0: 'door', e0: 'win' });
     walls(k, 0.5, 0.5, 1, 1, 1, { s0: 'win' });
     k.add('town', k.style >= 2 ? 'roof-high-point' : 'roof-point', 1, 1, 2);
     k.add('town', 'windmill', 1.62, 1, 1.55, 0, 0.62);
     k.add('town', 'cart', 0.35, 1.55, 0, 90, 0.7);
   } },
-  lumbercamp: { size: 2, styles: AGES, scale: 0.9, build(k) {
+  lumbercamp: { size: 2, styles: AGES, scale: 0.70, sq: 0.76, build(k) {
     walls(k, 0, 0, 2, 1, 0, { n0: 'wall-wood', n1: 'wall-wood', w0: 'wall-wood', e0: 'poles' }, 'wall-wood');
     roof(k, 0, 0, 2, 1, 1);
     pillars(k, [[0.1, 0.95], [1.9, 0.95], [1, 0.95]]);
@@ -86,7 +86,7 @@ export const RECIPES = {
     k.add('nature', 'log_stack', 1.6, 1.5, 0, 90, 0.8);
     k.add('nature', 'stump_round', 1.75, 0.6, 0, 0, 0.8);
   } },
-  miningcamp: { size: 2, styles: AGES, scale: 0.9, build(k) {
+  miningcamp: { size: 2, styles: AGES, scale: 0.70, sq: 0.76, build(k) {
     walls(k, 0, 0, 2, 1, 0, { e0: 'poles' }, k.S.stone ? 'wall' : 'wall-wood');
     roof(k, 0, 0, 2, 1, 1);
     pillars(k, [[0.1, 0.95], [1.9, 0.95], [1, 0.95]]);
@@ -94,7 +94,7 @@ export const RECIPES = {
     k.add('nature', 'rock_smallA', 1.55, 1.45, 0, 0, 0.9);
     k.add('nature', 'rock_smallC', 1.75, 1.75, 0, 40, 0.7);
   } },
-  dock: { size: 3, styles: AGES, build(k) {
+  dock: { size: 3, styles: AGES, scale: 0.92, sq: 0.86, build(k) {
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) k.add('town', 'planks', i + 0.5, j + 0.5, 0.05);
     for (const [x, y] of [[0.05, 0.05], [2.95, 0.05], [0.05, 2.95], [2.95, 2.95], [1.5, 2.95], [2.95, 1.5]]) k.add('town', 'pillar-wood', x, y, -0.6, 0, [1.2, 0.75, 1.2]);
     walls(k, 0, 0, 1, 1, 0.06, { s0: 'door', e0: 'win' });
@@ -102,20 +102,20 @@ export const RECIPES = {
     k.add('town', 'lantern', 2.7, 2.7, 0.05, 0, 0.8);
     k.add('town', 'cart', 2, 1, 0.05, 30, 0.6);
   } },
-  market: { size: 3, styles: AGES, build(k) {
+  market: { size: 3, styles: AGES, scale: 0.88, sq: 0.84, build(k) {
     walls(k, 0, 0, 3, 1, 0, { s0: 'win', s1: 'door', s2: 'win' });
     roof(k, 0, 0, 3, 1, 1);
     k.add('town', 'stall-red', 0.6, 1.8, 0); k.add('town', 'stall-green', 1.6, 2.3, 0, 0); k.add('town', 'stall', 2.5, 1.7, 0, 90);
     k.add('town', 'stall-stool', 2.6, 2.4, 0); k.add('town', 'cart', 0.7, 2.6, 0, 90, 0.7);
   } },
-  blacksmith: { size: 3, styles: AGES, build(k) {
+  blacksmith: { size: 3, styles: AGES, scale: 0.84, sq: 0.84, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
     roof(k, 0, 0, 2, 2, 1);
     k.add('town', 'chimney-base', 1.5, 0.5, 0, 0); k.add('town', 'chimney', 1.5, 0.5, 1, 0); k.add('town', 'chimney-top', 1.5, 0.5, 2, 0);
     leanTo(k, 's', 0, 2, 2, 0.7, 0.8); pillars(k, [[0.1, 2.75], [1, 2.75], [1.9, 2.75]], 0, 0.72);
     k.add('town', 'wheel', 2.3, 2.4, 0, 0, 1); k.add('nature', 'rock_smallFlatA', 1, 2.5, 0, 0, 0.7);
   } },
-  university: { size: 3, styles: AGES, build(k) {
+  university: { size: 3, styles: AGES, scale: 1.02, sq: 0.98, build(k) {
     walls(k, 0, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
     walls(k, 0, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
     roof(k, 0, 0.5, 3, 2, 2);
@@ -126,7 +126,7 @@ export const RECIPES = {
     k.add('town', 'fountain-round', 2.45, 2.65, 0, 0, 0.28);
     k.add('town', 'hedge', 0.35, 2.75, 0, 0, 0.55);
   } },
-  monastery: { size: 3, styles: AGES, build(k) {
+  monastery: { size: 3, styles: AGES, scale: 1.02, sq: 1.02, build(k) {
     walls(k, 0, 0, 2, 3, 0, { s0: 'wall-doorway-round', e1: 'wall-window-round', e0: 'wall-window-round', e2: 'wall-window-round' }, 'wall');
     walls(k, 0, 0, 2, 3, 1, { e1: 'wall-window-round' }, 'wall');
     roof(k, 0, 0, 2, 3, 2, true);
@@ -135,18 +135,16 @@ export const RECIPES = {
     k.add('nature', 'tree_cone', 2.5, 0.6, 0, 0, 0.8);
     k.add('town', 'fountain-round', 2.45, 1.35, 0, 0, 0.28);
   } },
-  barracks: { size: 3, styles: AGES, build(k) {
+  barracks: { size: 3, styles: AGES, scale: 0.98, sq: 0.94, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e1: 'win' });
     roof(k, 0, 0, 3, 2, 1);
-    if (k.style >= 2) {
-      walls(k, 2, 0, 1, 1, 1, { s0: 'win', e0: 'win' });
-      k.add('town', 'roof-point', 2.5, 0.5, 2);
-    }
+    walls(k, 2, 0, 1, 1, 1, { s0: 'win', e0: 'win' });
+    k.add('town', k.style >= 2 ? 'roof-high-point' : 'roof-point', 2.5, 0.5, 2);
     for (let i = 0; i < 3; i++) k.add('town', 'fence', i + 0.5, 2.5, 0, ROT.s);
     k.add('town', 'fence', 2.5, 2.5, 0, ROT.e); k.add('town', 'banner-red', 2.5, 1.5, 0, 0, 0.9);
     k.add('town', 'lantern', 1.4, 2.1, 0, 0, 0.7);
   } },
-  range: { size: 3, styles: AGES, build(k) {
+  range: { size: 3, styles: AGES, scale: 0.88, sq: 0.84, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e0: 'win', e1: 'win' });
     roof(k, 0, 0, 2, 2, 1);
     leanTo(k, 'e', 2, 0, 2, 0.68, 0.55);
@@ -155,7 +153,7 @@ export const RECIPES = {
     k.add('town', 'wheel', 2.5, 1.2, 0, 0, 1.3); k.add('town', 'stall-bench', 1.2, 2.4, 0, 90);
     k.add('town', 'banner-green', 0.4, 2.35, 0, 0, 0.85);
   } },
-  stable: { size: 3, styles: AGES, build(k) {
+  stable: { size: 3, styles: AGES, scale: 0.90, sq: 0.84, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'wall-wood-doorway-square-wide', s2: 'wall-wood-doorway-square-wide', s1: 'win', e1: 'win' }, 'wall-wood');
     roof(k, 0, 0, 3, 2, 1);
     leanTo(k, 's', 0, 2, 3, 0.65, 0.5);
@@ -163,7 +161,7 @@ export const RECIPES = {
     k.add('town', 'fence', 2.5, 2.5, 0, ROT.e); k.add('town', 'fence', 0.5, 2.5, 0, ROT.w);
     k.add('nature', 'log_stack', 2.35, 2.35, 0, 45, 0.65, { tint: '#e4be58' });
   } },
-  siege: { size: 3, styles: AGES, build(k) {
+  siege: { size: 3, styles: AGES, scale: 0.98, sq: 0.94, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'poles', s1: 'poles', s2: 'poles', e0: 'poles', e1: 'poles' }, 'wall-wood');
     roof(k, 0, 0, 3, 2, 1);
     k.add('castle', 'siege-ram', 1.6, 1.0, 0, 0, 0.7);
@@ -183,7 +181,7 @@ export const RECIPES = {
   } },
   unit_scorpion: { size: 1, res: true, build(k) { k.add('castle', 'siege-ballista', 0.5, 0.5, 0, 45, 0.62); } },
   unit_trebuchet: { size: 1, res: true, build(k) { k.add('castle', 'siege-trebuchet', 0.5, 0.5, 0, 45, 0.58); } },
-  tower: { size: 1, styles: [0, 2], scale: 0.8, build(k) {
+  tower: { size: 1, styles: [0, 2], scale: 0.84, sq: 0.96, build(k) {
     if (k.style < 2) { // wooden watch tower
       pillars(k, [[0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]], 0, 1.6);
       k.add('town', 'planks', 0.5, 0.5, 1.6); k.add('castle', 'tower-hexagon-top-wood', 0.5, 0.5, 1.62, 0, 1.1); k.add('town', 'roof-point', 0.5, 0.5, 2.05, 0, 1.05);
@@ -191,22 +189,22 @@ export const RECIPES = {
       k.add('castle', 'tower-square-base', 0.5, 0.5, 0); k.add('castle', 'tower-square-mid-windows', 0.5, 0.5, 1.01); k.add('castle', 'tower-square-top-roof-high', 0.5, 0.5, 2.02);
     }
   } },
-  castle: { size: 4, build(k) {
+  castle: { size: 4, scale: 1.12, sq: 1.06, build(k) {
     for (let i = 1; i < 3; i++) { k.add('castle', 'wall', i + 0.5, 0.5, 0, 90); k.add('castle', 'wall', i + 0.5, 3.5, 0, 90); k.add('castle', 'wall', 0.5, i + 0.5, 0); k.add('castle', 'wall', 3.5, i + 0.5, 0); }
-    for (const [x, y] of [[0.5, 0.5], [3.5, 0.5], [0.5, 3.5], [3.5, 3.5]]) { k.add('castle', 'tower-square-base', x, y, 0, 0, [1.1, 1.2, 1.1]); k.add('castle', 'tower-square-top-roof', x, y, 1.21, 0, 1.1); }
-    k.add('castle', 'tower-square-base', 2, 2, 0, 0, [1.8, 1.4, 1.8]); k.add('castle', 'tower-square-mid-windows', 2, 2, 1.41, 0, 1.8); k.add('castle', 'tower-square-top-roof-high', 2, 2, 2.42, 0, 1.8);
-    k.add('castle', 'gate', 2, 3.95, 0, 90, 1.3);
+    for (const [x, y] of [[0.5, 0.5], [3.5, 0.5], [0.5, 3.5], [3.5, 3.5]]) { k.add('castle', 'tower-square-base', x, y, 0, 0, [1.15, 1.35, 1.15]); k.add('castle', 'tower-square-top-roof', x, y, 1.36, 0, 1.15); }
+    k.add('castle', 'tower-square-base', 2, 2, 0, 0, [1.85, 1.5, 1.85]); k.add('castle', 'tower-square-mid-windows', 2, 2, 1.51, 0, 1.85); k.add('castle', 'tower-square-top-roof-high', 2, 2, 2.52, 0, 1.85);
+    k.add('castle', 'gate', 2, 3.95, 0, 90, 1.35);
   } },
-  outpost: { size: 1, scale: 0.8, build(k) {
+  outpost: { size: 1, scale: 0.72, sq: 0.84, build(k) {
     pillars(k, [[0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]], 0, 1.3);
     k.add('town', 'planks', 0.5, 0.5, 1.3, 0, 0.8); k.add('castle', 'tower-hexagon-top-wood', 0.5, 0.5, 1.32, 0, 0.9);
   } },
-  well: { size: 1, styles: [0, 2], scale: 0.9, build(k) {
+  well: { size: 1, styles: [0, 2], scale: 0.70, sq: 0.78, build(k) {
     k.add('town', 'fountain-round', 0.5, 0.5, 0, 0, 0.42);
     pillars(k, [[0.2, 0.5], [0.8, 0.5]], 0, 0.95, k.style >= 2 ? 'pillar-stone' : 'pillar-wood');
     k.add('town', 'roof-gable', 0.5, 0.5, 0.92, 90, [0.75, 0.6, 0.6]);
   } },
-  wonder: { size: 5, build(k) {
+  wonder: { size: 5, scale: 1.15, sq: 1.08, build(k) {
     for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) if (i === 0 || j === 0 || i === 4 || j === 4) k.add('castle', 'tower-square-base-border', i + 0.5, j + 0.5, 0);
     k.add('castle', 'tower-square-base', 2.5, 2.5, 0.45, 0, [2.6, 1.3, 2.6]);
     k.add('castle', 'tower-square-mid-windows', 2.5, 2.5, 1.76, 0, [2.2, 1.2, 2.2]);

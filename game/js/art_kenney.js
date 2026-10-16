@@ -103,7 +103,7 @@ if (KART.on && typeof drawUnitFigure === 'function') {
       const strike = attacking ? Math.max(0, 1 - since / 0.35) : 0;
       const walkBob = u.anim === 'walk' ? Math.sin(t * 14) * 0.6 : 0;
       const recoil = attacking ? (d.draw === 'ram' ? strike * 3.5 : -strike * 2.2) : 0;
-      const sc = 0.52;
+      const sc = 0.68;
       g.save();
       g.translate(recoil, walkBob);
       g.drawImage(im, -m.ax * sc, -m.ay * sc - 8, m.w * sc, m.h * sc);
@@ -135,7 +135,7 @@ if (KART.on && typeof drawShip === 'function') {
     const m = KENNEY_ART[kname], im = KART.img[kname], type = u.type;
     const bob = Math.sin(t * 2 + u.id) * 1.2, roll = Math.sin(t * 1.5 + u.id) * 0.025;
     const L = { transport: 24, tradecog: 22, galley: 26, wargalley: 28, galleon: 32, fireship: 26 }[type] || 24;
-    const sc = type === 'wargalley' ? 0.76 : type === 'transport' ? 0.76 : 0.72;
+    const sc = type === 'wargalley' ? 0.96 : type === 'transport' ? 0.96 : 0.90;
     g.save();
     g.rotate(roll); g.translate(0, bob);
     if (u.anim === 'walk') {

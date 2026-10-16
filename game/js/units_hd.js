@@ -350,9 +350,10 @@ if (UHD.on.any && UHD.on.unitsprites && typeof drawUnitFigure === 'function' && 
   const _duf = drawUnitFigure;
   UHD.drawFig = _duf;
   drawUnitFigure = function (g, u, t) {
-    if (!UHD.world || UHD.gen) return _duf.apply(this, arguments);
+    const df = UHD.drawFig || _duf;
+    if (!UHD.world || UHD.gen) return df.apply(this, arguments);
     const d = UNITS[u.type], cat = UHD.bad.has(u.type) ? null : uhdCategory(d);
-    if (!cat) { UHD.n.live++; return _duf.apply(this, arguments); }
+    if (!cat) { UHD.n.live++; return df.apply(this, arguments); }
     const zb = uhdZoomBucket(R.cam.zoom), pc = pcolor(u.owner);
     const K = uhdKey(u, d, t, W.t, zb, pc.c);
     let s = uhdTouch(UHD.cache, K.key);
@@ -361,14 +362,14 @@ if (UHD.on.any && UHD.on.unitsprites && typeof drawUnitFigure === 'function' && 
       if (UHD.genN >= UHD.minGen && UHD.genMs > UHD.budgetMs) {
         // over budget: another frame of the same pose keeps the look consistent, else draw it the old way
         const nk = UHD.sets.get(K.set); s = nk && UHD.cache.get(nk);
-        if (!s) { UHD.n.live++; return _duf.apply(this, arguments); }
+        if (!s) { UHD.n.live++; return df.apply(this, arguments); }
         UHD.n.near++;
       }
     }
     if (!s) {
       UHD.n.miss++;
-      try { s = uhdBuild(u, d, cat, K.ph.tq, K.ph.sinceQ, K.face, K.back, US * zb, _duf); }
-      catch (e) { UHD.bad.add(u.type); UHD.err = e && e.stack; UHD.n.live++; return _duf.apply(this, arguments); }
+      try { s = uhdBuild(u, d, cat, K.ph.tq, K.ph.sinceQ, K.face, K.back, US * zb, df); }
+      catch (e) { UHD.bad.add(u.type); UHD.err = e && e.stack; UHD.n.live++; return df.apply(this, arguments); }
       UHD.genN++; UHD.genMs += s.ms; UHD.ms.gen += s.ms;
       UHD.cache.set(K.key, s); UHD.bytes += s.bytes; UHD.sets.set(K.set, K.key);
       if (UHD.bytes > UHD.maxBytes) { const ev = uhdEvict(UHD.cache, UHD.bytes, UHD.maxBytes * 0.85, v => v.bytes); UHD.bytes = ev.bytes; UHD.n.evict += ev.n; }
