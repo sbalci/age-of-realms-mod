@@ -10,7 +10,7 @@ function wonderName(p) {
 BUILDINGS.wonder.age=0;
 BUILDINGS.wonder.desc+=' Its architecture changes with each Age; advancement preserves construction, health and the victory countdown.';
 const wonderStyle=bldStyle;
-bldStyle=function(b){return b.type==='wonder'?(b.ghost?b.style:Math.min(5,W.players[b.owner]?.age||0)):wonderStyle(b);};
+bldStyle=function(b){return (b.type==='wonder'||b.type==='tc')?(b.ghost?b.style:Math.min(5,W.players[b.owner]?.age||0)):wonderStyle(b);};
 const wonderArt=drawBuildingArt;
 drawBuildingArt=function(g,type,age,pc,t){
   if(type!=='wonder'||age===3)return wonderArt(g,type,age,pc,t);

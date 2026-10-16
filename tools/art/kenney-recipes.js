@@ -52,10 +52,9 @@ function leanTo(k, side, x0, y0, len, z, depth = 1) {
 export const RECIPES = {
   house: { size: 2, styles: AGES, scale: 0.85, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e1: 'win', s1: 'win' });
-    roof(k, 0, 0, 2, 2, 1, k.style >= 2);
+    roof(k, 0, 0, 2, 2, 1);
     if (k.style >= 1) k.add('town', 'chimney', 0.5, 0.5, 1.2, 90);
     if (k.style >= 2) {
-      k.add('town', 'roof-gable', 1.4, 1.5, 1.15, 0, [0.55, 0.55, 0.55]);
       k.add('town', 'hedge', 1.55, 1.92, 0, 0, 0.55);
     }
     k.add('town', 'lantern', 0.2, 1.92, 0, 0, 0.65);
@@ -64,13 +63,9 @@ export const RECIPES = {
     // a two-storey hall with a steep roof, a corner tower and a porch on the visible side
     walls(k, 0.5, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' });
     walls(k, 0.5, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' });
-    roof(k, 0.5, 0.5, 3, 2, 2, k.style >= 2);
+    roof(k, 0.5, 0.5, 3, 2, 2);
     walls(k, 3, 2.5, 1, 1, 0, { s0: 'win', e0: 'door' }); walls(k, 3, 2.5, 1, 1, 1, { s0: 'win', e0: 'win' }); walls(k, 3, 2.5, 1, 1, 2, { s0: 'win', e0: 'win' });
     k.add('town', 'roof-high-point', 3.5, 3, 3);
-    if (k.style >= 2) {
-      walls(k, 0.5, 2.5, 1, 1, 0, { s0: 'win', w0: 'win' }); walls(k, 0.5, 2.5, 1, 1, 1, { s0: 'win' });
-      k.add('town', 'roof-point', 1.0, 3.0, 2);
-    }
     leanTo(k, 's', 0.5, 2.5, 2, 0.7, 0.9); pillars(k, [[0.6, 3.35], [1.5, 3.35], [2.45, 3.35]], 0, 0.72, k.S.stone ? 'pillar-stone' : 'pillar-wood');
     if (k.style >= 1) k.add('town', 'chimney', 1, 0.9, 2.5, 90);
     if (k.style >= 2) k.add('town', 'fountain-round', 2.25, 3.55, 0, 0, 0.34);
@@ -123,9 +118,9 @@ export const RECIPES = {
   university: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0.5, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
     walls(k, 0, 0.5, 3, 2, 1, { s0: 'win', s1: 'win', s2: 'win', e0: 'win', e1: 'win' }, k.S.stone ? 'wall' : 'wall-wood');
-    roof(k, 0, 0.5, 3, 2, 2, true);
-    walls(k, 1, 0.5, 1, 1, 2, { s0: 'wall-window-round', e0: 'wall-window-round' }, 'wall');
-    k.add('town', 'roof-high-point', 1.5, 1.0, 3);
+    roof(k, 0, 0.5, 3, 2, 2);
+    walls(k, 2, 0.5, 1, 1, 2, { s0: 'wall-window-round', e0: 'wall-window-round' }, 'wall');
+    k.add('town', 'roof-high-point', 2.5, 1.0, 3);
     leanTo(k, 's', 0.5, 2.45, 2, 0.75, 0.5);
     pillars(k, [[0.55, 2.9], [1.45, 2.9], [2.45, 2.9]], 0, 0.75, 'pillar-stone');
     k.add('town', 'fountain-round', 2.45, 2.65, 0, 0, 0.28);
@@ -142,7 +137,7 @@ export const RECIPES = {
   } },
   barracks: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'win', s1: 'door', s2: 'win', e1: 'win' });
-    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
+    roof(k, 0, 0, 3, 2, 1);
     if (k.style >= 2) {
       walls(k, 2, 0, 1, 1, 1, { s0: 'win', e0: 'win' });
       k.add('town', 'roof-point', 2.5, 0.5, 2);
@@ -153,7 +148,7 @@ export const RECIPES = {
   } },
   range: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 2, 2, 0, { s0: 'door', e0: 'win', e1: 'win' });
-    roof(k, 0, 0, 2, 2, 1, k.style >= 2);
+    roof(k, 0, 0, 2, 2, 1);
     leanTo(k, 'e', 2, 0, 2, 0.68, 0.55);
     for (let i = 0; i < 3; i++) k.add('town', 'fence', i + 0.5, 2.5, 0, ROT.s);
     for (let j = 0; j < 2; j++) k.add('town', 'fence', 2.5, j + 0.5, 0, ROT.e);
@@ -162,7 +157,7 @@ export const RECIPES = {
   } },
   stable: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'wall-wood-doorway-square-wide', s2: 'wall-wood-doorway-square-wide', s1: 'win', e1: 'win' }, 'wall-wood');
-    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
+    roof(k, 0, 0, 3, 2, 1);
     leanTo(k, 's', 0, 2, 3, 0.65, 0.5);
     for (let i = 0; i < 3; i++) k.add('town', i === 1 ? 'fence-gate' : 'fence', i + 0.5, 2.5, 0, ROT.s);
     k.add('town', 'fence', 2.5, 2.5, 0, ROT.e); k.add('town', 'fence', 0.5, 2.5, 0, ROT.w);
@@ -170,7 +165,7 @@ export const RECIPES = {
   } },
   siege: { size: 3, styles: AGES, build(k) {
     walls(k, 0, 0, 3, 2, 0, { s0: 'poles', s1: 'poles', s2: 'poles', e0: 'poles', e1: 'poles' }, 'wall-wood');
-    roof(k, 0, 0, 3, 2, 1, k.style >= 2);
+    roof(k, 0, 0, 3, 2, 1);
     k.add('castle', 'siege-ram', 1.6, 1.0, 0, 0, 0.7);
     k.add('castle', 'siege-catapult', 1.1, 2.5, 0, -30, 0.55);
     if (k.style >= 2) k.add('castle', 'siege-ballista', 2.4, 2.35, 0, 20, 0.52);

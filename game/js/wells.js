@@ -27,7 +27,7 @@ if (typeof drawBuildingArt === 'function') {
   const _dba = drawBuildingArt;
   drawBuildingArt = function (g, type, st, pc, t) {
     if (type !== 'well') return _dba(g, type, st, pc, t);
-    const S = STYLE[st];
+    const S = STYLE[Math.min(3, st)];
     cyl(g, 0, 0, 0.42, 0, 11, S.stone);
     cyl(g, 0, 0, 0.3, 11, 0.8, '#2f6b8f');
     box(g, -0.5, -0.06, 0.1, 0.12, 0, 30, S.trim);

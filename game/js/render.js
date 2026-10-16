@@ -260,7 +260,7 @@ const STYLE = [
   { wall: '#c9c1ae', roof: '#3f5670', trim: '#7a6e5e', base: '#9a9282', beams: null, stone: '#c4bcaa' },
 ];
 function drawBuildingArt(g, type, st, pc, t) {
-  const S = STYLE[st];
+  const S = STYLE[Math.min(3, st)];
   const stoneAge = st >= 2;
   const walls = S.wall, roof = S.roof;
   const bricks = stoneAge;
@@ -276,20 +276,20 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'tc': {
-      box(g, 0, 0, 1.85, 1.85, 0, 5, '#9a8c74', { bricks: true });
+      box(g, 0, 0, 1.85, 1.85, 0, 5, st >= 5 ? '#546878' : '#9a8c74', { bricks: true });
       // wings
-      box(g, 0.9, -0.6, 0.75, 0.9, 5, 18, walls, { beams: S.beams, bricks });
-      gableY(g, 0.9, -0.6, 0.75, 0.9, 23, 14, roof);
-      box(g, -0.6, 0.9, 0.9, 0.75, 5, 18, walls, { beams: S.beams, bricks });
-      gableX(g, -0.6, 0.9, 0.9, 0.75, 23, 14, roof);
+      box(g, 0.9, -0.6, 0.75, 0.9, 5, 18, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
+      gableY(g, 0.9, -0.6, 0.75, 0.9, 23, 14, st >= 5 ? '#35596b' : roof);
+      box(g, -0.6, 0.9, 0.9, 0.75, 5, 18, st >= 5 ? '#d8e4ec' : walls, { beams: S.beams, bricks });
+      gableX(g, -0.6, 0.9, 0.9, 0.75, 23, 14, st >= 5 ? '#35596b' : roof);
       // central keep
-      box(g, -0.3, -0.3, 0.95, 0.95, 5, stoneAge ? 42 : 34, stoneAge ? S.stone : walls, { beams: S.beams, bricks });
+      box(g, -0.3, -0.3, 0.95, 0.95, 5, stoneAge ? 42 : 34, st >= 5 ? '#c4d6e0' : stoneAge ? S.stone : walls, { beams: S.beams, bricks });
       doorAt(g, -0.3, 0.65, 5, 'l', 0.25, 14);
-      windowAt(g, -0.6, 0.65, 26, 'l'); windowAt(g, 0.0, 0.65, 26, 'l'); windowAt(g, 0.65, -0.3, 26, 'r');
-      if (stoneAge) { crenel(g, -0.3, -0.3, 0.95, 0.95, 47, S.stone); pyramid(g, -0.3, -0.3, 0.7, 0.7, 47, 26, roof); }
+      windowAt(g, -0.6, 0.65, 26, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.0, 0.65, 26, 'l', st >= 4 ? '#64d8f0' : '#2a1f18'); windowAt(g, 0.65, -0.3, 26, 'r', st >= 4 ? '#64d8f0' : '#2a1f18');
+      if (stoneAge) { crenel(g, -0.3, -0.3, 0.95, 0.95, 47, st >= 5 ? '#9ab4c4' : S.stone); pyramid(g, -0.3, -0.3, 0.7, 0.7, 47, 26, st >= 5 ? '#48b8d0' : roof); }
       else pyramid(g, -0.3, -0.3, 1.05, 1.05, 39, 28, roof);
-      // bell tower
-      if (st >= 1) { box(g, 1.2, 1.2, 0.3, 0.3, 5, 34, S.stone, { bricks: true }); cone(g, 1.2, 1.2, 0.34, 39, 20, roof); }
+      // bell / clock / sensor tower
+      if (st >= 1) { box(g, 1.2, 1.2, 0.3, 0.3, 5, 34, st >= 5 ? '#9ab4c4' : S.stone, { bricks: true }); cone(g, 1.2, 1.2, 0.34, 39, 20, st >= 5 ? '#64e9ff' : roof); }
       flag(g, -0.3, -0.3, stoneAge ? 72 : 67, pc.c, t, 1.1);
       flag(g, 1.5, -1.4, 5, pc.c, t, 0.8); flag(g, -1.4, 1.5, 5, pc.c, t, 0.8);
       break;
@@ -415,7 +415,7 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'tower': {
-      const s2 = STYLE[Math.max(1, st)];
+      const s2 = STYLE[Math.min(3, Math.max(1, st))];
       box(g, 0, 0, 0.42, 0.42, 0, 44, s2.stone, { bricks: true });
       box(g, 0, 0, 0.5, 0.5, 44, 8, s2.stone, { bricks: true });
       crenel(g, 0, 0, 0.5, 0.5, 52, s2.stone);
@@ -453,13 +453,13 @@ function drawBuildingArt(g, type, st, pc, t) {
       break;
     }
     case 'wall': {
-      const c = STYLE[Math.max(2, st)].stone;
+      const c = STYLE[Math.min(3, Math.max(2, st))].stone;
       box(g, 0, 0, 0.5, 0.5, 0, 26, c, { bricks: true });
       crenel(g, 0, 0, 0.5, 0.5, 26, c);
       break;
     }
     case 'gate': {
-      const c = STYLE[Math.max(2, st)].stone;
+      const c = STYLE[Math.min(3, Math.max(2, st))].stone;
       box(g, -0.32, -0.32, 0.18, 0.18, 0, 38, c, { bricks: true });
       box(g, 0.32, 0.32, 0.18, 0.18, 0, 38, c, { bricks: true });
       box(g, 0, 0, 0.5, 0.5, 26, 8, c, { bricks: true });
@@ -1368,7 +1368,7 @@ function iconFor(key) {
     g.translate(32 + (d.naval ? 0 : -2), d.naval ? 48 : 56); g.scale(sc, sc);
     drawUnitFigure(g, fake, 0.5); g.restore();
   } else if (kind === 'bld') {
-    const s = BUILDINGS[id].size; const sp = bldSprite(id, W && W.players[W.humanId] ? (id === 'wonder' ? W.players[W.humanId].age : Math.min(3, W.players[W.humanId].age)) : 1, pc);
+    const s = BUILDINGS[id].size; const sp = bldSprite(id, W && W.players[W.humanId] ? (id === 'wonder' || id === 'tc' ? Math.min(5, W.players[W.humanId].age) : Math.min(3, W.players[W.humanId].age)) : 1, pc);
     const sc = Math.min(56 / sp.w, 56 / sp.h) * 1.15;
     if (id === 'farm') { g.save(); g.translate(32, 36); g.scale(0.34, 0.34); drawFarm(g, { built: true, food: 175, owner: 1, x: 0, y: 0, progress: 1 }, { x: 0, y: 0 }); g.restore(); }
     else g.drawImage(sp.cv, 32 - sp.w * sc / 2, 60 - sp.h * sc, sp.w * sc, sp.h * sc);
