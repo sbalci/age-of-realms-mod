@@ -69,6 +69,14 @@
 
 **Review gates.** Tasks 4 and 8 end with a user approval. Do not start the next task until the user approves.
 
+**Main-session steps.** These need the user or the live Blender MCP, so the coordinating session runs them itself even under subagent-driven execution:
+- Task 2 Step 7 (Blender preview)
+- Task 4 Steps 1–4 (hero review)
+- Task 8 Steps 1–2 (full-set review)
+- Task 9 Step 3 (screenshot review)
+
+Everything else is code and suits subagents.
+
 **Deviation from the spec, and why.** The spec says to build only the hero's pieces before review point 1. All 19 kit pieces were already written and checked while planning (headless export plus the kit tests), so Task 2 exports all of them; they are cheap to regenerate if the hero review changes the style. The gate still holds where it costs effort: no recipe other than `tc_turks` (age 2) is added or baked before approval.
 
 ## File Structure
@@ -1342,6 +1350,7 @@ test('every recipe style is baked into the manifest with its PNG', () => {
 - Produces:
   - `civKartKey(type, civ, st) → string | null`
   - `drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {})`, where `opts.crown === false` skips section 1
+  - Rule: a civ sprite is used only when its age suffix ≥ the age of the shared sprite `kartKey(type, st)` would pick. This keeps `tc_4`/`tc_5`.
 
 - [ ] **Step 1: Write the failing browser tests**
 
@@ -1386,7 +1395,7 @@ test('Turks and Saracens use their own building sprites without the painted crow
     turksMonastery1: drawProbe('monastery', 1, 'turks'),
   }));
   expect(r.turks2).toEqual({ names: ['tc_turks_2'], domes: 0 });
-  expect(r.turks5.names[0]).toMatch(/^tc_turks_[23]$/);
+  expect(r.turks5.names).toEqual(['tc_5']);   // the dedicated Future Town Center outranks the medieval civ sprite
   expect(r.franks2.names).toEqual(['tc_2']);
   expect(r.turksMonastery1.names).toEqual(['monastery_1']);
   expect(r.turksMonastery1.domes).toBeGreaterThan(0);
@@ -1465,11 +1474,23 @@ function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {}) {
   with:
 
 ```js
-        // per-civilization building sets (e.g. house_turks_2) come before the shared Kenney sprite
-        const civSet = !name && civKartKey(type, civ, st);
+        // per-civilization building sets (e.g. house_turks_2) replace the shared sprite unless the shared one is
+        // newer, so the dedicated Modern/Future Town Centers (tc_4, tc_5) still win over tc_turks_3
+        const shared = kartKey(type, st), own = !name && civKartKey(type, civ, st);
+        const ageOf = k => { const n = +k.slice(k.lastIndexOf('_') + 1); return Number.isFinite(n) ? n : -1; };
+        const civSet = own && (!shared || ageOf(own) >= ageOf(shared)) ? own : null;
         if (civSet) name = civSet;
         if (!name) name = kartKey(type, st);
 ```
+
+  How the rule resolves:
+
+  | Lookup | Picks | Why |
+  |---|---|---|
+  | `house`, Turks, age 5 | `house_turks_3` | civ age 3 = shared `house_3` age 3 |
+  | `tc`, Turks, age 2 | `tc_turks_2` | tie; the civ sprite wins |
+  | `tc`, Turks, age 5 | `tc_5` | shared age 5 > civ age 3 |
+  | `monastery`, Turks, age 1 | `monastery_1` | no civ sprite at or below age 1 |
 
   Then replace:
 

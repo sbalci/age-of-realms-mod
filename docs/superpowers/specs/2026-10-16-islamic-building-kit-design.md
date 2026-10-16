@@ -24,7 +24,9 @@ This is the pilot for the per-civilization building sets in [ASSET_PLAN.md](../.
 The sprites appear in the default Canvas 2D view.
 
 **Not in scope**
-- Ages 4–5. They show the civ's age-3 sprite plus the existing modern/future overlay, which is what every building does today.
+- Ages 4–5 sprites. A civ sprite is used only when it is at least as recent as the shared sprite the game would otherwise pick:
+  - Houses and monasteries in ages 4–5 show the civ's age-3 sprite plus the existing modern/future overlay, which is what every building does today.
+  - The Town Center keeps the dedicated shared Modern and Future sprites (`tc_4`, `tc_5`).
 - Other buildings and other civs.
 - Units.
 - The 2.5D renderer. It is an opt-in prototype (`?renderer=three` or `localStorage.aor_renderer`) that builds its own procedural meshes, and it stays unchanged.
@@ -117,7 +119,9 @@ Props reused from the Kenney kits:
 
 All in [civ_art.js](../../../game/js/civ_art.js), in the wrapped `bldSprite` (section D):
 
-1. **Civ sprite lookup.** Before the generic `kartKey(type, st)`, try `type + '_' + civ + '_' + s` for `s = st` down to 0, using the first one that has loaded.
+1. **Civ sprite lookup.** Before the generic `kartKey(type, st)`, try `type + '_' + civ + '_' + s` for `s = st` down to 0, taking the first one that has loaded.
+   - Use it only if its age is at least the age of the sprite `kartKey(type, st)` would pick. A bare key without an age counts as −1, and on a tie the civ sprite wins.
+   - This keeps the dedicated `tc_4`/`tc_5` Modern and Future Town Centers ahead of `tc_turks_3`.
 2. **Overlay.** When a civ sprite is used, call `drawCivBuildingOverlay` with an option that skips its section 1 (roof and crown ornaments: the painted dome and minaret).
    - Sections 2–4 still draw: courtyard props, the civ shield, and the age 4–5 modern and future add-ons.
    - The player-colour flag and banners still draw.
