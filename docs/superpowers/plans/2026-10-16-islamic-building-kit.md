@@ -27,7 +27,9 @@
   - No AI image generation.
   - Every mesh comes from `islamic_kit.py` or the existing Kenney CC0 kits.
 - Blender: `D:\Blender\blender.exe` (5.2.2 LTS). The `BLENDER` environment variable overrides it.
-- Playwright Chromium lives in `D:\ms-playwright` (installed in Task 0). Every command that bakes or runs browser tests needs `PLAYWRIGHT_BROWSERS_PATH=D:\ms-playwright`. In this VS Code session, prefix it on each command; new shells get it from `setx`.
+- Playwright Chromium for this project lives in `D:\ms-playwright` (installed in Task 0).
+  - Every command that bakes or runs browser tests sets `PLAYWRIGHT_BROWSERS_PATH=D:\ms-playwright` for that command only.
+  - Never set it user-wide (`setx`, or System Properties). Other projects on this PC use the default `%LOCALAPPDATA%\ms-playwright` and would stop finding their browsers.
 
 **Git**
 - Work on branch `feat/islamic-building-kit`.
@@ -113,19 +115,21 @@ Everything else is code and suits subagents.
 **Interfaces:**
 - Produces: Chromium in `D:\ms-playwright`, the `create-game-assets` skill installed, and recorded baseline test results.
 
-- [ ] **Step 1: Install Playwright's Chromium on D: and persist the path**
+- [ ] **Step 1: Install Playwright's Chromium on D: for this project only**
 
   The baker and the browser tests need Chromium for `@playwright/test` 1.64.1. Today only an older build (`chromium-1208`) is under `%LOCALAPPDATA%\ms-playwright`.
+
+  Other projects on this PC rely on that default folder. So the location is set for this one command, not user-wide; do not run `setx`.
 
   Run in PowerShell:
 
   ```powershell
-  $env:PLAYWRIGHT_BROWSERS_PATH = 'D:\ms-playwright'
-  npx playwright install chromium
-  setx PLAYWRIGHT_BROWSERS_PATH D:\ms-playwright
+  $env:PLAYWRIGHT_BROWSERS_PATH = 'D:\ms-playwright'; npx playwright install chromium
   ```
 
-  Expected: the install finishes with no error, and `D:\ms-playwright` contains a `chromium-*` folder.
+  Expected:
+  - The install finishes with no error, and `D:\ms-playwright` contains a `chromium-*` folder.
+  - `[Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH', 'User')` is still empty.
 
 - [ ] **Step 2: Install the create-game-assets skill** (Apache-2.0)
 
