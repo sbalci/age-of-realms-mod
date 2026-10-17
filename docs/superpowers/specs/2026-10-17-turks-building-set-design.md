@@ -128,6 +128,31 @@ All in `game/js/civ_art.js`.
 
 **The Town Center needs no new rule.** `tc_turks_4` and `tc_turks_5` tie on age with the shared generated `tc_4` / `tc_5`, and the civ sprite wins ties. For other civs `tc_4`/`tc_5` keep outranking their age-3 civ sprites.
 
+## Loading civ sprites on demand
+
+Added 2026-10-17 at the user's request.
+
+**Why.** Today `art_kenney.js` downloads every key in `KENNEY_ART` at startup, and each finished image clears `R.spriteCache`, the UHD caches, `ICONS` and the panel keys. That is about 130 images now, about 210 after this project, and about 700 on the full roadmap.
+
+**Change, in `game/js/art_kenney.js`:**
+- `kartCiv(key)` returns the civ of a civ-specific key (`<type>_<civ>_<age>` where `<civ>` is a key of `CIVS` from `data.js`), else `null`. `tree_anatolian_0` stays shared because `anatolian` is not a civ.
+- At startup only shared keys (`kartCiv(k) === null`) are requested.
+- `KART.loadCiv(civ)` requests that civ's keys once and returns a Promise that settles when all of them have loaded or failed. Repeat calls return the same Promise.
+- `KART.requested` (a Set) holds every key asked for so far.
+- Cache clearing after loads is coalesced: at most one clear per animation frame, instead of one per image. `KART.revision` still increments per image.
+
+**Change, in `game/js/civ_art.js`:** the wrapped `bldSprite` calls `KART.loadCiv(civ)` the first time it sees a civ. Until that civ's images arrive the existing fallback applies (shared sprite plus painted overlay), as it already does during progressive loading. The sprite name is recomputed each draw, so the civ sprite appears once loaded.
+
+**Tests.**
+- The browser "wait for art" helpers (`tests/browser/art.spec.js`, `islamic-art.spec.js`, `actors.spec.js`) wait for `KART.requested` to settle (loaded + failed = requested) instead of all of `KENNEY_ART`.
+- Tests that need civ sprites first `await KART.loadCiv('<civ>')`.
+- The missing-sprite count test counts only shared `tc_`/`farm_` keys.
+- A new browser test checks that:
+  - no `_turks_` key is requested at startup;
+  - `KART.loadCiv('turks')` loads exactly the Turks keys;
+  - a second call returns the same Promise;
+  - loading N images clears `R.spriteCache` fewer than N times.
+
 ## Kit additions (Islamic kit)
 
 New pieces in `tools/art/blender/islamic_kit.py`, same conventions as the existing 19: 1×1 cells, walls on the +x edge, glTF Y-up, matte, slot-named materials.
@@ -181,8 +206,9 @@ New pieces in `tools/art/blender/islamic_kit.py`, same conventions as the existi
 
 ## Process and review points
 
-**Phase A: refactor**
+**Phase A: refactor and loading**
 1. `kitlib.py`, the `.mjs` split, and both neutral proofs.
+1b. On-demand civ sprite loading (see "Loading civ sprites on demand").
 
 **Phase B: ages 0–3**
 2. Add the ages 0–3 pieces. Check them in the live Blender over MCP from the bake angle (45° azimuth, 30° elevation), then remove the preview.
