@@ -180,11 +180,12 @@ test('a civilization with its own castle draws it before its family castle', asy
   await page.evaluate(() => Promise.all(['turks', 'saracens', 'byzantines', 'franks'].map(civ => KART.loadCiv(civ))));
   await page.evaluate(drawProbe);
   const r = await page.evaluate(() => ({
-    turks2: drawProbe('castle', 2, 'turks'), turks3: drawProbe('castle', 3, 'turks'),
+    turks2: drawProbe('castle', 2, 'turks'), turks3: drawProbe('castle', 3, 'turks'), turks4: drawProbe('castle', 4, 'turks'),
     saracens2: drawProbe('castle', 2, 'saracens'), byzantines2: drawProbe('castle', 2, 'byzantines'), franks2: drawProbe('castle', 2, 'franks'),
   }));
   expect(r.turks2).toEqual({ names: ['castle_turks_2'], domes: 0 });
   expect(r.turks3.names).toEqual(['castle_turks_2']);
+  expect(r.turks4.names).toEqual(['castle_turks_4']);
   expect(r.saracens2.names).toEqual(['castle_med']);
   expect(r.byzantines2.names).toEqual(['castle_med']);
   expect(r.franks2.names).toEqual(['castle']);

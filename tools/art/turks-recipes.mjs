@@ -369,6 +369,210 @@ REPUBLICAN.barracks = k => {
   k.add(I, 'flagpole', 2.6, 2.6, 0);
 };
 
+// ---- mill: brick steam mill (age 4), concrete grain silos (age 5) ----
+TANZIMAT.mill = k => {
+  ring(k, 0.1, 0.6, 2, 1, 0, {}, 'wall-brick');
+  ring(k, 0.1, 0.6, 2, 1, 1, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 1.1, 1.1, 2, 0, [2, 0.6, 1]);
+  k.add(I, 'stack', 0.4, 0.3, 0, 0, 0.85);
+  k.add('town', 'cart', 0.6, 1.85, 0, 90, 0.55);
+};
+REPUBLICAN.mill = k => {
+  // two silos beside a three-storey elevator tower, warehouse in front
+  for (const x of [0.32, 0.8]) crown(k, 'silo', x, 0.4, 0, 0.8);
+  for (const z of [0, 1, 2]) ring(k, 1.1, 0, 1, 1, z, {}, 'wall-modern');
+  roof(k, 1.1, 0, 1, 1, 3);
+  ring(k, 0.1, 1.0, 2, 1, 0, {}, 'wall-modern');
+  roof(k, 0.1, 1.0, 2, 1, 1);
+};
+
+// ---- lumbercamp: steam sawmill (age 4), sawtooth-roofed sawmill (age 5) ----
+TANZIMAT.lumbercamp = k => {
+  ring(k, 0.1, 0.1, 2, 1, 0, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 1.1, 0.6, 1, 0, [2, 0.6, 1]);
+  k.add(I, 'stack', 1.85, 0.3, 0, 0, 0.7);
+  k.add('nature', 'log_large', 1.3, 1.5, 0, 60, 0.9);
+  k.add('nature', 'log', 0.6, 1.6, 0, 10, 1.1);
+};
+REPUBLICAN.lumbercamp = k => {
+  ring(k, 0.1, 0.1, 2, 1, 0, {}, 'wall-modern');
+  sawtooth(k, 0.1, 0.1, 2, 1, 1);
+  k.add('nature', 'log_large', 1.3, 1.5, 0, 60, 0.9);
+  k.add('town', 'cart', 0.6, 1.65, 0, 90, 0.55);
+};
+
+// ---- miningcamp: coal winding tower and engine house (age 4), steel headframe (age 5) ----
+TANZIMAT.miningcamp = k => {
+  k.add(I, 'lookout', 0.6, 0.6, 0, 0, 1.05);
+  ring(k, 1.0, 1.0, 1, 1, 0, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 1.5, 1.5, 1, 0, [1, 0.6, 1]);
+  k.add(I, 'stack', 1.85, 1.15, 0, 0, 0.6);
+  k.add('nature', 'stone_largeA', 0.5, 1.5, 0, 0, 0.7, { tint: '#3a3a3a' });   // coal heap
+};
+REPUBLICAN.miningcamp = k => {
+  k.add(I, 'headframe', 0.75, 0.6, 0, 0, 0.95);
+  ring(k, 1.0, 1.0, 1, 1, 0, {}, 'wall-modern');
+  roof(k, 1.0, 1.0, 1, 1, 1);
+  k.add('nature', 'stone_largeA', 0.5, 1.5, 0, 0, 0.7, { tint: '#3a3a3a' });
+};
+
+// ---- dock: arsenal with a clock tower (age 4), concrete quay with a gantry crane (age 5) ----
+TANZIMAT.dock = k => {
+  ring(k, 0, 0, 2, 1, 0, {}, 'wall-pilaster');
+  k.add(I, 'roof-hip', 1, 0.5, 1, 0, [2, 0.6, 1]);
+  crown(k, 'clock-tower', 2.5, 0.5, 0, 0.6);
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'jetty', x, 2.2, 0);
+  k.add(I, 'crane', 1.5, 1.4, 0, 0, 0.85);
+};
+REPUBLICAN.dock = k => {
+  ring(k, 0, 0, 2, 1, 0, {}, 'wall-modern');
+  roof(k, 0, 0, 2, 1, 1);
+  for (const x of [0.5, 1.5, 2.5]) for (const y of [1.5, 2.5]) k.add(I, 'roof-flat', x, y, 0.05);   // concrete quay
+  k.add(I, 'gantry', 1.6, 1.9, 0.11, 0, 0.9);
+};
+
+// ---- market: arcaded commercial hall (age 4), First National style market hall (age 5) ----
+TANZIMAT.market = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-pilaster');
+  ring(k, 0, 0, 3, 2, 1, {}, 'wall-pilaster');
+  k.add(I, 'roof-hip', 1.5, 1, 2, 0, [3, 0.6, 2]);
+  porch(k, 1, 2, 1, true);
+  for (const x of [0.5, 2.5]) k.add(I, 'awning', x, 2.5, 0, ROT.s);
+};
+REPUBLICAN.market = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-tile-arch');
+  ring(k, 0, 0, 3, 2, 1, {}, 'wall-tile-arch');
+  k.add(I, 'eave-broad', 1.5, 1, 2, 0, [3, 1, 2]);
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'awning', x, 2.5, 0, ROT.s);
+};
+
+// ---- blacksmith: brick ironworks (age 4), steelworks (age 5) ----
+TANZIMAT.blacksmith = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 1.5, 1, 1, 0, [3, 0.6, 2]);
+  k.add(I, 'stack', 2.6, 0.4, 0, 0, 0.9);
+  k.add(I, 'forge', 1.5, 2.5, 0, ROT.s);
+};
+REPUBLICAN.blacksmith = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-modern');
+  sawtooth(k, 0, 0, 3, 2, 1);
+  for (const x of [0.5, 1.3]) k.add(I, 'stack', x, 0.35, 0, 0, 1.15);
+};
+
+// ---- range: neoclassical shooting lodge (age 4), rifle range shelter (age 5) ----
+TANZIMAT.range = k => {
+  ring(k, 0, 0, 2, 1, 0, {}, 'wall-pilaster');
+  k.add(I, 'roof-hip', 1, 0.5, 1, 0, [2, 0.6, 1]);
+  porch(k, 0, 1, 2);
+  for (const y of [0.5, 1.5, 2.5]) k.add(I, 'target', 2.65, y, 0);
+};
+REPUBLICAN.range = k => {
+  ring(k, 0, 0, 2, 1, 0, {}, 'wall-modern');
+  roof(k, 0, 0, 2, 1, 1);
+  for (const y of [0.5, 1.5, 2.5]) k.add(I, 'target', 2.65, y, 0);
+  k.add(I, 'flagpole', 0.3, 2.6, 0);
+};
+
+// ---- stable: neoclassical imperial stables (age 4), Republican stud farm (age 5) ----
+TANZIMAT.stable = k => {
+  ring(k, 0, 0, 3, 1, 0, { s0: 'wall-arcade', s2: 'wall-arcade' }, 'wall-pilaster');
+  k.add(I, 'roof-hip', 1.5, 0.5, 1, 0, [3, 0.6, 1]);
+  k.add(I, 'pediment', 1.5, 0.5, 1, ROT.s);
+  lowWall(k, 0, 1.15, 3, 2, 0.3);
+};
+REPUBLICAN.stable = k => {
+  ring(k, 0, 0, 3, 1, 0, {}, 'wall-modern');
+  roof(k, 0, 0, 3, 1, 1);
+  lowWall(k, 0, 1.15, 3, 2, 0.3, 'wall-modern');
+};
+
+// ---- university: Darülfünun-style faculty (age 4), monumental 1930s faculty (age 5) ----
+TANZIMAT.university = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-pilaster');
+  ring(k, 0, 0, 3, 2, 1, {}, 'wall-pilaster');
+  k.add(I, 'roof-hip', 1.5, 1, 2, 0, [3, 0.6, 2]);
+  porch(k, 0.5, 2, 2, true);
+};
+REPUBLICAN.university = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-modern');
+  ring(k, 0, 0, 3, 2, 1, {}, 'wall-modern');
+  roof(k, 0, 0, 3, 2, 2);
+  porch(k, 0, 2, 3);
+  k.add(I, 'flagpole', 1.5, 1.0, 2.06, 0, 0.8);
+};
+
+// ---- siege: Tophane-style domed cannon foundry (age 4), arms factory (age 5) ----
+TANZIMAT.siege = k => {
+  ring(k, 0, 0, 2, 2, 0, {}, 'wall-brick');
+  roof(k, 0, 0, 2, 2, 1);
+  for (const [x, y] of [[0.5, 0.5], [1.5, 0.5], [0.5, 1.5], [1.5, 1.5]]) crown(k, 'dome-lead', x, y, 1.06, 0.6);
+  k.add(I, 'stack', 1.95, 0.15, 0, 0, 0.8);
+  for (const y of [0.7, 1.7]) k.add(I, 'cannon', 2.5, y, 0, 0, 1.1);
+};
+REPUBLICAN.siege = k => {
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-modern');
+  sawtooth(k, 0, 0, 3, 2, 1);
+  k.add(I, 'stack', 2.7, 0.3, 0, 0, 1.0);
+  for (const x of [0.8, 2.2]) k.add(I, 'cannon', x, 2.5, 0, ROT.s, 1.1);
+};
+
+// ---- tower: coastal artillery tower (age 4), concrete gun battery tower (age 5) ----
+TANZIMAT.tower = k => {
+  ring(k, 0, 0, 1, 1, 0, {}, 'wall-brick');
+  ring(k, 0, 0, 1, 1, 1, {}, 'wall-brick');
+  roof(k, 0, 0, 1, 1, 2, 'balustrade');
+  k.add(I, 'cannon', 0.5, 0.5, 2.06, 45, 0.6);
+};
+REPUBLICAN.tower = k => {
+  ring(k, 0, 0, 1, 1, 0, {}, 'wall-modern');
+  ring(k, 0, 0, 1, 1, 1, {}, 'wall-modern');
+  roof(k, 0, 0, 1, 1, 2);
+  k.add(I, 'gun-turret', 0.5, 0.5, 2.06, 45, 0.7);
+};
+
+// ---- well: baroque fountain (age 4), plain Republican fountain (age 5) ----
+TANZIMAT.well = k => {
+  ring(k, 0, 0, 1, 1, 0, {}, 'wall-pilaster');
+  k.add(I, 'eave-broad', 0.5, 0.5, 1, 0, [1, 0.8, 1]);
+  crown(k, 'dome-lead', 0.5, 0.5, 1.1, 0.45, true);
+};
+REPUBLICAN.well = k => {
+  lowWall(k, 0, 0, 1, 1, 0.35, 'wall-modern');
+  k.add('town', 'fountain-round', 0.5, 0.5, 0, 0, 0.5);
+};
+
+// ---- castle: Tanzimat gun bastion (age 4), concrete coastal fortress (age 5) ----
+TANZIMAT.castle = k => {
+  // low thick ramparts with a balustrade and guns, brick barracks inside, flag
+  lowWall(k, 0, 0, 4, 4, 0.7);
+  ring(k, 0, 0, 4, 4, 0.7, {}, 'balustrade');
+  ring(k, 1, 1, 2, 1, 0, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 2, 1.5, 1, 0, [2, 0.6, 1]);
+  for (const [x, y, rot] of [[3.6, 0.6, 0], [3.6, 3.4, 0], [0.6, 3.6, -90], [2.0, 3.65, -90]]) k.add(I, 'cannon', x, y, 0.7, rot, 1.0);
+  k.add(I, 'flagpole', 0.6, 0.6, 0.7, 0, 1.3);
+};
+REPUBLICAN.castle = k => {
+  // casemate walls with gun turrets on the corners, flag
+  ring(k, 0, 0, 4, 4, 0, {}, 'wall-modern');
+  ring(k, 0, 0, 4, 4, 1, {}, 'wall-modern');
+  courtyard(k, 0, 0, 4, 4, 2);
+  for (const [x, y] of [[0.5, 0.5], [3.5, 0.5], [0.5, 3.5], [3.5, 3.5]]) k.add(I, 'gun-turret', x, y, 2.06, 45, 0.9);
+  k.add(I, 'flagpole', 2, 2, 0, 0, 1.6);
+};
+
+// ---- outpost: telegraph signal station (age 4), fire-watch tower (age 5) ----
+TANZIMAT.outpost = k => {
+  ring(k, 0, 0, 1, 1, 0, {}, 'wall-brick');
+  k.add(I, 'roof-hip', 0.5, 0.5, 1, 0, [1, 0.6, 1]);
+  k.add(I, 'flagpole', 0.5, 0.5, 1.2, 0, 0.8);
+};
+REPUBLICAN.outpost = k => {
+  ring(k, 0, 0, 1, 1, 0, {}, 'wall-modern');
+  ring(k, 0, 0, 1, 1, 1, {}, 'wall-modern');
+  roof(k, 0, 0, 1, 1, 2);
+  k.add(I, 'flagpole', 0.5, 0.5, 2.06, 0, 0.8);
+};
+
 // ---- recipes (keep last) ----
 const BUILDERS = { seljuk: SELJUK, ottoman: OTTOMAN, tanzimat: TANZIMAT, republican: REPUBLICAN };
 export const TURKS_RECIPES = {};
