@@ -39,6 +39,7 @@ export function islamicSlots(civ, age) {
 const I = 'islamic';
 const ROT = { e: 0, s: -90, w: 180, n: 90 };
 const CYPRESS = { color: '#2f5a3a' };
+const HIDE = { color: '#b49a72' };   // the Kenney tent's own fabric renders pink; hide-coloured canvas suits a camp
 
 // ring of wall pieces around a w x d block of cells from tile (x0, y0); feats: { s0: 'wall-door', e1: 'wall-window' }
 function ring(k, x0, y0, w, d, z = 0, feats = {}, base = 'wall') {
@@ -89,7 +90,7 @@ export const ISLAMIC_RECIPES = {
       k.add(I, 'portal', 2, 3, 0, ROT.s);
       crown(k, 'kumbet', 1, 1, 1.06, 0.9);
       if (k.style === 1) crown(k, 'dome-lead', 2.4, 1.6, 1.06, 1.1);
-      k.add('nature', 'tent_detailedOpen', 3.7, 3.7, 0, -30, 0.5);
+      k.add('nature', 'tent_detailedOpen', 3.7, 3.7, 0, -30, 0.5, HIDE);
     } else {
       // Ottoman Divan: two-storey hall behind a domed portico, stepped domes up to a central dome with an alem
       ring(k, 0.5, 0.5, 3, 2, 0, { s0: 'wall-window', s1: 'wall-door', s2: 'wall-window', e0: 'wall-window', e1: 'wall-door' });
@@ -144,7 +145,7 @@ export const ISLAMIC_RECIPES = {
     roof(k, 0.5, 0.5, 3, 2, top, 'merlon-stepped');
     if (k.style === 0) {
       // mud-brick compound: walled hall, shade tent and palms
-      k.add('nature', 'tent_detailedOpen', 1.6, 3.3, 0, 0, 0.7);
+      k.add('nature', 'tent_detailedOpen', 1.6, 3.3, 0, 0, 0.7, HIDE);
     } else {
       // Dar al-Imara: horseshoe-arcaded portico before a hall under a pointed ribbed dome
       crown(k, 'dome-ribbed', 2, 1.5, top + 0.06, tall ? 1.7 : 1.3);
@@ -152,7 +153,7 @@ export const ISLAMIC_RECIPES = {
       if (k.style === 3) crown(k, 'minaret-square', 0.8, 0.8, top + 0.06, 0.6);
     }
     k.add('nature', 'tree_palm', 3.75, 0.4, 0, 0, 0.8);
-    k.add('nature', 'tree_palmBend', 3.75, 3.7, 0, 200, 0.75);
+    k.add('nature', 'tree_palmBend', 3.8, 2.2, 0, 20, 0.75);
   } },
   monastery_saracens: { civ: 'saracens', size: 3, styles: [2, 3], scale: 1.02, sq: 1.02, build(k) {
     // courtyard mosque: arcaded front, prayer hall under a pointed ribbed dome, square tiered minaret
@@ -163,6 +164,5 @@ export const ISLAMIC_RECIPES = {
     if (k.style === 3) for (const x of [0.55, 2.45]) crown(k, 'dome-ribbed', x, 0.95, 2.06, 0.6);
     portico(k, 0, 2, 2, null, 'merlon-stepped');
     crown(k, 'minaret-square', 2.5, 2.5, 0, 1.15);
-    k.add('nature', 'tree_palm', 0.3, 2.75, 0, 0, 0.6);
   } },
 };

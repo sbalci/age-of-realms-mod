@@ -87,5 +87,8 @@ test('every recipe style is baked into the manifest with its PNG', () => {
     assert.ok(fs.existsSync(path.join(root, 'game/art/kenney', key + '.png')), key + '.png missing');
   }
 });
+test('the pilot covers exactly 20 sprites', () => {
+  assert.equal(Object.values(R.ISLAMIC_RECIPES).reduce((n, r) => n + r.styles.length, 0), 20);
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
