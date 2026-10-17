@@ -17,12 +17,13 @@ export const PALETTES = {
     { wall: '#f2deb8', roof: '#1e7c72', trim: '#c89830', stone: '#e8d0aa', accent: '#e8b838', dome: '#d8a830' },
   ],
 };
-export const FIXED = { gold: '#e8c040', dark: '#2a2420' };
+export const FIXED = { gold: '#e8c040', dark: '#2a2420', wood: '#6b4a2b', metal: '#4a4640' };
 // One multiplier on every slot colour. The civ palettes were tuned for flat 2D art; tuned at the pilot's review point 1.
 export const SHADE = 0.92;
 // Height of each crowning piece at scale 1, so a finial or another piece can sit on top. tests/islamic-art.test.js
 // checks these against the GLBs.
-export const TOP = { 'dome-lead': 0.62, 'dome-ribbed': 0.959, 'kumbet': 1.98, 'minaret-pencil': 3.27, 'minaret-square': 2.995, 'portal': 1.76 };
+export const TOP = { 'dome-lead': 0.62, 'dome-ribbed': 0.959, 'kumbet': 1.98, 'minaret-pencil': 3.27, 'minaret-square': 2.995, 'portal': 1.76,
+  'tower-round': 2.31, 'asbad': 1.67, 'kiosk': 1.1, 'lookout': 2.16 };
 
 const shade = (hex, f) => '#' + [1, 3, 5].map(i => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * f)).toString(16).padStart(2, '0')).join('');
 

@@ -222,6 +222,162 @@ def piece_mashrabiya():
     return p
 
 
+# ---- Turks pieces, ages 0-3 (Seljuk and Ottoman) ----
+# The camera sees each piece's +x and -y sides (game +x and +y), so two-sided details go there.
+def piece_tower_round():
+    p = Piece('tower-round')
+    n, rot = 16, -math.pi / 16
+    p.prism('stone', 0.44, n, 0.0, 0.12, rot=rot)
+    p.prism('wall', 0.42, n, 0.12, 1.5, rot=rot)
+    p.prism('band', 0.425, n, 1.2, 1.26, rot=rot)
+    p.prism('trim', 0.45, n, 1.5, 1.57, rot=rot)
+    p.lathe('dome', [(0.47, 0.0), (0.0, 0.74)], n, z0=1.57, rot=rot)
+    face = 0.42 * math.cos(math.pi / 16)
+    for z0, z1 in ((0.45, 0.7), (0.95, 1.15)):
+        p.box('dark', face - 0.01, -0.025, z0, face + 0.012, 0.025, z1)
+    return p
+
+
+def piece_asbad():
+    p = Piece('asbad')
+    p.box('stone', -0.4, -0.4, 0.0, 0.4, 0.4, 0.12)
+    p.box('wall', -0.38, -0.38, 0.12, 0.38, 0.38, 1.6)
+    p.box('band', -0.385, -0.385, 1.08, 0.385, 0.385, 1.12)
+    for s in (-0.24, -0.08, 0.08, 0.24):
+        p.box('dark', 0.38, s - 0.03, 1.18, 0.39, s + 0.03, 1.52)      # wind slots, +x face
+        p.box('dark', s - 0.03, -0.39, 1.18, s + 0.03, -0.38, 1.52)    # wind slots, camera-side -y face
+    p.slab_yz('dark', opening(0.11, 0.12, 0.5), 0.38, 0.395)
+    p.box('trim', -0.43, -0.43, 1.6, 0.43, 0.43, 1.67)
+    return p
+
+
+def piece_kiosk():
+    p = Piece('kiosk')
+    p.prism('stone', 0.38, 8, 0.0, 0.18, rot=math.pi / 8)
+    p.prism('accent', 0.24, 8, 0.18, 0.26, rot=math.pi / 8)          # tiled basin
+    for k in range(8):
+        a = math.pi / 8 + 2 * math.pi * k / 8
+        p.prism('stone', 0.03, 6, 0.18, 0.7, cx=0.31 * math.cos(a), cy=0.31 * math.sin(a))
+    p.prism('roof', 0.45, 8, 0.7, 0.76, rot=math.pi / 8)              # broad eave
+    p.lathe('dome', round_dome(0.3, 0.26), 12, z0=0.76)
+    p.prism('gold', 0.025, 6, 1.02, 1.1)
+    return p
+
+
+def piece_lookout():
+    p = Piece('lookout')
+    for x in (-0.3, 0.3):
+        for y in (-0.3, 0.3):
+            p.box('wood', x - 0.035, y - 0.035, 0.0, x + 0.035, y + 0.035, 1.82)
+    p.slab_xz('wood', [(-0.3, 0.2), (-0.24, 0.2), (0.3, 0.9), (0.24, 0.9)], -0.33, -0.29)
+    p.box('wood', -0.38, -0.38, 1.5, 0.38, 0.38, 1.56)
+    for x0, y0, x1, y1 in ((0.35, -0.38, 0.38, 0.38), (-0.38, -0.38, -0.35, 0.38), (-0.38, -0.38, 0.38, -0.35), (-0.38, 0.35, 0.38, 0.38)):
+        p.box('wood', x0, y0, 1.68, x1, y1, 1.72)
+    p.lathe('roof', [(0.56, 0.0), (0.0, 0.34)], 4, z0=1.82, rot=math.pi / 4)
+    return p
+
+
+def piece_jetty():
+    p = Piece('jetty')
+    for y0, y1 in ((-0.5, -0.18), (-0.16, 0.16), (0.18, 0.5)):
+        p.box('wood', -0.5, y0, 0.06, 0.5, y1, 0.12)
+    for x in (-0.38, 0.38):
+        for y in (-0.42, 0.42):
+            p.prism('wood', 0.04, 6, -0.18, 0.16, cx=x, cy=y)
+    return p
+
+
+def piece_crane():
+    p = Piece('crane')
+    p.box('stone', -0.16, -0.16, 0.0, 0.16, 0.16, 0.1)
+    p.box('wood', -0.04, -0.04, 0.1, 0.04, 0.04, 1.42)
+    p.box('wood', -0.12, -0.03, 1.32, 0.72, 0.03, 1.38)
+    p.slab_xz('wood', [(0.0, 0.95), (0.06, 0.95), (0.5, 1.32), (0.42, 1.32)], -0.02, 0.02)
+    p.box('dark', 0.66, -0.006, 0.72, 0.672, 0.006, 1.32)
+    p.box('metal', 0.62, -0.05, 0.62, 0.72, 0.05, 0.72)
+    return p
+
+
+def piece_cannon():
+    p = Piece('cannon')
+    p.box('wood', -0.26, -0.1, 0.1, 0.12, 0.1, 0.22)
+    for y0, y1 in ((-0.17, -0.11), (0.11, 0.17)):
+        p.cyl_y('wood', 0.13, 10, y0, y1, cx=-0.06, cz=0.13)
+    p.cyl_x('metal', 0.075, 0.055, 12, -0.32, 0.46, cz=0.3)
+    return p
+
+
+def piece_rack_shields():
+    p = Piece('rack-shields')
+    for y in (-0.36, 0.36):
+        p.box('wood', 0.36, y - 0.025, 0.0, 0.41, y + 0.025, 0.62)
+    p.box('wood', 0.36, -0.4, 0.56, 0.41, 0.4, 0.61)
+    for y in (-0.2, 0.0, 0.2):
+        p.cyl_x('accent', 0.095, 0.095, 12, 0.41, 0.43, cy=y, cz=0.36)
+        p.cyl_x('metal', 0.025, 0.02, 6, 0.43, 0.45, cy=y, cz=0.36)
+    for y in (-0.1, 0.1):
+        p.box('metal', 0.415, y - 0.006, 0.08, 0.425, y + 0.006, 0.52)
+    return p
+
+
+def piece_target():
+    p = Piece('target')
+    for y in (-0.16, 0.16):
+        p.slab_xz('wood', [(-0.2, 0.0), (-0.14, 0.0), (0.02, 0.5), (-0.04, 0.5)], y - 0.02, y + 0.02)
+    p.cyl_x('wall', 0.22, 0.22, 16, 0.0, 0.05, cz=0.5)
+    p.cyl_x('accent', 0.14, 0.14, 16, 0.05, 0.06, cz=0.5)
+    p.cyl_x('dark', 0.05, 0.05, 10, 0.06, 0.07, cz=0.5)
+    return p
+
+
+def piece_forge():
+    p = Piece('forge')
+    p.box('stone', -0.32, -0.26, 0.0, 0.18, 0.26, 0.36)
+    p.box('gold', 0.14, -0.14, 0.2, 0.19, 0.14, 0.3)          # glowing coals in the hearth mouth
+    p.box('stone', -0.26, -0.18, 0.36, 0.08, 0.18, 0.62)
+    p.box('stone', -0.2, -0.12, 0.62, 0.02, 0.12, 0.95)       # flue
+    p.box('metal', 0.32, -0.06, 0.0, 0.42, 0.06, 0.12)         # anvil
+    p.box('metal', 0.29, -0.1, 0.12, 0.47, 0.1, 0.18)
+    return p
+
+
+def piece_sextant():
+    p = Piece('sextant')
+    p.box('stone', -0.45, -0.12, 0.0, 0.45, 0.12, 0.08)
+    outer = [(-0.4 + 0.85 * math.cos(t), 0.08 + 0.85 * math.sin(t)) for t in (math.pi / 2 * s / 10 for s in range(11))]
+    inner = [(-0.4 + 0.72 * math.cos(t), 0.08 + 0.72 * math.sin(t)) for t in (math.pi / 2 * s / 10 for s in range(10, -1, -1))]
+    p.slab_xz('stone', outer + inner, -0.07, 0.07)
+    p.box('gold', -0.42, -0.075, 0.08, -0.38, 0.075, 0.95)    # gnomon edge
+    return p
+
+
+def piece_tug():
+    p = Piece('tug')
+    p.prism('wood', 0.016, 6, 0.0, 1.02)
+    p.lathe('dark', [(0.075, 0.0), (0.05, 0.18), (0.02, 0.3)], 8, z0=0.66)   # horse-tail plume
+    p.lathe('gold', round_dome(0.035, 0.035), 8, z0=1.02)
+    p.slab_yz('gold', [(y, z + 1.14) for y, z in crescent(0.055, 0.046, 0.022)], -0.006, 0.006)
+    return p
+
+
+def piece_awning():
+    p = Piece('awning')
+    p.box('wood', 0.18, -0.42, 0.0, 0.44, 0.42, 0.3)                   # counter
+    p.box('trim', 0.2, -0.38, 0.3, 0.42, -0.06, 0.38)                  # goods
+    p.box('gold', 0.2, 0.06, 0.3, 0.42, 0.38, 0.36)
+    for y in (-0.45, 0.45):
+        p.box('wood', 0.44, y - 0.02, 0.0, 0.48, y + 0.02, 0.62)
+    p.slab_xz('accent', [(-0.1, 0.82), (-0.1, 0.86), (0.56, 0.64), (0.56, 0.6)], -0.5, 0.5)
+    return p
+
+
+def piece_chimney():
+    p = Piece('chimney')
+    p.box('stone', -0.08, -0.08, 0.0, 0.08, 0.08, 0.5)
+    p.box('trim', -0.1, -0.1, 0.5, 0.1, 0.1, 0.55)
+    return p
+
+
 PIECES = {
     'wall': piece_wall, 'wall-window': piece_wall_window, 'wall-door': piece_wall_door,
     'wall-arcade': piece_wall_arcade, 'wall-timber': piece_wall_timber,
@@ -231,6 +387,20 @@ PIECES = {
     'minaret-pencil': piece_minaret_pencil, 'minaret-square': piece_minaret_square,
     'portal': piece_portal, 'bay-cumba': piece_bay_cumba, 'alem': piece_alem,
     'malqaf': piece_malqaf, 'mashrabiya': piece_mashrabiya,
+    'tower-round': piece_tower_round,
+    'asbad': piece_asbad,
+    'kiosk': piece_kiosk,
+    'lookout': piece_lookout,
+    'jetty': piece_jetty,
+    'crane': piece_crane,
+    'cannon': piece_cannon,
+    'rack-shields': piece_rack_shields,
+    'target': piece_target,
+    'forge': piece_forge,
+    'sextant': piece_sextant,
+    'tug': piece_tug,
+    'awning': piece_awning,
+    'chimney': piece_chimney,
 }
 
 

@@ -19,6 +19,7 @@ import sys
 SLOTS = {   # preview colours only (sRGB); the recipe modules supply the baked colours
     'wall': '#ded4c2', 'stone': '#ccc2b0', 'trim': '#288290', 'roof': '#526270', 'dome': '#586878',
     'accent': '#c83028', 'band': '#288290', 'gold': '#e8c040', 'dark': '#2a2420',
+    'wood': '#6b4a2b', 'metal': '#4a4640', 'brick': '#9a4a32',
 }
 
 
@@ -97,6 +98,33 @@ class Piece:
 
     def prism(self, slot, r, n, z0, z1, cx=0.0, cy=0.0, rot=0.0):
         self.lathe(slot, [(r, 0.0), (r, z1 - z0)], n, cx, cy, z0, rot)
+
+    def slab_xz(self, slot, pts, y0, y1):
+        """Extrude a closed (x, z) outline along y from y0 to y1."""
+        i, n = self._mat(slot), len(pts)
+        a = [self.bm.verts.new((x, y0, z)) for x, z in pts]
+        b = [self.bm.verts.new((x, y1, z)) for x, z in pts]
+        self.bm.faces.new(a).material_index = i
+        self.bm.faces.new(b[::-1]).material_index = i
+        for k in range(n):
+            self.bm.faces.new((a[k], a[(k + 1) % n], b[(k + 1) % n], b[k])).material_index = i
+
+    def _tube(self, slot, ring_a, ring_b):
+        i, n = self._mat(slot), len(ring_a)
+        self.bm.faces.new(ring_a[::-1]).material_index = i
+        self.bm.faces.new(ring_b).material_index = i
+        for k in range(n):
+            self.bm.faces.new((ring_a[k], ring_a[(k + 1) % n], ring_b[(k + 1) % n], ring_b[k])).material_index = i
+
+    def cyl_x(self, slot, r0, r1, n, x0, x1, cy=0.0, cz=0.0):
+        """Cylinder (or tapered barrel) lying along x, radius r0 at x0 and r1 at x1."""
+        ring = lambda x, r: [self.bm.verts.new((x, cy + r * math.cos(2 * math.pi * k / n), cz + r * math.sin(2 * math.pi * k / n))) for k in range(n)]
+        self._tube(slot, ring(x0, r0), ring(x1, r1))
+
+    def cyl_y(self, slot, r, n, y0, y1, cx=0.0, cz=0.0):
+        """Cylinder lying along y (wheels, discs facing the camera's -y side) from y0 to y1."""
+        ring = lambda y: [self.bm.verts.new((cx + r * math.cos(2 * math.pi * k / n), y, cz + r * math.sin(2 * math.pi * k / n))) for k in range(n)]
+        self._tube(slot, ring(y0), ring(y1))
 
 
 # ---- 2D outlines in the (y, z) wall plane ----

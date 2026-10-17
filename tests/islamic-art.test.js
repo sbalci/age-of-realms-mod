@@ -3,9 +3,10 @@ const assert = require('assert/strict'), fs = require('fs'), path = require('pat
 const root = path.join(__dirname, '..');
 const KIT = path.join(root, 'assets/original/islamic');
 const KENNEY = { town: 'assets/thirdparty/kenney/fantasy-town-kit', castle: 'assets/thirdparty/kenney/castle-kit', nature: 'assets/thirdparty/kenney/nature-kit' };
-const SLOTS = ['wall', 'stone', 'trim', 'roof', 'dome', 'accent', 'band', 'gold', 'dark'];
+const SLOTS = ['wall', 'stone', 'trim', 'roof', 'dome', 'accent', 'band', 'gold', 'dark', 'wood', 'metal'];
 const PIECES = ['wall', 'wall-window', 'wall-door', 'wall-arcade', 'wall-timber', 'roof-flat', 'roof-hip', 'merlon-pointed', 'merlon-stepped',
-  'dome-lead', 'dome-ribbed', 'kumbet', 'minaret-pencil', 'minaret-square', 'portal', 'bay-cumba', 'alem', 'malqaf', 'mashrabiya'];
+  'dome-lead', 'dome-ribbed', 'kumbet', 'minaret-pencil', 'minaret-square', 'portal', 'bay-cumba', 'alem', 'malqaf', 'mashrabiya',
+  'tower-round', 'asbad', 'kiosk', 'lookout', 'jetty', 'crane', 'cannon', 'rack-shields', 'target', 'forge', 'sextant', 'tug', 'awning', 'chimney'];
 // Sprites baked so far, by building type and age. The recipes must bake exactly these, and manifest.js may hold no others.
 const TURKS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
 const SARACENS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
