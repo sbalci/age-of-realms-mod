@@ -140,6 +140,11 @@ def opening(a, z0, zs, k=1.6):
     return [(a, z0)] + pointed_arch(a, zs, k) + [(-a, z0)]
 
 
+def round_opening(a, z0, zs, steps=8):
+    """Round-arched opening of half-width a: sill at z0, semicircular head springing at zs."""
+    return [(a, z0)] + [(a * math.cos(t), zs + a * math.sin(t)) for t in (math.pi * s / steps for s in range(steps + 1))] + [(-a, z0)]
+
+
 def horseshoe(r, zs, beta=math.radians(20), steps=12):
     """Horseshoe arch of radius r whose feet stand on zs, from the right foot over the top to the left foot."""
     zc = zs + r * math.sin(beta)

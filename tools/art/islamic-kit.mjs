@@ -9,6 +9,8 @@ export const PALETTES = {
     { wall: '#d6be98', roof: '#2e7c88', trim: '#6e5030', stone: '#c2ac8c', accent: '#2494a0', dome: '#2e8490' },
     { wall: '#ded4c2', roof: '#526270', trim: '#288290', stone: '#ccc2b0', accent: '#c83028', dome: '#586878' },
     { wall: '#eae2d2', roof: '#465666', trim: '#228898', stone: '#dad2c0', accent: '#e2b038', dome: '#4a5c6e' },
+    { wall: '#ccc6bc', roof: '#3c4854', trim: '#485460', stone: '#bab4aa', accent: '#c83028', dome: '#4c5c6c' },
+    { wall: '#e6dccb', roof: '#b0503a', trim: '#8c3a2c', stone: '#c9a98e', accent: '#c8102e', dome: '#7d858c' },
   ],
   saracens: [
     { wall: '#b88c58', roof: '#d4b068', trim: '#78522c', stone: '#bca07c', accent: '#1e824c', dome: '#c8a058' },
@@ -17,13 +19,13 @@ export const PALETTES = {
     { wall: '#f2deb8', roof: '#1e7c72', trim: '#c89830', stone: '#e8d0aa', accent: '#e8b838', dome: '#d8a830' },
   ],
 };
-export const FIXED = { gold: '#e8c040', dark: '#2a2420', wood: '#6b4a2b', metal: '#4a4640' };
+export const FIXED = { gold: '#e8c040', dark: '#2a2420', wood: '#6b4a2b', metal: '#4a4640', brick: '#9a4a32' };
 // One multiplier on every slot colour. The civ palettes were tuned for flat 2D art; tuned at the pilot's review point 1.
 export const SHADE = 0.92;
 // Height of each crowning piece at scale 1, so a finial or another piece can sit on top. tests/islamic-art.test.js
 // checks these against the GLBs.
 export const TOP = { 'dome-lead': 0.62, 'dome-ribbed': 0.959, 'kumbet': 1.98, 'minaret-pencil': 3.27, 'minaret-square': 2.995, 'portal': 1.76,
-  'tower-round': 2.31, 'asbad': 1.67, 'kiosk': 1.1, 'lookout': 2.16 };
+  'tower-round': 2.31, 'asbad': 1.67, 'kiosk': 1.1, 'lookout': 2.16, 'clock-tower': 2.52, 'silo': 2.4, 'headframe': 2.02 };
 
 const shade = (hex, f) => '#' + [1, 3, 5].map(i => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * f)).toString(16).padStart(2, '0')).join('');
 

@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kitlib  # noqa: E402
-from kitlib import Piece, opening, horseshoe, crescent, pointed_dome, round_dome  # noqa: E402
+from kitlib import Piece, opening, round_opening, horseshoe, crescent, pointed_dome, round_dome  # noqa: E402
 
 T = 0.12      # wall thickness
 FACE = 0.5    # outer wall face: the cell's +x edge
@@ -378,6 +378,174 @@ def piece_chimney():
     return p
 
 
+# ---- Turks pieces, ages 4-5 (Tanzimat and Republican) ----
+def piece_column():
+    p = Piece('column')
+    p.box('stone', -0.08, -0.08, 0.0, 0.08, 0.08, 0.07)
+    p.prism('wall', 0.055, 12, 0.07, 0.9)
+    p.box('stone', -0.085, -0.085, 0.9, 0.085, 0.085, 1.0)
+    return p
+
+
+def piece_pediment():
+    p = Piece('pediment')
+    p.box('trim', FACE - 0.1, -0.52, 0.0, FACE + 0.04, 0.52, 0.08)          # entablature
+    p.slab_yz('wall', [(-0.5, 0.08), (0.5, 0.08), (0.0, 0.36)], FACE - 0.08, FACE + 0.02)
+    p.slab_yz('trim', [(-0.54, 0.07), (-0.46, 0.07), (0.0, 0.33), (0.46, 0.07), (0.54, 0.07), (0.0, 0.4)], FACE + 0.02, FACE + 0.04)
+    return p
+
+
+def piece_balustrade():
+    p = Piece('balustrade')
+    p.box('stone', FACE - 0.08, -0.5, 0.0, FACE, 0.5, 0.04)
+    for k in range(9):
+        p.prism('stone', 0.018, 6, 0.04, 0.16, cx=FACE - 0.04, cy=-0.4 + k * 0.1)
+    p.box('stone', FACE - 0.09, -0.5, 0.16, FACE + 0.01, 0.5, 0.2)
+    return p
+
+
+def piece_wall_pilaster():
+    p = Piece('wall-pilaster')
+    p.box('wall', FACE - T, -0.5, 0.0, FACE, 0.5, 1.0)
+    p.box('stone', FACE - T - 0.01, -0.5, 0.0, FACE + 0.02, 0.5, 0.12)
+    for y in (-0.44, 0.44):
+        p.box('stone', FACE, y - 0.05, 0.12, FACE + 0.03, y + 0.05, 0.9)
+    p.slab_yz('trim', round_opening(0.17, 0.2, 0.62), FACE, FACE + 0.02)
+    p.slab_yz('dark', round_opening(0.14, 0.23, 0.62), FACE, FACE + 0.03)
+    p.box('trim', FACE - 0.01, -0.5, 0.9, FACE + 0.04, 0.5, 1.0)          # cornice
+    return p
+
+
+def piece_clock_tower():
+    p = Piece('clock-tower')
+    p.box('stone', -0.3, -0.3, 0.0, 0.3, 0.3, 0.8)
+    p.box('wall', -0.26, -0.26, 0.8, 0.26, 0.26, 1.8)
+    for x in (-0.24, 0.24):
+        for y in (-0.24, 0.24):
+            p.box('stone', x - 0.035, y - 0.035, 0.8, x + 0.035, y + 0.035, 1.8)
+    p.box('trim', -0.3, -0.3, 1.8, 0.3, 0.3, 1.86)
+    p.cyl_x('gold', 0.15, 0.15, 16, 0.26, 0.275, cz=1.5)                   # clock face, +x side
+    p.cyl_x('wall', 0.12, 0.12, 16, 0.275, 0.285, cz=1.5)
+    p.box('dark', 0.285, -0.006, 1.5, 0.29, 0.006, 1.6)
+    p.box('dark', 0.285, 0.0, 1.494, 0.29, 0.07, 1.506)
+    p.cyl_y('gold', 0.15, 16, -0.275, -0.26, cz=1.5)                       # clock face, camera-side -y
+    p.cyl_y('wall', 0.12, 16, -0.285, -0.275, cz=1.5)
+    p.box('wall', -0.2, -0.2, 1.86, 0.2, 0.2, 2.22)
+    p.slab_yz('dark', round_opening(0.07, 1.92, 2.08), 0.2, 0.21)
+    p.lathe('dome', round_dome(0.2, 0.18), 12, z0=2.22)
+    p.prism('gold', 0.02, 6, 2.4, 2.52)
+    return p
+
+
+def piece_eave_broad():
+    p = Piece('eave-broad')
+    r = 0.72 * math.sqrt(2)
+    p.lathe('roof', [(r, 0.0), (r, 0.05), (0.0, 0.3)], 4, rot=math.pi / 4)
+    p.lathe('trim', [(0.5 * math.sqrt(2), -0.06), (0.5 * math.sqrt(2), 0.0)], 4, rot=math.pi / 4)   # frieze under the eave
+    return p
+
+
+def piece_wall_tile_arch():
+    p = Piece('wall-tile-arch')
+    p.box('stone', FACE - T, -0.5, 0.0, FACE, 0.5, 1.0)
+    p.box('trim', FACE - T - 0.01, -0.5, 0.0, FACE + 0.02, 0.5, 0.1)
+    p.box('accent', FACE, -0.2, 0.3, FACE + 0.012, 0.2, 0.86)               # tile panel
+    p.slab_yz('trim', opening(0.16, 0.3, 0.6), FACE + 0.012, FACE + 0.025)
+    p.slab_yz('dark', opening(0.13, 0.32, 0.6), FACE + 0.012, FACE + 0.035)
+    p.box('trim', FACE, -0.5, 0.92, FACE + 0.02, 0.5, 0.97)
+    return p
+
+
+def piece_wall_modern():
+    p = Piece('wall-modern')
+    p.box('wall', FACE - T, -0.5, 0.0, FACE, 0.5, 1.0)
+    p.box('stone', FACE - T - 0.01, -0.5, 0.0, FACE + 0.015, 0.5, 0.08)
+    p.box('trim', FACE, -0.44, 0.4, FACE + 0.02, 0.44, 0.43)               # sill
+    p.box('dark', FACE, -0.42, 0.43, FACE + 0.015, 0.42, 0.7)              # ribbon window
+    p.box('wall', FACE, -0.5, 0.94, FACE + 0.03, 0.5, 1.0)                 # flat-roof lip
+    return p
+
+
+def piece_wall_brick():
+    p = Piece('wall-brick')
+    p.box('brick', FACE - T, -0.5, 0.0, FACE, 0.5, 1.0)
+    p.box('stone', FACE - T - 0.01, -0.5, 0.0, FACE + 0.02, 0.5, 0.1)
+    for y in (-0.46, 0.46):
+        p.box('brick', FACE, y - 0.04, 0.1, FACE + 0.025, y + 0.04, 0.96)
+    p.slab_yz('stone', round_opening(0.16, 0.3, 0.62), FACE, FACE + 0.015)
+    p.slab_yz('dark', round_opening(0.13, 0.32, 0.62), FACE, FACE + 0.03)
+    p.box('stone', FACE, -0.5, 0.94, FACE + 0.02, 0.5, 1.0)
+    return p
+
+
+def piece_roof_sawtooth():
+    p = Piece('roof-sawtooth')
+    p.slab_xz('roof', [(-0.5, 0.0), (0.5, 0.0), (0.5, 0.06), (-0.5, 0.06)], -0.5, 0.5)
+    p.slab_xz('roof', [(-0.5, 0.06), (0.44, 0.06), (0.44, 0.4)], -0.5, 0.5)
+    p.box('dark', 0.44, -0.48, 0.08, 0.46, 0.48, 0.36)                     # north-light glazing
+    return p
+
+
+def piece_silo():
+    p = Piece('silo')
+    p.prism('wall', 0.3, 16, 0.0, 2.2)
+    for z in (0.7, 1.45):
+        p.prism('trim', 0.305, 16, z, z + 0.04)
+    p.lathe('roof', [(0.31, 0.0), (0.0, 0.2)], 16, z0=2.2)
+    return p
+
+
+def piece_headframe():
+    p = Piece('headframe')
+    for x in (-0.2, 0.2):
+        for y in (-0.2, 0.2):
+            p.box('metal', x - 0.03, y - 0.03, 0.0, x + 0.03, y + 0.03, 1.6)
+    for z in (0.5, 1.05, 1.58):
+        p.box('metal', -0.23, -0.23, z, 0.23, 0.23, z + 0.04)
+    p.slab_xz('metal', [(-0.62, 0.0), (-0.54, 0.0), (-0.16, 1.5), (-0.24, 1.5)], -0.03, 0.03)   # back leg
+    p.cyl_y('metal', 0.2, 16, -0.03, 0.03, cz=1.82)                        # sheave wheel
+    p.cyl_y('dark', 0.12, 12, -0.035, 0.035, cz=1.82)
+    return p
+
+
+def piece_stack():
+    p = Piece('stack')
+    p.lathe('brick', [(0.13, 0.0), (0.08, 2.0)], 12)
+    p.prism('dark', 0.095, 12, 2.0, 2.06)
+    return p
+
+
+def piece_gantry():
+    p = Piece('gantry')
+    for x in (-0.35, 0.25):
+        for y in (-0.3, 0.3):
+            p.box('metal', x - 0.035, y - 0.035, 0.0, x + 0.035, y + 0.035, 1.3)
+    p.box('metal', -0.45, -0.07, 1.3, 0.95, 0.07, 1.42)                    # boom, overhanging the water (+x)
+    p.box('metal', -0.4, -0.34, 1.28, -0.3, 0.34, 1.34)
+    p.box('metal', 0.2, -0.34, 1.28, 0.3, 0.34, 1.34)
+    p.box('accent', 0.6, -0.09, 1.22, 0.76, 0.09, 1.32)                    # trolley
+    p.box('dark', 0.675, -0.006, 0.7, 0.685, 0.006, 1.22)
+    return p
+
+
+def piece_gun_turret():
+    p = Piece('gun-turret')
+    p.prism('wall', 0.42, 16, 0.0, 0.3)
+    p.lathe('metal', [(0.28, 0.0), (0.28, 0.12), (0.18, 0.22), (0.0, 0.24)], 16, z0=0.3)
+    p.cyl_x('metal', 0.035, 0.03, 8, 0.15, 0.78, cz=0.42)
+    return p
+
+
+def piece_flagpole():
+    p = Piece('flagpole')
+    p.prism('metal', 0.016, 6, 0.0, 1.62)
+    p.box('accent', -0.006, -0.46, 1.22, 0.006, -0.02, 1.52)               # flag flies to the camera side (-y)
+    # crescent turned to open toward the fly, and a small star beyond it
+    p.slab_yz('wall', [(-z - 0.17, y + 1.37) for y, z in crescent(0.07, 0.058, 0.028)], 0.006, 0.012)
+    p.box('wall', 0.006, -0.3, 1.35, 0.012, -0.26, 1.39)
+    return p
+
+
 PIECES = {
     'wall': piece_wall, 'wall-window': piece_wall_window, 'wall-door': piece_wall_door,
     'wall-arcade': piece_wall_arcade, 'wall-timber': piece_wall_timber,
@@ -401,6 +569,22 @@ PIECES = {
     'tug': piece_tug,
     'awning': piece_awning,
     'chimney': piece_chimney,
+    'column': piece_column,
+    'pediment': piece_pediment,
+    'balustrade': piece_balustrade,
+    'wall-pilaster': piece_wall_pilaster,
+    'clock-tower': piece_clock_tower,
+    'eave-broad': piece_eave_broad,
+    'wall-tile-arch': piece_wall_tile_arch,
+    'wall-modern': piece_wall_modern,
+    'wall-brick': piece_wall_brick,
+    'roof-sawtooth': piece_roof_sawtooth,
+    'silo': piece_silo,
+    'headframe': piece_headframe,
+    'stack': piece_stack,
+    'gantry': piece_gantry,
+    'gun-turret': piece_gun_turret,
+    'flagpole': piece_flagpole,
 }
 
 
