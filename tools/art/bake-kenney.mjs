@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Bake Kenney CC0 models into isometric sprites for the Canvas 2D renderer.
 //   node tools/art/bake-kenney.mjs                 -> writes game/art/kenney/*.png and game/art/kenney/manifest.js
-//   node tools/art/bake-kenney.mjs --preview a,b   -> writes tools/art/preview.png (contact sheet), nothing else
-//   node tools/art/bake-kenney.mjs --only a,b        -> bakes only recipes a and b and merges them into manifest.js
+//   node tools/art/bake-kenney.mjs --preview a,b  -> writes tools/art/preview.png (contact sheet), nothing else
+//   node tools/art/bake-kenney.mjs --only a,b     -> bakes only recipes a and b and merges them into manifest.js
 // Needs the dev dependencies (npm ci): three and @playwright/test with Chromium.
 import { chromium } from '@playwright/test';
 import http from 'node:http';
@@ -13,7 +13,9 @@ import { parseBakeArgs, parseManifest, serializeManifest, mergeManifest } from '
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outDir = path.join(root, 'game/art/kenney');
-const { preview, only } = parseBakeArgs(process.argv.slice(2));
+let args;
+try { args = parseBakeArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
+const { preview, only } = args;
 
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
@@ -40,6 +42,8 @@ if (preview) {
   console.log('wrote tools/art/preview.png');
 } else {
   const res = await page.evaluate(o => window.bakeAll(o), only);
+  const missing = only ? only.filter(n => !Object.keys(res).some(k => k === n || k.startsWith(n + '_'))) : [];
+  if (missing.length) { console.error(`no recipe named ${missing.join(', ')}; nothing written`); await browser.close(); server.close(); process.exit(1); }
   fs.mkdirSync(outDir, { recursive: true });
   const baked = {};
   for (const [name, v] of Object.entries(res)) {

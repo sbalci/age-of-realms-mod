@@ -14,6 +14,11 @@ const test = async (name, fn) => { try { await fn(); pass++; console.log('PASS '
     assert.deepEqual(io.parseBakeArgs(['--only', 'house_turks']), { preview: false, only: ['house_turks'] });
     assert.deepEqual(io.parseBakeArgs(['--only', '--preview']), { preview: true, only: null });
   });
+  await test('parseBakeArgs rejects --only without a list and unknown options', () => {
+    assert.throws(() => io.parseBakeArgs(['--only']), /--only needs/);
+    assert.throws(() => io.parseBakeArgs(['--only', '--x']), /unknown option --x/);
+    assert.throws(() => io.parseBakeArgs(['--onyl', 'tc']), /unknown option --onyl/);
+  });
   await test('the committed manifest.js round-trips byte for byte', () => {
     const src = fs.readFileSync(manifestPath, 'utf8').replace(/\r\n/g, '\n');
     assert.equal(io.serializeManifest(io.parseManifest(src)), src);
