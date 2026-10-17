@@ -67,3 +67,14 @@ export function portico(k, x0, y0, w, domes, edge = null) {
   roof(k, x0, y0, w, 1, 1, edge);
   if (domes) for (let i = 0; i < w; i++) crown(k, domes, x0 + i + 0.5, y0 + 0.5, 1.06, 0.55);
 }
+// low walls (courtyards, yards, paddocks) around a w x d block: wall pieces scaled to height h
+export function lowWall(k, x0, y0, w, d, h = 0.45, base = 'wall') {
+  const s = [1, h, 1];
+  for (let i = 0; i < w; i++) { k.add(I, base, x0 + i + 0.5, y0 + 0.5, 0, ROT.n, s); k.add(I, base, x0 + i + 0.5, y0 + d - 0.5, 0, ROT.s, s); }
+  for (let j = 0; j < d; j++) { k.add(I, base, x0 + 0.5, y0 + j + 0.5, 0, ROT.w, s); k.add(I, base, x0 + w - 0.5, y0 + j + 0.5, 0, ROT.e, s); }
+}
+// flat roof over the outer ring of cells of a block, leaving its courtyard open; optional parapet as in roof()
+export function courtyard(k, x0, y0, w, d, z, edge = null) {
+  for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) if (i === 0 || j === 0 || i === w - 1 || j === d - 1) k.add(I, 'roof-flat', x0 + i + 0.5, y0 + j + 0.5, z);
+  if (edge) ring(k, x0, y0, w, d, z + 0.06, {}, edge);
+}

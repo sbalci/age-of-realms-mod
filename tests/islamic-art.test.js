@@ -8,7 +8,10 @@ const PIECES = ['wall', 'wall-window', 'wall-door', 'wall-arcade', 'wall-timber'
   'dome-lead', 'dome-ribbed', 'kumbet', 'minaret-pencil', 'minaret-square', 'portal', 'bay-cumba', 'alem', 'malqaf', 'mashrabiya',
   'tower-round', 'asbad', 'kiosk', 'lookout', 'jetty', 'crane', 'cannon', 'rack-shields', 'target', 'forge', 'sextant', 'tug', 'awning', 'chimney'];
 // Sprites baked so far, by building type and age. The recipes must bake exactly these, and manifest.js may hold no others.
-const TURKS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
+const TURKS_BAKED = {
+  house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3], castle: [2], market: [1, 2, 3],
+  dock: [0, 1, 2, 3], university: [2, 3],
+};
 const SARACENS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('PASS ' + name); } catch (e) { fail++; console.error('FAIL ' + name + '\n' + e.stack); } };

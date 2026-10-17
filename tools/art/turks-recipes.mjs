@@ -1,6 +1,6 @@
 // Turks building recipes: one builder per architectural era and building type, assembled from the Islamic kit
 // (see islamic-kit.mjs) plus a few Kenney props. kenney-recipes.js merges TURKS_RECIPES into RECIPES.
-import { I, ROT, CYPRESS, HIDE, TOP, ring, roof, crown, portico } from './islamic-kit.mjs';
+import { I, ROT, CYPRESS, HIDE, TOP, ring, roof, crown, portico, lowWall, courtyard } from './islamic-kit.mjs';
 
 // The architectural era of each Turkish age.
 export const ERA = ['seljuk', 'seljuk', 'ottoman', 'ottoman', 'tanzimat', 'republican'];
@@ -86,6 +86,60 @@ OTTOMAN.monastery = k => {
     portico(k, 0.5, 2, 2, 'dome-lead');
     crown(k, 'minaret-pencil', 2.75, 0.25, 0, 1.15);
   }
+};
+
+// ---- castle: Rumeli Hisarı-style fortress (age 2) ----
+OTTOMAN.castle = k => {
+  // two-storey curtain walls with pointed merlons, a gate portal, round cannon towers with lead cones and alems
+  ring(k, 0, 0, 4, 4, 0);
+  ring(k, 0, 0, 4, 4, 1);
+  ring(k, 0, 0, 4, 4, 2, {}, 'merlon-pointed');
+  k.add(I, 'portal', 1.5, 3.5, 0, ROT.s);
+  for (const [x, y, s] of [[0.5, 0.5, 1.25], [3.5, 0.5, 1.25], [0.5, 3.5, 1.1], [3.5, 3.5, 1.4]]) crown(k, 'tower-round', x, y, 0, s, true);
+};
+
+// ---- market: covered bazaar (age 1), bedesten under rows of small lead domes (ages 2-3) ----
+SELJUK.market = k => {
+  // open arcaded hall behind a row of stalls
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-arcade');
+  roof(k, 0, 0, 3, 2, 1, 'merlon-pointed');
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'awning', x, 2.5, 0, ROT.s);
+};
+OTTOMAN.market = k => {
+  ring(k, 0, 0, 3, 2, 0, { s0: 'wall-door', s1: 'wall-window', s2: 'wall-door', e0: 'wall-window', e1: 'wall-door' });
+  roof(k, 0, 0, 3, 2, 1);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) crown(k, 'dome-lead', i + 0.5, j + 0.5, 1.06, 0.6, k.style === 3 && i === 1 && j === 0);
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'awning', x, 2.5, 0, ROT.s);
+};
+
+// ---- dock: timber jetty (ages 0-1), arched stone tersane with a domed beacon (ages 2-3) ----
+SELJUK.dock = k => {
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'jetty', x, 1.5, 0);
+  k.add(I, 'jetty', 2.5, 2.5, 0);
+  ring(k, 0, 0, 1, 1, 0, { s0: 'wall-door' });
+  roof(k, 0, 0, 1, 1, 1);
+  if (k.style === 1) k.add(I, 'crane', 2.5, 0.6, 0, 0, 0.8);
+};
+OTTOMAN.dock = k => {
+  // vaulted shipyard galleries open to the water, harbour beacon tower, crane and jetty
+  ring(k, 0, 0, 2, 1, 0, { s0: 'wall-arcade', s1: 'wall-arcade', e0: 'wall-arcade' });
+  roof(k, 0, 0, 2, 1, 1);
+  for (const x of [0.5, 1.5]) crown(k, 'dome-lead', x, 0.5, 1.06, 0.6);
+  crown(k, 'tower-round', 2.5, 0.5, 0, 0.6, true);
+  for (const x of [0.5, 1.5, 2.5]) k.add(I, 'jetty', x, 2.2, 0);
+  k.add(I, 'crane', 1.5, 1.4, 0, 0, 0.8);
+  if (k.style === 3) k.add(I, 'cannon', 2.6, 1.5, 0, 0, 0.8);
+};
+
+// ---- university: madrasa and observatory (ages 2-3) ----
+OTTOMAN.university = k => {
+  // courtyard madrasa behind a grand iwan portal, domed lecture hall at the back, sextant in the court
+  ring(k, 0, 0, 3, 3, 0, { e0: 'wall-window', e1: 'wall-window', e2: 'wall-window', s0: 'wall-window', s2: 'wall-window' });
+  courtyard(k, 0, 0, 3, 3, 1, 'merlon-pointed');
+  k.add(I, 'portal', 1.5, 2.5, 0, ROT.s);
+  crown(k, 'dome-lead', 1.5, 0.5, 1.06, 1.0, true);
+  k.add(I, 'sextant', 1.5, 1.5, 0, 0, 0.8);
+  if (k.style === 3) crown(k, 'minaret-pencil', 2.75, 0.25, 0, 0.9);
 };
 
 // ---- recipes (keep last) ----
