@@ -23,8 +23,9 @@ try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/game/?art=${art}`);
-    if (art === 'kenney') await page.waitForFunction(() => Object.keys(KART.img).length === Object.keys(KENNEY_ART).length);
+    if (art === 'kenney') await page.waitForFunction(() => KART.booted && Object.keys(KART.img).length + KART.failed.length === KART.requested.size);
     await page.locator('#btn-tutorial').click();
+    if (art === 'kenney') await page.evaluate(() => KART.loadCiv(__game.W.players[1].civ));
     await page.evaluate(() => {
       const g = __game, w = g.W, m = w.map, p = w.players[1];
       g.UI.paused = true; w.noFog = true; p.age = 2; w.menu = false;

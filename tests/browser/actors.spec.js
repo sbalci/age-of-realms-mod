@@ -10,6 +10,7 @@ async function captureArmy(page,future){
     g.R.cam.zoom=1.5;g.centerCamOn(tc.x+3,tc.y+5);
     for(const u of w.list)if(u.kind==='unit')UnitArt.ensure(UnitArt.key(u));
   },future);
+  await page.evaluate(()=>KART.loadCiv('turks'));
   await page.waitForFunction(()=>UnitArt.pending.size===0&&KART.booted&&Object.keys(KART.img).length+KART.failed.length===KART.requested.size);
   await page.evaluate(()=>renderWorld(__game.R.ctx,{selection:new Set(__game.UI.selection)}));
   await page.screenshot({path:'assets/screenshots/'+(future?'game-future':'game-ottoman')+'.jpg',type:'jpeg',quality:90});
