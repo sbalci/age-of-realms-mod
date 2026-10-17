@@ -20,7 +20,7 @@ export const PALETTES = {
 };
 export const FIXED = { gold: '#e8c040', dark: '#2a2420' };
 // One multiplier on every slot colour. The civ palettes were tuned for flat 2D art; tune once at review point 1.
-export const SHADE = 1.0;
+export const SHADE = 0.92;
 // Height of each crowning piece at scale 1, so a finial can sit on top. tests/islamic-art.test.js checks these against the GLBs.
 export const TOP = { 'dome-lead': 0.62, 'dome-ribbed': 0.959, 'kumbet': 1.98, 'minaret-pencil': 3.27, 'minaret-square': 2.995, 'portal': 1.76 };
 
@@ -80,7 +80,7 @@ export const ISLAMIC_RECIPES = {
       ring(k, 0.5, 0.5, 3, 2, 0, { s0: 'wall-window', s1: 'wall-door', s2: 'wall-window', e0: 'wall-window', e1: 'wall-door' });
       ring(k, 0.5, 0.5, 3, 2, 1, { s0: 'wall-window', s1: 'wall-window', s2: 'wall-window', e0: 'wall-window', e1: 'wall-window' });
       roof(k, 0.5, 0.5, 3, 2, 2);
-      crown(k, 'dome-lead', 2, 1.5, 2.06, k.style === 3 ? 2.0 : 1.8, true);
+      crown(k, 'dome-lead', 2, 1.5, 2.06, k.style === 3 ? 2.3 : 2.1, true);
       for (const x of [0.95, 3.05]) crown(k, 'dome-lead', x, 1.5, 2.06, 0.8);
       portico(k, 0.5, 2.5, 3, 'dome-lead');
       k.add('town', 'fountain-round', 0.3, 3.75, 0, 0, 0.3);

@@ -79,5 +79,13 @@ test('islamicSlots colours every slot, with ablaq bands only for Saracens from a
   assert.equal(R.islamicSlots('saracens', 1).band, R.islamicSlots('saracens', 1).wall);
   assert.equal(R.islamicSlots('turks', 3).band, R.islamicSlots('turks', 3).wall);
 });
+test('every recipe style is baked into the manifest with its PNG', () => {
+  const art = vm.runInNewContext(fs.readFileSync(path.join(root, 'game/art/kenney/manifest.js'), 'utf8') + ';KENNEY_ART');
+  for (const [name, r] of Object.entries(R.ISLAMIC_RECIPES)) for (const s of r.styles) {
+    const key = name + '_' + s;
+    assert.ok(art[key], key + ' missing from manifest.js');
+    assert.ok(fs.existsSync(path.join(root, 'game/art/kenney', key + '.png')), key + '.png missing');
+  }
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
