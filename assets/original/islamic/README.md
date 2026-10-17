@@ -21,4 +21,4 @@ Modular architecture pieces for the Turks and Saracens buildings:
 - Wall pieces sit on the cell's +x edge and face +x.
 - glTF is Y-up.
 - Materials are named after colour slots: `wall`, `stone`, `trim`, `roof`, `dome`, `accent`, `band`, `gold`, `dark`. They are metallic 0 and roughness 1 to match the Kenney kits.
-- `tools/art/kenney-bake.html` recolours every slot per civilization and age from `tools/art/islamic-recipes.js`.
+- `tools/art/kenney-bake.html` recolours every slot per civilization and age from `tools/art/islamic-kit.mjs`, for the recipes in `tools/art/turks-recipes.mjs` and `tools/art/saracens-recipes.mjs`.

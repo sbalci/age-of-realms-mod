@@ -1,11 +1,14 @@
 // Original Islamic building kit: GLB pieces, recipes and civ palettes stay consistent with each other and the game.
-const assert = require('assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm');
+const assert = require('assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm'), { pathToFileURL } = require('url');
 const root = path.join(__dirname, '..');
 const KIT = path.join(root, 'assets/original/islamic');
 const KENNEY = { town: 'assets/thirdparty/kenney/fantasy-town-kit', castle: 'assets/thirdparty/kenney/castle-kit', nature: 'assets/thirdparty/kenney/nature-kit' };
 const SLOTS = ['wall', 'stone', 'trim', 'roof', 'dome', 'accent', 'band', 'gold', 'dark'];
 const PIECES = ['wall', 'wall-window', 'wall-door', 'wall-arcade', 'wall-timber', 'roof-flat', 'roof-hip', 'merlon-pointed', 'merlon-stepped',
   'dome-lead', 'dome-ribbed', 'kumbet', 'minaret-pencil', 'minaret-square', 'portal', 'bay-cumba', 'alem', 'malqaf', 'mashrabiya'];
+// Sprites baked so far, by building type and age. The recipes must bake exactly these, and manifest.js may hold no others.
+const TURKS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
+const SARACENS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('PASS ' + name); } catch (e) { fail++; console.error('FAIL ' + name + '\n' + e.stack); } };
 
@@ -22,88 +25,98 @@ function bounds(j) {   // over every POSITION accessor, in glTF axes (y is up)
   }
   return { min, max };
 }
+const keysOf = (baked, civ) => Object.entries(baked).flatMap(([type, ages]) => ages.map(a => `${type}_${civ}_${a}`));
+const manifest = () => vm.runInNewContext(fs.readFileSync(path.join(root, 'game/art/kenney/manifest.js'), 'utf8') + ';KENNEY_ART');
 
-const R = vm.runInNewContext(fs.readFileSync(path.join(root, 'tools/art/islamic-recipes.js'), 'utf8').replace(/^export /gm, '') +
-  ';({ PALETTES, TOP, ISLAMIC_RECIPES, islamicSlots })');
-function placements() {   // every k.add(kit, name) made by every recipe at every style it bakes
-  const out = [];
-  for (const [recipe, r] of Object.entries(R.ISLAMIC_RECIPES)) for (const style of r.styles) {
-    r.build({ style, add: (kit, name) => out.push({ recipe, style, kit, name }) });
+(async () => {
+  const mod = f => import(pathToFileURL(path.join(root, 'tools/art', f)).href);
+  const kit = await mod('islamic-kit.mjs'), T = await mod('turks-recipes.mjs'), S = await mod('saracens-recipes.mjs');
+  const RECIPES = { ...T.TURKS_RECIPES, ...S.SARACENS_RECIPES };
+  const EXPECTED = [...keysOf(TURKS_BAKED, 'turks'), ...keysOf(SARACENS_BAKED, 'saracens')];
+  function placements() {   // every k.add(kit, name) made by every recipe at every style it bakes
+    const out = [];
+    for (const [recipe, r] of Object.entries(RECIPES)) for (const style of r.styles) {
+      r.build({ style, add: (kitName, name) => out.push({ recipe, style, kit: kitName, name }) });
+    }
+    return out;
   }
-  return out;
-}
 
-test('the kit holds every piece', () => {
-  for (const n of PIECES) assert.ok(fs.existsSync(path.join(KIT, n + '.glb')), n + '.glb missing');
-});
-test('kit pieces use only the named colour slots and are matte', () => {
-  for (const n of PIECES) for (const m of glb(n).materials) {
-    assert.ok(SLOTS.includes(m.name), n + ': unexpected material ' + m.name);
-    assert.equal(m.pbrMetallicRoughness.metallicFactor ?? 1, 0, n + ' ' + m.name + ' metallic');
-    assert.equal(m.pbrMetallicRoughness.roughnessFactor ?? 1, 1, n + ' ' + m.name + ' roughness');
-  }
-});
-test('wall pieces follow the Kenney cell convention: +x edge, one storey, one cell wide', () => {
-  for (const n of PIECES.filter(n => n.startsWith('wall'))) {
-    const { min, max } = bounds(glb(n));
-    assert.ok(min[0] >= 0.3 && max[0] <= 0.56, n + ' x ' + min[0] + '..' + max[0]);
-    assert.ok(Math.abs(min[1]) < 1e-3 && Math.abs(max[1] - 1) < 1e-3, n + ' height');
-    assert.ok(min[2] >= -0.501 && max[2] <= 0.501, n + ' width');
-  }
-});
-test('every Islamic piece a recipe uses is in the kit', () => {
-  for (const p of placements().filter(p => p.kit === 'islamic')) assert.ok(PIECES.includes(p.name), `${p.recipe}_${p.style}: unknown piece ${p.name}`);
-});
-test('every Kenney prop a recipe uses exists in its kit', () => {
-  for (const p of placements().filter(p => p.kit !== 'islamic')) assert.ok(fs.existsSync(path.join(root, KENNEY[p.kit], p.name + '.glb')), `${p.recipe}_${p.style}: ${p.kit}/${p.name}`);
-});
-test('TOP heights match the crowning pieces', () => {
-  for (const [n, h] of Object.entries(R.TOP)) {
-    const top = bounds(glb(n)).max[1];
-    assert.ok(Math.abs(top - h) < 0.005, n + ' top ' + top + ' vs TOP ' + h);
-  }
-});
-test('palettes match CIV_ARCH in game/js/civ_art.js for ages 0-3', () => {
-  const src = fs.readFileSync(path.join(root, 'game/js/civ_art.js'), 'utf8');
-  const CIV_ARCH = vm.runInNewContext(src.slice(src.indexOf('const CIV_ARCH'), src.indexOf('const CIV_WONDER_NAMES')) + ';CIV_ARCH');
-  for (const civ of ['turks', 'saracens']) for (let age = 0; age < 4; age++) for (const f of ['wall', 'stone', 'trim', 'roof', 'dome', 'accent']) {
-    assert.equal(R.PALETTES[civ][age][f], CIV_ARCH[civ].ages[age][f], `${civ} age ${age} ${f}`);
-  }
-});
-test('islamicSlots colours every slot, with ablaq bands only for Saracens from age 2', () => {
-  for (const civ of ['turks', 'saracens']) for (let age = 0; age < 4; age++) {
-    const s = R.islamicSlots(civ, age);
-    for (const k of SLOTS) assert.match(s[k], /^#[0-9a-f]{6}$/, `${civ} ${age} ${k}`);
-  }
-  assert.equal(R.islamicSlots('saracens', 2).band, R.islamicSlots('saracens', 2).trim);
-  assert.equal(R.islamicSlots('saracens', 1).band, R.islamicSlots('saracens', 1).wall);
-  assert.equal(R.islamicSlots('turks', 3).band, R.islamicSlots('turks', 3).wall);
-});
-test('every recipe style is baked into the manifest with its PNG', () => {
-  const art = vm.runInNewContext(fs.readFileSync(path.join(root, 'game/art/kenney/manifest.js'), 'utf8') + ';KENNEY_ART');
-  for (const [name, r] of Object.entries(R.ISLAMIC_RECIPES)) for (const s of r.styles) {
-    const key = name + '_' + s;
-    assert.ok(art[key], key + ' missing from manifest.js');
-    assert.ok(fs.existsSync(path.join(root, 'game/art/kenney', key + '.png')), key + '.png missing');
-  }
-});
-const PILOT = [];
-for (const civ of ['turks', 'saracens']) {
-  for (const a of [0, 1, 2, 3]) PILOT.push('house_' + civ + '_' + a, 'tc_' + civ + '_' + a);
-  for (const a of [2, 3]) PILOT.push('monastery_' + civ + '_' + a);
-}
-test('the pilot covers exactly 20 sprites', () => {
-  const keys = Object.entries(R.ISLAMIC_RECIPES).flatMap(([name, r]) => r.styles.map(s => name + '_' + s)).sort();
-  assert.deepEqual(keys, PILOT.slice().sort());
-  assert.equal(keys.length, 20);
-});
-test('manifest.js holds no turks/saracens sprite outside the pilot set', () => {
-  const art = vm.runInNewContext(fs.readFileSync(path.join(root, 'game/art/kenney/manifest.js'), 'utf8') + ';KENNEY_ART');
-  const stale = Object.keys(art).filter(k => /_(turks|saracens)_\d+$/.test(k) && !PILOT.includes(k));
-  assert.deepEqual(stale, []);
-});
-test('islamicSlots names the valid civs when the recipe has none', () => {
-  assert.throws(() => R.islamicSlots(undefined, 0), /one of turks, saracens .*\(got undefined\)/);
-});
-console.log(`${pass} passed, ${fail} failed`);
-process.exitCode = fail ? 1 : 0;
+  test('the kit holds every piece', () => {
+    for (const n of PIECES) assert.ok(fs.existsSync(path.join(KIT, n + '.glb')), n + '.glb missing');
+  });
+  test('kit pieces use only the named colour slots and are matte', () => {
+    for (const n of PIECES) for (const m of glb(n).materials) {
+      assert.ok(SLOTS.includes(m.name), n + ': unexpected material ' + m.name);
+      assert.equal(m.pbrMetallicRoughness.metallicFactor ?? 1, 0, n + ' ' + m.name + ' metallic');
+      assert.equal(m.pbrMetallicRoughness.roughnessFactor ?? 1, 1, n + ' ' + m.name + ' roughness');
+    }
+  });
+  test('wall pieces follow the Kenney cell convention: +x edge, one storey, one cell wide', () => {
+    for (const n of PIECES.filter(n => n.startsWith('wall'))) {
+      const { min, max } = bounds(glb(n));
+      assert.ok(min[0] >= 0.3 && max[0] <= 0.56, n + ' x ' + min[0] + '..' + max[0]);
+      assert.ok(Math.abs(min[1]) < 1e-3 && Math.abs(max[1] - 1) < 1e-3, n + ' height');
+      assert.ok(min[2] >= -0.501 && max[2] <= 0.501, n + ' width');
+    }
+  });
+  test('every Islamic piece a recipe uses is in the kit', () => {
+    for (const p of placements().filter(p => p.kit === 'islamic')) assert.ok(PIECES.includes(p.name), `${p.recipe}_${p.style}: unknown piece ${p.name}`);
+  });
+  test('every Kenney prop a recipe uses exists in its kit', () => {
+    for (const p of placements().filter(p => p.kit !== 'islamic')) assert.ok(fs.existsSync(path.join(root, KENNEY[p.kit], p.name + '.glb')), `${p.recipe}_${p.style}: ${p.kit}/${p.name}`);
+  });
+  test('TOP heights match the crowning pieces', () => {
+    for (const [n, h] of Object.entries(kit.TOP)) {
+      const top = bounds(glb(n)).max[1];
+      assert.ok(Math.abs(top - h) < 0.005, n + ' top ' + top + ' vs TOP ' + h);
+    }
+  });
+  test('palettes match CIV_ARCH in game/js/civ_art.js for every age they cover', () => {
+    const src = fs.readFileSync(path.join(root, 'game/js/civ_art.js'), 'utf8');
+    const CIV_ARCH = vm.runInNewContext(src.slice(src.indexOf('const CIV_ARCH'), src.indexOf('const CIV_WONDER_NAMES')) + ';CIV_ARCH');
+    for (const civ of ['turks', 'saracens']) kit.PALETTES[civ].forEach((row, age) => {
+      for (const f of ['wall', 'stone', 'trim', 'roof', 'dome', 'accent']) assert.equal(row[f], CIV_ARCH[civ].ages[age][f], `${civ} age ${age} ${f}`);
+    });
+  });
+  test('islamicSlots colours every slot, with ablaq bands only for Saracens from age 2', () => {
+    for (const civ of ['turks', 'saracens']) for (let age = 0; age < 6; age++) {
+      const s = kit.islamicSlots(civ, age);
+      for (const k of SLOTS) assert.match(s[k], /^#[0-9a-f]{6}$/, `${civ} ${age} ${k}`);
+    }
+    assert.equal(kit.islamicSlots('saracens', 2).band, kit.islamicSlots('saracens', 2).trim);
+    assert.equal(kit.islamicSlots('saracens', 1).band, kit.islamicSlots('saracens', 1).wall);
+    assert.equal(kit.islamicSlots('turks', 3).band, kit.islamicSlots('turks', 3).wall);
+  });
+  test('islamicSlots names the valid civs when the recipe has none', () => {
+    assert.throws(() => kit.islamicSlots(undefined, 0), /one of turks, saracens .*\(got undefined\)/);
+  });
+  test('every recipe style is baked into the manifest with its PNG', () => {
+    const art = manifest();
+    for (const [name, r] of Object.entries(RECIPES)) for (const s of r.styles) {
+      const key = name + '_' + s;
+      assert.ok(art[key], key + ' missing from manifest.js');
+      assert.ok(fs.existsSync(path.join(root, 'game/art/kenney', key + '.png')), key + '.png missing');
+    }
+  });
+  test('the recipes bake exactly the expected sprites', () => {
+    const keys = Object.entries(RECIPES).flatMap(([name, r]) => r.styles.map(s => name + '_' + s)).sort();
+    assert.deepEqual(keys, EXPECTED.slice().sort());
+  });
+  test('manifest.js holds no turks/saracens sprite outside the expected set', () => {
+    const stale = Object.keys(manifest()).filter(k => /_(turks|saracens)_\d+$/.test(k) && !EXPECTED.includes(k));
+    assert.deepEqual(stale, []);
+  });
+  test('no recipe name is defined in more than one recipe module', () => {
+    const src = fs.readFileSync(path.join(root, 'tools/art/kenney-recipes.js'), 'utf8');
+    const start = src.indexOf('export const RECIPES = {');
+    const kenney = [...src.slice(start, src.indexOf('\n};', start)).matchAll(/^  ([a-z_0-9]+): \{/gm)].map(m => m[1]);
+    assert.ok(kenney.length > 20, 'read the Kenney recipe names (' + kenney.length + ')');
+    const owner = new Map();
+    for (const [module, names] of [['kenney-recipes.js', kenney], ['turks-recipes.mjs', Object.keys(T.TURKS_RECIPES)], ['saracens-recipes.mjs', Object.keys(S.SARACENS_RECIPES)]]) {
+      for (const n of names) { assert.ok(!owner.has(n), `${n} is defined in ${owner.get(n)} and ${module}`); owner.set(n, module); }
+    }
+  });
+
+  console.log(`${pass} passed, ${fail} failed`);
+  process.exitCode = fail ? 1 : 0;
+})();

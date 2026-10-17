@@ -1,4 +1,5 @@
-import { ISLAMIC_RECIPES } from './islamic-recipes.js';
+import { TURKS_RECIPES } from './turks-recipes.mjs';
+import { SARACENS_RECIPES } from './saracens-recipes.mjs';
 
 // Building recipes for the Kenney art style. Coordinates are game tiles: a building of size s covers
 // x, y in [0, s]; z is height in world units (one Kenney storey = 1). Kenney modules are 1x1 cells
@@ -263,5 +264,5 @@ export const RECIPES = {
 };
 
 // Turks and Saracens buildings from the original Islamic kit (assets/original/islamic/)
-Object.assign(RECIPES, ISLAMIC_RECIPES);
+Object.assign(RECIPES, TURKS_RECIPES, SARACENS_RECIPES);
 
