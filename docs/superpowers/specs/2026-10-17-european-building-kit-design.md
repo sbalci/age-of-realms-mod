@@ -51,14 +51,23 @@ Every building keeps a role cue that reads at game scale:
 - siege workshop: crane and timber bay
 - tower: watch, then guard, then keep
 - well: winch, then a roofed wellhouse
-- castle: a Western concentric fortress, used by the Franks, Teutons and Italians
+- castle: a Western concentric fortress, used by all four `west`-family civs (Franks, Teutons, Spanish, Italians)
 - outpost: lookout scaffold
 
 **Unchanged:**
 - Turks and Saracens keep their `house`/`tc`/`monastery` civ sprites. Their other buildings show the new shared set plus the painted dome until project 2.
 - The painted civ overlays in `civ_art.js` still draw on the shared sprites for the other civs.
 - `tc_4`, `tc_5`, the Wonders, `castle_east`/`castle_med`/`castle_nordic`, the ships (generated images), farms, siege engines (`unit_*`), trees and resources.
-- Game code. Classic art (`?art=classic`) and the 2.5D renderer are also untouched.
+- Classic art (`?art=classic`) and the 2.5D renderer.
+
+**Game code** is unchanged, with one approved exception.
+- `drawCivBuildingOverlay` paints civ crowns on shared sprites at heights derived from `BLD_H[type] × 0.58`. Those heights were tuned to the Kenney silhouettes:
+  - East Asian eaves and the shachihoko
+  - Norse dragon finials and shields
+  - Byzantine domes
+  - Turk and Saracen domes and minarets on the university, market, castle and fallback monastery
+- If the in-game check shows crowns floating or sunk on the new silhouettes, the Kenney-mode (`isKenney`) overlay anchor may be retuned per building type. Preferably derive it from the sprite's manifest height above its anchor.
+- `BLD_H` itself is not changed, because classic art and other systems use it.
 
 ## Shared Blender code
 
@@ -116,9 +125,13 @@ Kenney props may still be placed by recipes, as in the Islamic kit: trees, rocks
 ## Recipes and baking
 
 **Shared recipe code**
-- `tools/art/kit-recipes.mjs` holds:
-  - `ring`, `roof`, `crown` and `portico`, with the kit name as their first argument
-  - `slotColours(palette, fixed, shade)`
+- `tools/art/kit-recipes.mjs` holds only what is kit-neutral:
+  - `kitHelpers(kit, TOP)`, which returns `{ ring, crown }` bound to that kit's name and crown heights, so recipe call sites don't change;
+  - `ROT`;
+  - `slotColours(palette, fixed, shade)`.
+- Kit-specific helpers stay with their kit:
+  - Islamic: `roof()` places `roof-flat`, `portico()` places `wall-arcade`; both stay in `islamic-recipes.mjs`.
+  - European: gable, porch and yard helpers go in `european-recipes.mjs`.
 - The recipe modules become `.mjs`:
   - `tools/art/islamic-recipes.js` → `islamic-recipes.mjs`
   - new `tools/art/european-recipes.mjs`
@@ -170,7 +183,14 @@ Kenney props may still be placed by recipes, as in the Islamic kit: trees, rocks
    - Prove it neutral:
      - the Islamic GLBs re-export byte-identical;
      - `npm run art:bake -- --recipes house_turks,tc_turks,monastery_turks,house_saracens,tc_saracens,monastery_saracens` leaves every PNG byte-identical.
-2. **Kit.** Write `european_kit.py`. Check the pieces in the live Blender over MCP from the bake angle, then remove the preview.
+2. **Kit, style-board pieces only.**
+   - Write `european_kit.py` with just what the House and Town Center need:
+     - the five wall families
+     - the open bay
+     - the roofs
+     - chimney, dormer, crenellated parapet, round tower, square tower top, bell gable
+   - Check them in the live Blender over MCP from the bake angle, then remove the preview.
+   - Role props (windmill sails, pier, crane, targets, forge, awning, piles, weapon rack, dummy) and the remaining details (buttress, rose window, spire) are added in the batch that first needs them. A style change at review point 1 then never means reworking props.
 3. **Review point 1, style board.**
    - Preview `house` and `tc`, all four ages.
    - Use the create-game-assets QA. Tune `SHADE`.
@@ -182,9 +202,10 @@ Kenney props may still be placed by recipes, as in the Islamic kit: trees, rocks
 5. **Review point 2.**
    - Contact sheet of all 63 sprites.
    - **The user approves.** Re-bake any polished recipes.
-6. **In-game check.** `tests/browser/european-art.spec.js` places one of each European building type for a Frankish player at ages 0 and 3 on cleared ground, then:
-   - asserts every expected shared key is in `KART.cache`;
-   - saves `test-results/european-age0.png` and `test-results/european-age3.png` for review.
+6. **In-game check.** `tests/browser/european-art.spec.js` builds two scenes on cleared ground.
+   - **Frankish town:** one of each European building type at ages 0 and 3. Assert every expected shared key is in `KART.cache`. Save `test-results/european-age0.png` and `test-results/european-age3.png`.
+   - **Overlay check:** at ages 2 and 3, a row of the overlay-heavy building types (`tc`, `university`, `market`, `barracks`, `castle`, `monastery`) for each of Japanese, Vikings, Byzantines and Turks. Save `test-results/european-overlays-age<N>.png`.
+   - Review the screenshots for floating or sunk crowns. If needed, retune the Kenney-mode overlay anchors (see Scope), re-run, and review again.
 7. **Docs.**
    - `assets/original/european/README.md` (CC0)
    - an ASSET_PLAN §2 line on the European kit
@@ -204,6 +225,9 @@ Kenney props may still be placed by recipes, as in the Islamic kit: trees, rocks
   - every recipe style is baked into `manifest.js` with its PNG;
   - the exact 63-key set;
   - no recipe name is defined in more than one of `kenney-recipes.js`, `islamic-recipes.mjs` and `european-recipes.mjs`.
+    - Duplicates are invisible after `Object.assign`.
+    - `kenney-recipes.js` can't be imported from Node without a `MODULE_TYPELESS_PACKAGE_JSON` warning.
+    - So: read the Kenney key set from the text of its `export const RECIPES = { … }` literal (two-space-indented `name: {` lines), import the two `.mjs` modules directly, and compare the three key sets pairwise.
 - **Existing tests** stay green:
   - `npm test` (apart from the pre-existing `tests/command.test.js` failure)
   - `tests/browser/art.spec.js` (including the mill `staticSails` check)
