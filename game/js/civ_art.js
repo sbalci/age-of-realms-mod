@@ -427,8 +427,9 @@ function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {}) {
     drawCivShield(g, civ, pc, bp[0], bp[1], size >= 3 ? 4.2 : 3.2, st >= 2);
   }
 
-  // 4. Era 4 (Modern Age) & Era 5 (Future Age) Architectural Retrofits for ALL buildings
-  if (st === 4 && type !== 'palisade') {
+  // 4. Era 4 (Modern Age) & Era 5 (Future Age) Architectural Retrofits for ALL buildings, except civ sprites
+  //    already baked for that age (opts.era === false)
+  if (opts.era !== false && st === 4 && type !== 'palisade') {
     // Modern Age: Industrial steel roof truss/antenna, ventilator stack & warm electric floodlight
     const mp = P(r * 0.45, -r * 0.45, topZ * 0.65);
     g.fillStyle = '#3c444c';
@@ -446,7 +447,7 @@ function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {}) {
       g.fillStyle = '#ff6040';
       g.beginPath(); g.arc(ap[0], ap[1] - 16.5, 1.5, 0, Math.PI * 2); g.fill();
     }
-  } else if (st >= 5 && type !== 'palisade') {
+  } else if (opts.era !== false && st >= 5 && type !== 'palisade') {
     // Future Age: Glowing cyan/accent energy conduits, solar array strip & levitating holo-beacon
     const glow = agePal.accent || '#5ce6ff';
     const fp1 = P(-r * 0.65, r * 0.72, 6), fp2 = P(r * 0.65, r * 0.72, 6);
@@ -872,7 +873,7 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
                   vicBanner(g, size / 2 - 0.22, 0.55, 16, pc, 13);
                 }
               }
-              drawCivBuildingOverlay(g, type, st, pc, civ, true, civSet ? { crown: false } : undefined);
+              drawCivBuildingOverlay(g, type, st, pc, civ, true, civSet ? { crown: false, era: !(st >= 4 && ageOf(civSet) === st) } : undefined);
             }, under);
             s.staticSails = type === 'mill';
             KART.cache.set(key, s);

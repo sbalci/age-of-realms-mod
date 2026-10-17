@@ -190,3 +190,39 @@ test('a civilization with its own castle draws it before its family castle', asy
   expect(r.franks2.names).toEqual(['castle']);
   expect(errors).toEqual([]);
 });
+
+test('civ sprites baked for the Modern or Future age skip the painted era add-ons', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/game/'); await waitForArt(page);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(() => Promise.all([KART.loadCiv('turks'), KART.loadCiv('saracens')]));
+  const r = await page.evaluate(() => {
+    const real = drawCivBuildingOverlay, seen = [];
+    drawCivBuildingOverlay = (...a) => { seen.push(a[6]); return real(...a); };
+    const probe = (type, st, civ) => {
+      KART.cache.clear(); seen.length = 0;
+      bldSprite(type, st, W.players[1].color, civ);
+      return { names: [...KART.cache.keys()].map(k => k.split('|')[0]), opts: seen[0] };
+    };
+    // the era option really removes section 4: the same overlay call draws fewer rectangles with era: false
+    const rects = opts => {
+      const g = document.createElement('canvas').getContext('2d'), fill = g.fillRect.bind(g);
+      let n = 0;
+      g.fillRect = (...a) => { n++; return fill(...a); };
+      real(g, 'house', 4, W.players[1].color, 'turks', true, opts);
+      return n;
+    };
+    try {
+      return {
+        turks4: probe('house', 4, 'turks'), turks5: probe('tc', 5, 'turks'), saracens4: probe('house', 4, 'saracens'),
+        withEra: rects({ crown: false }), withoutEra: rects({ crown: false, era: false }),
+      };
+    } finally { drawCivBuildingOverlay = real; KART.cache.clear(); }
+  });
+  expect(r.turks4).toEqual({ names: ['house_turks_4'], opts: { crown: false, era: false } });
+  expect(r.turks5).toEqual({ names: ['tc_turks_5'], opts: { crown: false, era: false } });
+  expect(r.saracens4).toEqual({ names: ['house_saracens_3'], opts: { crown: false, era: true } });
+  expect(r.withoutEra).toBeLessThan(r.withEra);
+  expect(errors).toEqual([]);
+});
