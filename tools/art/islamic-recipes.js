@@ -66,7 +66,22 @@ function portico(k, x0, y0, w, domes, edge = null) {
 }
 
 export const ISLAMIC_RECIPES = {
-  tc_turks: { civ: 'turks', size: 4, styles: [2], scale: 1.06, sq: 1.02, build(k) {
+  house_turks: { civ: 'turks', size: 2, styles: [0, 1, 2, 3], scale: 0.72, sq: 0.80, build(k) {
+    ring(k, 0.1, 0.1, 2, 2, 0, { s0: 'wall-door', s1: 'wall-window', e1: 'wall-window' });
+    if (k.style <= 1) {
+      // Seljuk stone dwelling with a flat roof; a roof room from age 1
+      roof(k, 0.1, 0.1, 2, 2, 1);
+      if (k.style === 1) { ring(k, 0.1, 0.1, 1, 1, 1.06, { s0: 'wall-window', e0: 'wall-window' }); roof(k, 0.1, 0.1, 1, 1, 2.06); }
+    } else {
+      // Ottoman konak: timber-framed upper floor, projecting cumba bay, wide hipped roof
+      ring(k, 0.1, 0.1, 2, 2, 1, {}, 'wall-timber');
+      k.add(I, 'bay-cumba', 1.1, 1.6, 1, ROT.s);
+      if (k.style === 3) k.add(I, 'bay-cumba', 1.6, 1.1, 1, ROT.e);
+      k.add(I, 'roof-hip', 1.1, 1.1, 2, 0, [2, 1, 2]);
+    }
+    k.add('nature', 'tree_cone', 2.3, 0.35, 0, 0, 0.8, CYPRESS);
+  } },
+  tc_turks: { civ: 'turks', size: 4, styles: [0, 1, 2, 3], scale: 1.06, sq: 1.02, build(k) {
     if (k.style <= 1) {
       // Seljuk caravanserai: walled stone court behind a tall tiled portal, with a kümbet tower
       ring(k, 0.5, 0.5, 3, 3, 0, { e0: 'wall-window', e2: 'wall-window', s0: 'wall-window', s2: 'wall-window' });
@@ -87,5 +102,24 @@ export const ISLAMIC_RECIPES = {
       if (k.style === 3) k.add('nature', 'tree_cone', 3.75, 3.75, 0, 0, 0.9, CYPRESS);
     }
     k.add('nature', 'tree_cone', 3.75, 0.35, 0, 0, 0.9, CYPRESS);
+  } },
+  monastery_turks: { civ: 'turks', size: 3, styles: [2, 3], scale: 1.02, sq: 1.02, build(k) {
+    if (k.style === 2) {
+      // Seljuk Gök Medrese: stone court, tiled portal flanked by twin minarets, domed hall
+      ring(k, 0, 0, 3, 3, 0, { e0: 'wall-window', e1: 'wall-window', e2: 'wall-window', s0: 'wall-window', s2: 'wall-window' });
+      roof(k, 0, 0, 3, 3, 1, 'merlon-pointed');
+      k.add(I, 'portal', 1.5, 2.5, 0, ROT.s);
+      for (const x of [1.1, 1.9]) crown(k, 'minaret-pencil', x, 2.97, TOP.portal, 0.55);
+      crown(k, 'dome-lead', 1.5, 1.1, 1.06, 1.3, true);
+    } else {
+      // Ottoman mosque: prayer hall under a great dome with corner domes, domed portico, pencil minaret
+      ring(k, 0.5, 0, 2, 2, 0, { e0: 'wall-window', e1: 'wall-window', s0: 'wall-window', s1: 'wall-window' });
+      ring(k, 0.5, 0, 2, 2, 1, { e0: 'wall-window', e1: 'wall-window', s0: 'wall-window', s1: 'wall-window' });
+      roof(k, 0.5, 0, 2, 2, 2);
+      crown(k, 'dome-lead', 1.5, 1, 2.06, 1.9, true);
+      for (const [x, y] of [[0.95, 0.45], [2.05, 0.45], [0.95, 1.55], [2.05, 1.55]]) crown(k, 'dome-lead', x, y, 2.06, 0.6);
+      portico(k, 0.5, 2, 2, 'dome-lead');
+      crown(k, 'minaret-pencil', 2.75, 0.25, 0, 1.15);
+    }
   } },
 };
