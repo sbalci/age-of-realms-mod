@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined' && KART.on && Object.keys(KART.img).length + KART.failed.length === Object.keys(KENNEY_ART).length);
+const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined' && KART.on && KART.booted && Object.keys(KART.img).length + KART.failed.length === KART.requested.size);
 
 test('CC0 art is the default and renders harvest stages without changing the match', async ({ page }) => {
   const errors = [], external = [];
@@ -65,7 +65,7 @@ test('missing sprites fall back to drawn art and play remains available', async 
   await page.route('**/art/kenney/tc_*.png', route => route.abort());
   await page.route('**/art/kenney/farm_*.png', route => route.abort());
   await page.goto('/game/'); await waitForArt(page);
-  expect(await page.evaluate(() => KART.failed.length)).toBe(await page.evaluate(() => Object.keys(KENNEY_ART).filter(k => /^(tc|farm)_/.test(k)).length));
+  expect(await page.evaluate(() => KART.failed.filter(k => kartCiv(k) === null).length)).toBe(await page.evaluate(() => Object.keys(KENNEY_ART).filter(k => /^(tc|farm)_/.test(k) && kartCiv(k) === null).length));
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => {
@@ -82,7 +82,7 @@ test('2.5D refreshes cached resource art after a delayed sprite arrives', async 
   await page.route('**/art/kenney/berry_0.png', async route => { await held; await route.continue(); });
   await page.goto('/game/?renderer=three', { waitUntil: 'domcontentloaded' });
   try {
-    await page.waitForFunction(() => window.__game?.T25D.stats.frames > 1 && Object.keys(KART.img).length === Object.keys(KENNEY_ART).length - 1);
+    await page.waitForFunction(() => window.__game?.T25D.stats.frames > 1 && KART.booted && Object.keys(KART.img).length === KART.requested.size - 1);
     await page.locator('#btn-tutorial').click();
     await page.evaluate(() => {
       __game.UI.paused = true;
@@ -112,6 +112,7 @@ test('Turks and Saracens use their own building sprites without the painted crow
   await page.goto('/game/'); await waitForArt(page);
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(() => KART.loadCiv('turks'));
   await page.evaluate(drawProbe);
   const r = await page.evaluate(() => ({
     turks2: drawProbe('tc', 2, 'turks'),
@@ -132,8 +133,39 @@ test('a missing civ sprite falls back to the shared sprite and its painted crown
   await page.goto('/game/'); await waitForArt(page);
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(() => KART.loadCiv('turks'));
   await page.evaluate(drawProbe);
   const r = await page.evaluate(() => drawProbe('tc', 2, 'turks'));
   expect(r.names).toEqual(['tc_2']);
   expect(r.domes).toBeGreaterThan(0);
+});
+
+test('civilization building sprites load on demand and refresh caches at most once per frame', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/game/'); await waitForArt(page);
+  const r = await page.evaluate(async () => {
+    const turks = Object.keys(KENNEY_ART).filter(k => kartCiv(k) === 'turks');
+    const before = turks.filter(k => KART.requested.has(k)).length;
+    const clear = R.spriteCache.clear.bind(R.spriteCache);
+    let clears = 0;
+    R.spriteCache.clear = () => { clears++; return clear(); };
+    try {
+      const first = KART.loadCiv('turks'), again = KART.loadCiv('turks');
+      await first;
+      await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+      return {
+        total: turks.length, before, same: first === again, loaded: turks.filter(k => KART.img[k]).length, clears,
+        shared: kartCiv('tree_anatolian_0'), civ: kartCiv('castle_turks_2'),
+      };
+    } finally { delete R.spriteCache.clear; }
+  });
+  expect(r.total).toBeGreaterThan(0);
+  expect(r.before).toBe(0);              // nothing of the Turks set is fetched at startup
+  expect(r.same).toBe(true);
+  expect(r.loaded).toBe(r.total);
+  expect(r.clears).toBeGreaterThan(0);
+  expect(r.clears).toBeLessThan(r.total); // one cache refresh per frame, not per image
+  expect(r.shared).toBeNull();
+  expect(r.civ).toBe('turks');
+  expect(errors).toEqual([]);
 });

@@ -840,6 +840,8 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
       const civ = civArg || (typeof W !== 'undefined' && W && W.players ? (W.players.find(q => q && q.color === pc)?.civ || 'franks') : 'franks');
       const spec = civSpec(civ);
       if (typeof KART !== 'undefined' && KART.on) {
+        // a civilization's own building set is fetched the first time that civ is drawn
+        if (!KART.civs.has(civ)) KART.loadCiv(civ);
         // Cultural hero sprite selection (e.g., castle_east, castle_med, castle_nordic)
         let name = null;
         if (type === 'castle') {

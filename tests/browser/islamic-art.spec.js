@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined' && KART.on && Object.keys(KART.img).length + KART.failed.length === Object.keys(KENNEY_ART).length);
+const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined' && KART.on && KART.booted && Object.keys(KART.img).length + KART.failed.length === KART.requested.size);
 
 // A Turks row and a Saracens row of Town Center, Monastery and House on cleared grass, drawn by the live game.
 // Saves test-results/islamic-age<N>.png for the in-game review: footprint fit, shadows, flag and shield, no doubled domes.
@@ -16,6 +16,7 @@ for (const age of [1, 3, 5]) test(`Turks and Saracens towns use their own buildi
   await page.goto('/game/'); await waitForArt(page);
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(() => Promise.all([KART.loadCiv('turks'), KART.loadCiv('saracens')]));
   await page.evaluate(age => {
     const g = __game, w = g.W, m = w.map;
     g.UI.paused = true; w.noFog = true; w.players[1].age = age;

@@ -1,8 +1,14 @@
 // ===== Default art style: Kenney CC0 kits, pre-rendered by tools/art/bake-kenney.mjs =====
 // ?art=classic restores drawn art; valid choices are remembered in this browser.
-// Local sprites load progressively, with drawn art as the fallback for missing assets.
+// Local sprites load progressively, with drawn art as the fallback for missing assets. Shared sprites load at
+// startup; a civilization's own building set (house_turks_2 ...) loads the first time that civ is drawn.
 'use strict';
-const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/', revision: 0, failed: [] };
+const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/', revision: 0, failed: [], requested: new Set(), civs: new Map(), booted: false };
+// the civilization a sprite key belongs to (house_turks_2 -> 'turks'), or null for shared sprites (tree_anatolian_0)
+function kartCiv(k) {
+  const m = /^.+_([a-z]+)_\d+$/.exec(k);
+  return m && typeof CIVS === 'object' && Object.prototype.hasOwnProperty.call(CIVS, m[1]) ? m[1] : null;
+}
 (function () {
   let v = null;
   const valid = value => value === 'kenney' || value === 'classic';
@@ -10,22 +16,42 @@ const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/', revisi
   try { if (valid(v)) localStorage.setItem('aor.art', v); else v = localStorage.getItem('aor.art'); } catch (e) { /* storage blocked */ }
   KART.on = v !== 'classic' && typeof KENNEY_ART === 'object' && typeof Image === 'function';
   if (!KART.on) return;
+  // Portraits, cached building canvases and HD unit sprites may have used the drawn fallback while sprites load.
+  // Refresh them at most once per frame, however many images finish in it.
+  let refreshQueued = false;
+  const refresh = () => {
+    refreshQueued = false;
+    if (typeof R !== 'undefined' && R.spriteCache) R.spriteCache.clear();
+    if (typeof UHD !== 'undefined' && UHD.cache) { UHD.cache.clear(); UHD.sets.clear(); UHD.bytes = 0; }
+    if (typeof ICONS !== 'undefined') ICONS.clear();
+    if (typeof UI !== 'undefined') UI.panelKey = '';
+    const box = document.getElementById('selinfo');
+    if (box) box.dataset.multiKey = '';
+  };
+  const queueRefresh = () => {
+    if (refreshQueued) return;
+    refreshQueued = true;
+    (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : setTimeout)(refresh);
+  };
+  // fetch each sprite once; resolves when every one of these keys has loaded or failed
+  const request = keys => Promise.all(keys.filter(k => !KART.requested.has(k)).map(k => new Promise(done => {
+    KART.requested.add(k);
+    const im = new Image();
+    im.onload = () => { KART.img[k] = im; KART.revision++; queueRefresh(); done(); };
+    im.onerror = () => { KART.failed.push(k); done(); };
+    im.src = KART.base + k + '.png';
+  })));
+  let boot;
+  const booted = new Promise(resolve => { boot = resolve; });
+  // a civilization's own building set: requested once, after startup; repeat calls return the same promise
+  KART.loadCiv = civ => {
+    if (!KART.civs.has(civ)) KART.civs.set(civ, booted.then(() => request(Object.keys(KENNEY_ART).filter(k => kartCiv(k) === civ))).then(() => undefined));
+    return KART.civs.get(civ);
+  };
   const load = () => {
-    for (const k of Object.keys(KENNEY_ART)) {
-      const im = new Image();
-      im.onload = () => {
-        KART.img[k] = im; KART.revision++;
-        // Portraits, cached building canvases and HD unit sprites may have used the drawn fallback during loading.
-        if (typeof R !== 'undefined' && R.spriteCache) R.spriteCache.clear();
-        if (typeof UHD !== 'undefined' && UHD.cache) { UHD.cache.clear(); UHD.sets.clear(); UHD.bytes = 0; }
-        if (typeof ICONS !== 'undefined') ICONS.clear();
-        if (typeof UI !== 'undefined') UI.panelKey = '';
-        const box = document.getElementById('selinfo');
-        if (box) box.dataset.multiKey = '';
-      };
-      im.onerror = () => { KART.failed.push(k); };
-      im.src = KART.base + k + '.png';
-    }
+    request(Object.keys(KENNEY_ART).filter(k => kartCiv(k) === null));
+    KART.booted = true;
+    boot();
   };
   // Start after the page has booted so a slow image cannot hold up the main loop's load handler.
   if (typeof window !== 'undefined' && document.readyState !== 'complete') window.addEventListener('load', load, { once: true });
