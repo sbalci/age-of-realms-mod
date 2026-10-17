@@ -22,8 +22,15 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-17-turks-building-set-design.md](../specs/2026-10-17-turks-building-set-design.md)
 
-**Validated while planning:**
-- The code in this plan was run end to end in a scratch worktree: refactor proofs, every phase's recipe structure, all 89 Turks sprites baked, and every node and browser test listed here passing.
+**Validated while planning** (in a scratch worktree):
+- **Ran:**
+  - both byte-identical refactor proofs
+  - the recipe structure of every phase
+  - a bake of all 89 Turks sprites
+  - `node tests/islamic-art.test.js` (13/13)
+  - `npm run test:syntax`
+  - the art, islamic-art and actors browser specs, including every new browser test here
+- **Not run:** `npm run test:quick` and the full browser suite. They first run during execution: test:quick in most tasks, the full browser suite in Task 13.
 - The looks are first drafts. The three review points exist to change them.
 
 ## Global Constraints
@@ -82,12 +89,12 @@
 **Main-session steps** (they need the user or the live Blender MCP; the coordinating session runs them itself even under subagent-driven execution):
 - Task 4 Step 6
 - Task 5 Steps 4–6
-- Task 7 Step 4
 - Task 8 (all)
 - Task 9 Step 7
 - Task 10 Steps 4–6
-- Task 12 Step 4
 - Task 13 Step 3
+
+The self-check previews in Tasks 7 and 12 stay with the implementer, who opens `tools/art/preview.png` with the Read tool. The coordinator also looks at those previews when reviewing the task.
 
 ## How to check a bake
 
