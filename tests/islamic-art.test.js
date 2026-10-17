@@ -9,8 +9,10 @@ const PIECES = ['wall', 'wall-window', 'wall-door', 'wall-arcade', 'wall-timber'
   'tower-round', 'asbad', 'kiosk', 'lookout', 'jetty', 'crane', 'cannon', 'rack-shields', 'target', 'forge', 'sextant', 'tug', 'awning', 'chimney'];
 // Sprites baked so far, by building type and age. The recipes must bake exactly these, and manifest.js may hold no others.
 const TURKS_BAKED = {
-  house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3], castle: [2], market: [1, 2, 3],
-  dock: [0, 1, 2, 3], university: [2, 3],
+  house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3], mill: [0, 1, 2, 3], lumbercamp: [0, 1, 2, 3],
+  miningcamp: [0, 1, 2, 3], dock: [0, 1, 2, 3], barracks: [0, 1, 2, 3], market: [1, 2, 3],
+  blacksmith: [1, 2, 3], range: [1, 2, 3], stable: [1, 2, 3], university: [2, 3], siege: [2, 3],
+  tower: [1, 2, 3], well: [0, 2], castle: [2], outpost: [0],
 };
 const SARACENS_BAKED = { house: [0, 1, 2, 3], tc: [0, 1, 2, 3], monastery: [2, 3] };
 let pass = 0, fail = 0;

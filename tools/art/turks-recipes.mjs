@@ -142,6 +142,157 @@ OTTOMAN.university = k => {
   if (k.style === 3) crown(k, 'minaret-pencil', 2.75, 0.25, 0, 0.9);
 };
 
+// ---- mill: wind-tower mill (ages 0-1), with a domed granary (ages 2-3) ----
+SELJUK.mill = k => {
+  crown(k, 'asbad', 0.6, 0.6, 0, 1.05);
+  ring(k, 1, 1, 1, 1, 0, { s0: 'wall-door' });
+  roof(k, 1, 1, 1, 1, 1, 'merlon-pointed');
+  if (k.style === 1) k.add('town', 'cart', 0.5, 1.75, 0, 90, 0.55);
+};
+OTTOMAN.mill = k => {
+  crown(k, 'asbad', 0.6, 0.6, 0, 1.25);
+  ring(k, 1, 1, 1, 1, 0, { s0: 'wall-door', e0: 'wall-window' });
+  roof(k, 1, 1, 1, 1, 1);
+  crown(k, 'dome-lead', 1.5, 1.5, 1.06, 0.75, k.style === 3);
+  k.add('town', 'cart', 0.5, 1.75, 0, 90, 0.55);
+};
+
+// ---- lumbercamp: canvas-and-stone timber yard (ages 0-1), stone yard with a timber crane (ages 2-3) ----
+SELJUK.lumbercamp = k => {
+  lowWall(k, 0, 0, 2, 2, 0.35);
+  k.add('nature', 'tent_detailedOpen', 0.6, 0.6, 0, 0, 0.55, HIDE);
+  k.add('nature', 'log_large', 1.35, 1.2, 0, 60, 0.9);
+  k.add('nature', 'log', 1.1, 1.6, 0, 20, 1.1);
+  if (k.style === 1) k.add('nature', 'stump_roundDetailed', 0.5, 1.5, 0, 0, 1.0);
+};
+OTTOMAN.lumbercamp = k => {
+  lowWall(k, 0, 0, 2, 2, 0.45);
+  ring(k, 0.1, 0.1, 1, 1, 0, { s0: 'wall-arcade', e0: 'wall-arcade' });
+  roof(k, 0.1, 0.1, 1, 1, 1);
+  k.add(I, 'crane', 1.45, 0.55, 0, 0, 0.75);
+  k.add('nature', 'log_large', 1.3, 1.35, 0, 60, 0.9);
+  k.add('nature', 'log', 0.6, 1.55, 0, 10, 1.1);
+};
+
+// ---- miningcamp: quarry pithead with a hoist (ages 0-1), stone assay house with a domed smelter (ages 2-3) ----
+SELJUK.miningcamp = k => {
+  lowWall(k, 0, 0, 2, 2, 0.3);
+  k.add(I, 'crane', 0.7, 0.7, 0, 0, 0.7);
+  k.add('nature', 'stone_largeA', 1.3, 1.25, 0, 0, 0.8, { tint: '#a8a196' });
+  k.add('nature', 'stone_smallB', 1.6, 0.6, 0, 30, 0.9, { tint: '#a8a196' });
+  if (k.style === 1) k.add('town', 'cart', 0.6, 1.6, 0, 90, 0.55);
+};
+OTTOMAN.miningcamp = k => {
+  ring(k, 0.1, 0.1, 1, 1, 0, { s0: 'wall-door', e0: 'wall-window' });
+  roof(k, 0.1, 0.1, 1, 1, 1);
+  crown(k, 'dome-lead', 0.6, 0.6, 1.06, 0.55);
+  k.add(I, 'chimney', 0.9, 0.3, 1.06);
+  k.add(I, 'crane', 1.5, 0.6, 0, 0, 0.75);
+  k.add('nature', 'stone_largeA', 1.4, 1.4, 0, 0, 0.8, { tint: '#a8a196' });
+  k.add('town', 'cart', 0.6, 1.65, 0, 90, 0.55);
+};
+
+// ---- barracks: walled drill yard (ages 0-1), Janissary barracks court (ages 2-3) ----
+SELJUK.barracks = k => {
+  lowWall(k, 0, 0, 3, 3, 0.45);
+  ring(k, 0.2, 0.2, 2, 1, 0, { s0: 'wall-door', s1: 'wall-window', e0: 'wall-window' });
+  roof(k, 0.2, 0.2, 2, 1, 1, 'merlon-pointed');
+  k.add(I, 'rack-shields', 2.3, 1.2, 0, ROT.e);
+  k.add(I, 'tug', 2.5, 2.4, 0);
+  if (k.style === 1) k.add('nature', 'tent_detailedOpen', 0.9, 2.1, 0, 20, 0.5, HIDE);
+};
+OTTOMAN.barracks = k => {
+  // two-storey barracks range behind a domed arcade, standards and a weapon rack in the yard
+  ring(k, 0, 0, 3, 1, 0, { s0: 'wall-window', s1: 'wall-door', s2: 'wall-window', e0: 'wall-window' });
+  ring(k, 0, 0, 3, 1, 1, { s0: 'wall-window', s1: 'wall-window', s2: 'wall-window', e0: 'wall-window' });
+  roof(k, 0, 0, 3, 1, 2, 'merlon-pointed');
+  portico(k, 0, 1, 3, 'dome-lead');
+  for (const x of [0.4, 2.6]) k.add(I, 'tug', x, 2.6, 0);
+  k.add(I, 'rack-shields', 1.6, 2.3, 0, ROT.s);
+  if (k.style === 3) crown(k, 'dome-lead', 1.5, 0.5, 2.06, 0.8, true);
+};
+
+// ---- blacksmith: smithy (age 1), stone forge hall with racks of scimitars and shields (ages 2-3) ----
+SELJUK.blacksmith = k => {
+  ring(k, 0, 0, 2, 2, 0, { s0: 'wall-door', s1: 'wall-window', e1: 'wall-window' });
+  roof(k, 0, 0, 2, 2, 1, 'merlon-pointed');
+  k.add(I, 'chimney', 0.5, 0.5, 1.06);
+  k.add(I, 'forge', 2.4, 1.0, 0);
+  k.add(I, 'rack-shields', 1.6, 2.35, 0, ROT.s);
+};
+OTTOMAN.blacksmith = k => {
+  ring(k, 0, 0, 2, 2, 0, { s0: 'wall-door', s1: 'wall-window', e0: 'wall-window', e1: 'wall-window' });
+  roof(k, 0, 0, 2, 2, 1);
+  crown(k, 'dome-lead', 1.0, 1.0, 1.06, 1.1, k.style === 3);
+  k.add(I, 'chimney', 0.35, 0.35, 1.06, 0, 1.3);
+  k.add(I, 'forge', 2.45, 1.0, 0);
+  k.add(I, 'rack-shields', 1.0, 2.35, 0, ROT.s);
+  k.add(I, 'rack-shields', 2.35, 2.2, 0, ROT.e);
+};
+
+// ---- range: archery lodge (age 1), Meydan-ı Ok lodge with bow racks and targets (ages 2-3) ----
+SELJUK.range = k => {
+  ring(k, 0, 0, 1, 2, 0, { e0: 'wall-window', e1: 'wall-door' });
+  roof(k, 0, 0, 1, 2, 1, 'merlon-pointed');
+  for (const y of [0.5, 1.5, 2.5]) k.add(I, 'target', 2.6, y, 0);
+  lowWall(k, 0, 2, 1, 1, 0.35);
+};
+OTTOMAN.range = k => {
+  ring(k, 0, 0, 2, 1, 0, { s0: 'wall-window', s1: 'wall-door', e0: 'wall-window' });
+  roof(k, 0, 0, 2, 1, 1);
+  crown(k, 'dome-lead', 1.0, 0.5, 1.06, 0.7, k.style === 3);
+  portico(k, 0, 1, 2, null, 'merlon-pointed');
+  for (const y of [0.5, 1.5, 2.5]) k.add(I, 'target', 2.65, y, 0);
+  k.add(I, 'rack-shields', 1.2, 2.4, 0, ROT.s);
+  k.add(I, 'tug', 0.4, 2.6, 0);
+};
+
+// ---- stable: timber stable (age 1), Has Ahır imperial stables with a lead cupola and tuğ (ages 2-3) ----
+SELJUK.stable = k => {
+  ring(k, 0, 0, 3, 1, 0, { s0: 'wall-arcade', s1: 'wall-arcade', s2: 'wall-arcade' });
+  k.add(I, 'roof-hip', 1.5, 0.5, 1, 0, [3, 0.8, 1]);
+  lowWall(k, 0, 1.15, 3, 2, 0.3);
+};
+OTTOMAN.stable = k => {
+  ring(k, 0, 0, 3, 1, 0, { s0: 'wall-arcade', s1: 'wall-door', s2: 'wall-arcade', e0: 'wall-window' });
+  roof(k, 0, 0, 3, 1, 1);
+  crown(k, 'kiosk', 1.5, 0.5, 1.06, 0.7);
+  lowWall(k, 0, 1.15, 3, 2, 0.35);
+  k.add(I, 'tug', 2.6, 2.6, 0);
+  if (k.style === 3) k.add(I, 'tug', 0.4, 2.6, 0);
+};
+
+// ---- siege: cannon foundry with gun barrels in the yard (ages 2-3) ----
+OTTOMAN.siege = k => {
+  ring(k, 0, 0, 2, 2, 0, { s0: 'wall-door', s1: 'wall-arcade', e0: 'wall-window', e1: 'wall-arcade' });
+  roof(k, 0, 0, 2, 2, 1);
+  for (const [x, y] of [[0.5, 0.5], [1.5, 0.5], [0.5, 1.5], [1.5, 1.5]]) crown(k, 'dome-lead', x, y, 1.06, 0.6);
+  k.add(I, 'chimney', 1.9, 0.2, 1.06, 0, 1.4);
+  for (const y of [0.7, 1.7]) k.add(I, 'cannon', 2.5, y, 0, 0, 1.1);
+  if (k.style === 3) k.add(I, 'cannon', 1.4, 2.55, 0, ROT.s, 1.1);
+};
+
+// ---- tower: watch tower (age 1), domed guard turret (age 2), keep with a cannon on the roof (age 3) ----
+SELJUK.tower = k => { crown(k, 'kumbet', 0.5, 0.5, 0, 0.75); };
+OTTOMAN.tower = k => {
+  if (k.style === 2) { crown(k, 'tower-round', 0.5, 0.5, 0, 0.9, true); return; }
+  ring(k, 0, 0, 1, 1, 0, { s0: 'wall-door' });
+  ring(k, 0, 0, 1, 1, 1, { s0: 'wall-window', e0: 'wall-window' });
+  ring(k, 0, 0, 1, 1, 2, { s0: 'wall-window', e0: 'wall-window' });
+  roof(k, 0, 0, 1, 1, 3, 'merlon-pointed');
+  k.add(I, 'cannon', 0.5, 0.5, 3.06, 45, 0.6);
+};
+
+// ---- well: stone well with a winch (age 0), şadırvan fountain kiosk (age 2) ----
+SELJUK.well = k => {
+  lowWall(k, 0, 0, 1, 1, 0.35);
+  k.add(I, 'crane', 0.35, 0.5, 0, 0, 0.55);
+};
+OTTOMAN.well = k => { crown(k, 'kiosk', 0.5, 0.5, 0, 1.15, true); };
+
+// ---- outpost: timber lookout (age 0) ----
+SELJUK.outpost = k => { k.add(I, 'lookout', 0.5, 0.5, 0); };
+
 // ---- recipes (keep last) ----
 const BUILDERS = { seljuk: SELJUK, ottoman: OTTOMAN, tanzimat: TANZIMAT, republican: REPUBLICAN };
 export const TURKS_RECIPES = {};
