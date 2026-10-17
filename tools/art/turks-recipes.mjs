@@ -160,7 +160,7 @@ OTTOMAN.mill = k => {
 // ---- lumbercamp: canvas-and-stone timber yard (ages 0-1), stone yard with a timber crane (ages 2-3) ----
 SELJUK.lumbercamp = k => {
   lowWall(k, 0, 0, 2, 2, 0.35);
-  k.add('nature', 'tent_detailedOpen', 0.6, 0.6, 0, 0, 0.55, HIDE);
+  k.add('nature', 'tent_detailedOpen', 0.65, 0.65, 0, 0, [0.9, 1.4, 0.9], HIDE);
   k.add('nature', 'log_large', 1.35, 1.2, 0, 60, 0.9);
   k.add('nature', 'log', 1.1, 1.6, 0, 20, 1.1);
   if (k.style === 1) k.add('nature', 'stump_roundDetailed', 0.5, 1.5, 0, 0, 1.0);
@@ -177,10 +177,11 @@ OTTOMAN.lumbercamp = k => {
 // ---- miningcamp: quarry pithead with a hoist (ages 0-1), stone assay house with a domed smelter (ages 2-3) ----
 SELJUK.miningcamp = k => {
   lowWall(k, 0, 0, 2, 2, 0.3);
-  k.add(I, 'crane', 0.7, 0.7, 0, 0, 0.7);
-  k.add('nature', 'stone_largeA', 1.3, 1.25, 0, 0, 0.8, { tint: '#a8a196' });
+  k.add('nature', 'tent_detailedOpen', 0.6, 1.4, 0, -90, [0.85, 1.35, 0.85], HIDE);
+  k.add(I, 'crane', 0.7, 0.55, 0, 0, 0.7);
+  k.add('nature', 'stone_largeA', 1.4, 1.2, 0, 0, 0.8, { tint: '#a8a196' });
   k.add('nature', 'stone_smallB', 1.6, 0.6, 0, 30, 0.9, { tint: '#a8a196' });
-  if (k.style === 1) k.add('town', 'cart', 0.6, 1.6, 0, 90, 0.55);
+  if (k.style === 1) k.add('town', 'cart', 1.45, 1.7, 0, 0, 0.55);
 };
 OTTOMAN.miningcamp = k => {
   ring(k, 0.1, 0.1, 1, 1, 0, { s0: 'wall-door', e0: 'wall-window' });

@@ -1003,16 +1003,16 @@ const KENNEY_ART = {
  },
  "lumbercamp_turks_0": {
   "w": 141,
-  "h": 93,
+  "h": 101,
   "ax": 70,
-  "ay": 45.3,
+  "ay": 52.92,
   "SC": 2
  },
  "lumbercamp_turks_1": {
   "w": 141,
-  "h": 93,
+  "h": 101,
   "ax": 70,
-  "ay": 45.3,
+  "ay": 52.92,
   "SC": 2
  },
  "lumbercamp_turks_2": {
@@ -1031,14 +1031,14 @@ const KENNEY_ART = {
  },
  "miningcamp_turks_0": {
   "w": 141,
-  "h": 106,
+  "h": 107,
   "ax": 70,
   "ay": 58.72,
   "SC": 2
  },
  "miningcamp_turks_1": {
   "w": 141,
-  "h": 106,
+  "h": 107,
   "ax": 70,
   "ay": 58.72,
   "SC": 2
