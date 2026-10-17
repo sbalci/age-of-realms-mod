@@ -374,12 +374,12 @@ TANZIMAT.mill = k => {
   ring(k, 0.1, 0.6, 2, 1, 0, {}, 'wall-brick');
   ring(k, 0.1, 0.6, 2, 1, 1, {}, 'wall-brick');
   k.add(I, 'roof-hip', 1.1, 1.1, 2, 0, [2, 0.6, 1]);
-  k.add(I, 'stack', 0.4, 0.3, 0, 0, 0.85);
+  k.add(I, 'stack', 0.4, 0.3, 0, 0, [1, 1.5, 1]);   // tall enough to clear the roof from the camera side
   k.add('town', 'cart', 0.6, 1.85, 0, 90, 0.55);
 };
 REPUBLICAN.mill = k => {
   // two silos beside a three-storey elevator tower, warehouse in front
-  for (const x of [0.32, 0.8]) crown(k, 'silo', x, 0.4, 0, 0.8);
+  for (const y of [0.3, 0.75]) crown(k, 'silo', 0.3, y, 0, 0.8);   // west of the tower, so it hides neither silo
   for (const z of [0, 1, 2]) ring(k, 1.1, 0, 1, 1, z, {}, 'wall-modern');
   roof(k, 1.1, 0, 1, 1, 3);
   ring(k, 0.1, 1.0, 2, 1, 0, {}, 'wall-modern');

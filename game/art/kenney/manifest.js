@@ -1262,9 +1262,9 @@ const KENNEY_ART = {
  },
  "mill_turks_4": {
   "w": 144,
-  "h": 155,
+  "h": 179,
   "ax": 70,
-  "ay": 106.57,
+  "ay": 131.35,
   "SC": 2
  },
  "mill_turks_5": {
