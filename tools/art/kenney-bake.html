@@ -18,12 +18,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RECIPES, STYLES } from './kenney-recipes.js';
+import { islamicSlots } from './islamic-recipes.js';
 
 const SC = 2;                                // output pixel density (render.js sprites use SC = 2)
 const PPU = 32 * Math.SQRT2;                 // screen px per world unit
 const EL = Math.PI / 6;
 const DIR = new THREE.Vector3(Math.cos(EL) / Math.SQRT2, Math.sin(EL), Math.cos(EL) / Math.SQRT2);
-const KITS = { town: '/assets/thirdparty/kenney/fantasy-town-kit/', castle: '/assets/thirdparty/kenney/castle-kit/', nature: '/assets/thirdparty/kenney/nature-kit/' };
+const KITS = { town: '/assets/thirdparty/kenney/fantasy-town-kit/', castle: '/assets/thirdparty/kenney/castle-kit/', nature: '/assets/thirdparty/kenney/nature-kit/', islamic: '/assets/original/islamic/' };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -109,6 +110,8 @@ async function assemble(recipe, styleIdx) {
         const m = await model(kit, name);
         m.position.set(x, z, y); m.rotation.y = rot * Math.PI / 180;
         if (Array.isArray(s)) m.scale.set(s[0], s[1], s[2]); else m.scale.setScalar(s);
+        // original kit pieces carry named colour slots; colour them from the recipe civ's palette for this age
+        if (kit === 'islamic') { const slots = islamicSlots(recipe.civ, styleIdx); m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.map = null; o.material.color = new THREE.Color(slots[o.material.name] || '#ff00ff'); o.material.roughness = 1; o.material.metalness = 0; } }); }
         if (kit === 'town' || kit === 'castle') { const tex = await styledTexture(kit, kit === 'town' ? styleIdx : -1); m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.map = tex; } }); }
         if (opts.leaf) m.traverse(o => { if (o.isMesh && /leaf|leav/i.test(o.material.name)) { o.material = o.material.clone(); o.material.color = new THREE.Color(opts.leaf); } });
         if (opts.tint) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(opts.tint); } });

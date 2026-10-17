@@ -23,6 +23,16 @@ function bounds(j) {   // over every POSITION accessor, in glTF axes (y is up)
   return { min, max };
 }
 
+const R = vm.runInNewContext(fs.readFileSync(path.join(root, 'tools/art/islamic-recipes.js'), 'utf8').replace(/^export /gm, '') +
+  ';({ PALETTES, TOP, ISLAMIC_RECIPES, islamicSlots })');
+function placements() {   // every k.add(kit, name) made by every recipe at every style it bakes
+  const out = [];
+  for (const [recipe, r] of Object.entries(R.ISLAMIC_RECIPES)) for (const style of r.styles) {
+    r.build({ style, add: (kit, name) => out.push({ recipe, style, kit, name }) });
+  }
+  return out;
+}
+
 test('the kit holds every piece', () => {
   for (const n of PIECES) assert.ok(fs.existsSync(path.join(KIT, n + '.glb')), n + '.glb missing');
 });
@@ -40,6 +50,34 @@ test('wall pieces follow the Kenney cell convention: +x edge, one storey, one ce
     assert.ok(Math.abs(min[1]) < 1e-3 && Math.abs(max[1] - 1) < 1e-3, n + ' height');
     assert.ok(min[2] >= -0.501 && max[2] <= 0.501, n + ' width');
   }
+});
+test('every Islamic piece a recipe uses is in the kit', () => {
+  for (const p of placements().filter(p => p.kit === 'islamic')) assert.ok(PIECES.includes(p.name), `${p.recipe}_${p.style}: unknown piece ${p.name}`);
+});
+test('every Kenney prop a recipe uses exists in its kit', () => {
+  for (const p of placements().filter(p => p.kit !== 'islamic')) assert.ok(fs.existsSync(path.join(root, KENNEY[p.kit], p.name + '.glb')), `${p.recipe}_${p.style}: ${p.kit}/${p.name}`);
+});
+test('TOP heights match the crowning pieces', () => {
+  for (const [n, h] of Object.entries(R.TOP)) {
+    const top = bounds(glb(n)).max[1];
+    assert.ok(Math.abs(top - h) < 0.005, n + ' top ' + top + ' vs TOP ' + h);
+  }
+});
+test('palettes match CIV_ARCH in game/js/civ_art.js for ages 0-3', () => {
+  const src = fs.readFileSync(path.join(root, 'game/js/civ_art.js'), 'utf8');
+  const CIV_ARCH = vm.runInNewContext(src.slice(src.indexOf('const CIV_ARCH'), src.indexOf('const CIV_WONDER_NAMES')) + ';CIV_ARCH');
+  for (const civ of ['turks', 'saracens']) for (let age = 0; age < 4; age++) for (const f of ['wall', 'stone', 'trim', 'roof', 'dome', 'accent']) {
+    assert.equal(R.PALETTES[civ][age][f], CIV_ARCH[civ].ages[age][f], `${civ} age ${age} ${f}`);
+  }
+});
+test('islamicSlots colours every slot, with ablaq bands only for Saracens from age 2', () => {
+  for (const civ of ['turks', 'saracens']) for (let age = 0; age < 4; age++) {
+    const s = R.islamicSlots(civ, age);
+    for (const k of SLOTS) assert.match(s[k], /^#[0-9a-f]{6}$/, `${civ} ${age} ${k}`);
+  }
+  assert.equal(R.islamicSlots('saracens', 2).band, R.islamicSlots('saracens', 2).trim);
+  assert.equal(R.islamicSlots('saracens', 1).band, R.islamicSlots('saracens', 1).wall);
+  assert.equal(R.islamicSlots('turks', 3).band, R.islamicSlots('turks', 3).wall);
 });
 console.log(`${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

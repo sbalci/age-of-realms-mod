@@ -1,3 +1,5 @@
+import { ISLAMIC_RECIPES } from './islamic-recipes.js';
+
 // Building recipes for the Kenney art style. Coordinates are game tiles: a building of size s covers
 // x, y in [0, s]; z is height in world units (one Kenney storey = 1). Kenney modules are 1x1 cells
 // centred on their origin; wall panels sit on the cell's +x edge and are rotated to face outwards.
@@ -259,3 +261,7 @@ export const RECIPES = {
   gold_0: { size: 1, res: true, build(k) { k.add('nature', 'stone_largeB', 0.5, 0.5, 0, 0, 0.98, { tint: '#ffd24a' }); k.add('nature', 'stone_smallC', 0.95, 0.85, 0, 0, 0.9, { tint: '#ffc830' }); } },
   gold_1: { size: 1, res: true, build(k) { k.add('nature', 'stone_largeD', 0.5, 0.5, 0, 90, 0.98, { tint: '#ffd24a' }); } },
 };
+
+// Turks and Saracens buildings from the original Islamic kit (assets/original/islamic/)
+Object.assign(RECIPES, ISLAMIC_RECIPES);
+
