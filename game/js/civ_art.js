@@ -334,7 +334,7 @@ function drawTorii(g, x, y, z0, h = 16) {
   g.stroke();
 }
 
-function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney) {
+function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {}) {
   const spec = civSpec(civ);
   const agePal = spec.ages[Math.min(5, Math.max(0, st))];
   const size = BUILDINGS[type] ? BUILDINGS[type].size : 2;
@@ -342,8 +342,8 @@ function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney) {
   const gold = '#e8c040';
   const topZ = (BLD_H[type] || 50) * (isKenney ? 0.58 : 0.72);
 
-  // 1. Civilization-specific roof & crown ornament on major & civic buildings
-  if (st >= 1 && !BUILDINGS[type]?.wall && type !== 'palisade' && type !== 'outpost') {
+  // 1. Civilization-specific roof & crown ornament on major & civic buildings (civ sprites model their own; opts.crown = false)
+  if (opts.crown !== false && st >= 1 &&!BUILDINGS[type]?.wall && type !== 'palisade' && type !== 'outpost') {
     if (spec.family === 'east') {
       if (size >= 2) drawEastEaves(g, 0, 0, r * 0.72, r * 0.72, topZ * 0.55, agePal.roof, gold);
       if (civ === 'japanese' && size >= 3) drawShachihoko(g, 0, 0, topZ * 0.92);
@@ -843,6 +843,12 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
           const famKey = spec.family === 'east' ? 'castle_east' : (spec.family === 'islamic' || spec.family === 'byzantine') ? 'castle_med' : spec.family === 'nordic' ? 'castle_nordic' : 'castle';
           if (KART.img[famKey]) name = famKey;
         }
+        // per-civilization building sets (e.g. house_turks_2) replace the shared sprite unless the shared one is
+        // newer, so the dedicated Modern/Future Town Centers (tc_4, tc_5) still win over tc_turks_3
+        const shared = kartKey(type, st), own = !name && civKartKey(type, civ, st);
+        const ageOf = k => { const n = +k.slice(k.lastIndexOf('_') + 1); return Number.isFinite(n) ? n : -1; };
+        const civSet = own && (!shared || ageOf(own) >= ageOf(shared)) ? own : null;
+        if (civSet) name = civSet;
         if (!name) name = kartKey(type, st);
         if (name && KART.img[name]) {
           const key = name + '|' + st + '|' + pc.c + '|' + civ;
@@ -863,7 +869,7 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
                   vicBanner(g, size / 2 - 0.22, 0.55, 16, pc, 13);
                 }
               }
-              drawCivBuildingOverlay(g, type, st, pc, civ, true);
+              drawCivBuildingOverlay(g, type, st, pc, civ, true, civSet ? { crown: false } : undefined);
             }, under);
             s.staticSails = type === 'mill';
             KART.cache.set(key, s);

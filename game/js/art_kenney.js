@@ -37,6 +37,11 @@ function kartKey(type, st) {
   for (let s = st; s >= 0; s--) if (KART.img[type + '_' + s]) return type + '_' + s;
   return KART.img[type] ? type : null;
 }
+// a civilization's own building sprite (house_turks_2): exact age, else the nearest lower age it was baked for
+function civKartKey(type, civ, st) {
+  for (let s = st; s >= 0; s--) if (KART.img[type + '_' + civ + '_' + s]) return type + '_' + civ + '_' + s;
+  return null;
+}
 function kartSprite(name, decorate, under) {
   const m = KENNEY_ART[name], im = KART.img[name];
   const cv = document.createElement('canvas'); cv.width = Math.ceil(m.w * m.SC); cv.height = Math.ceil(m.h * m.SC);

@@ -65,7 +65,7 @@ test('missing sprites fall back to drawn art and play remains available', async 
   await page.route('**/art/kenney/tc_*.png', route => route.abort());
   await page.route('**/art/kenney/farm_*.png', route => route.abort());
   await page.goto('/game/'); await waitForArt(page);
-  expect(await page.evaluate(() => KART.failed.length)).toBe(7);
+  expect(await page.evaluate(() => KART.failed.length)).toBe(await page.evaluate(() => Object.keys(KENNEY_ART).filter(k => /^(tc|farm)_/.test(k)).length));
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => {
@@ -92,4 +92,48 @@ test('2.5D refreshes cached resource art after a delayed sprite arrives', async 
     release(); await waitForArt(page);
     expect(await page.evaluate(() => __game.T25D.asset(artProbe) !== oldArt)).toBe(true);
   } finally { release(); }
+});
+
+// Renders one building sprite from scratch and reports which baked sprite it used and how many painted domes it drew.
+const drawProbe = () => {
+  window.drawProbe = (type, st, civ) => {
+    const real = vicDome; let domes = 0;
+    vicDome = (...a) => { domes++; return real(...a); };
+    try {
+      KART.cache.clear();
+      bldSprite(type, st, W.players[1].color, civ);
+      return { names: [...KART.cache.keys()].map(k => k.split('|')[0]), domes };
+    } finally { vicDome = real; KART.cache.clear(); }
+  };
+};
+
+test('Turks and Saracens use their own building sprites without the painted crown', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/game/'); await waitForArt(page);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(drawProbe);
+  const r = await page.evaluate(() => ({
+    turks2: drawProbe('tc', 2, 'turks'),
+    turks5: drawProbe('tc', 5, 'turks'),
+    franks2: drawProbe('tc', 2, 'franks'),
+    turksMonastery1: drawProbe('monastery', 1, 'turks'),
+  }));
+  expect(r.turks2).toEqual({ names: ['tc_turks_2'], domes: 0 });
+  expect(r.turks5.names).toEqual(['tc_5']);   // the dedicated Future Town Center outranks the medieval civ sprite
+  expect(r.franks2.names).toEqual(['tc_2']);
+  expect(r.turksMonastery1.names).toEqual(['monastery_1']);
+  expect(r.turksMonastery1.domes).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('a missing civ sprite falls back to the shared sprite and its painted crown', async ({ page }) => {
+  await page.route('**/art/kenney/tc_turks_*.png', route => route.abort());
+  await page.goto('/game/'); await waitForArt(page);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(drawProbe);
+  const r = await page.evaluate(() => drawProbe('tc', 2, 'turks'));
+  expect(r.names).toEqual(['tc_2']);
+  expect(r.domes).toBeGreaterThan(0);
 });
