@@ -842,17 +842,16 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
       if (typeof KART !== 'undefined' && KART.on) {
         // a civilization's own building set is fetched the first time that civ is drawn
         if (!KART.civs.has(civ)) KART.loadCiv(civ);
-        // Cultural hero sprite selection (e.g., castle_east, castle_med, castle_nordic)
-        let name = null;
-        if (type === 'castle') {
+        // per-civilization building sets (e.g. house_turks_2, castle_turks_2) replace the shared sprite unless the
+        // shared one is newer, so the dedicated Modern/Future Town Centers (tc_4, tc_5) still win over tc_saracens_3
+        const shared = kartKey(type, st), own = civKartKey(type, civ, st);
+        const civSet = own && (!shared || ageOf(own) >= ageOf(shared)) ? own : null;
+        let name = civSet;
+        // cultural hero castles (castle_east, castle_med, castle_nordic) for civs without a castle of their own
+        if (!name && type === 'castle') {
           const famKey = spec.family === 'east' ? 'castle_east' : (spec.family === 'islamic' || spec.family === 'byzantine') ? 'castle_med' : spec.family === 'nordic' ? 'castle_nordic' : 'castle';
           if (KART.img[famKey]) name = famKey;
         }
-        // per-civilization building sets (e.g. house_turks_2) replace the shared sprite unless the shared one is
-        // newer, so the dedicated Modern/Future Town Centers (tc_4, tc_5) still win over tc_turks_3
-        const shared = kartKey(type, st), own = !name && civKartKey(type, civ, st);
-        const civSet = own && (!shared || ageOf(own) >= ageOf(shared)) ? own : null;
-        if (civSet) name = civSet;
         if (!name) name = shared;
         if (name && KART.img[name]) {
           const key = name + '|' + st + '|' + pc.c + '|' + civ;

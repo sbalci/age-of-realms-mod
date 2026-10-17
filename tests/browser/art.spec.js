@@ -169,3 +169,22 @@ test('civilization building sprites load on demand and refresh caches at most on
   expect(r.civ).toBe('turks');
   expect(errors).toEqual([]);
 });
+
+test('a civilization with its own castle draws it before its family castle', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/game/'); await waitForArt(page);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await page.evaluate(() => Promise.all(['turks', 'saracens', 'byzantines', 'franks'].map(civ => KART.loadCiv(civ))));
+  await page.evaluate(drawProbe);
+  const r = await page.evaluate(() => ({
+    turks2: drawProbe('castle', 2, 'turks'), turks3: drawProbe('castle', 3, 'turks'),
+    saracens2: drawProbe('castle', 2, 'saracens'), byzantines2: drawProbe('castle', 2, 'byzantines'), franks2: drawProbe('castle', 2, 'franks'),
+  }));
+  expect(r.turks2).toEqual({ names: ['castle_turks_2'], domes: 0 });
+  expect(r.turks3.names).toEqual(['castle_turks_2']);
+  expect(r.saracens2.names).toEqual(['castle_med']);
+  expect(r.byzantines2.names).toEqual(['castle_med']);
+  expect(r.franks2.names).toEqual(['castle']);
+  expect(errors).toEqual([]);
+});
