@@ -343,7 +343,7 @@ function drawCivBuildingOverlay(g, type, st, pc, civ, isKenney, opts = {}) {
   const topZ = (BLD_H[type] || 50) * (isKenney ? 0.58 : 0.72);
 
   // 1. Civilization-specific roof & crown ornament on major & civic buildings (civ sprites model their own; opts.crown = false)
-  if (opts.crown !== false && st >= 1 &&!BUILDINGS[type]?.wall && type !== 'palisade' && type !== 'outpost') {
+  if (opts.crown !== false && st >= 1 && !BUILDINGS[type]?.wall && type !== 'palisade' && type !== 'outpost') {
     if (spec.family === 'east') {
       if (size >= 2) drawEastEaves(g, 0, 0, r * 0.72, r * 0.72, topZ * 0.55, agePal.roof, gold);
       if (civ === 'japanese' && size >= 3) drawShachihoko(g, 0, 0, topZ * 0.92);
@@ -830,6 +830,9 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
     };
   }
 
+  // age suffix of a sprite name (house_turks_2 -> 2); -1 when there is none
+  const ageOf = k => { const n = +k.slice(k.lastIndexOf('_') + 1); return Number.isFinite(n) ? n : -1; };
+
   // D. Wrap bldSprite so building cache keys include (type, st, pc.c, civ) and cultural Kenney assets are selected
   if (typeof bldSprite === 'function') {
     const _baseBldSprite = bldSprite;
@@ -846,10 +849,9 @@ function drawCivShipOverlay(g, u, t, pc, civ, age) {
         // per-civilization building sets (e.g. house_turks_2) replace the shared sprite unless the shared one is
         // newer, so the dedicated Modern/Future Town Centers (tc_4, tc_5) still win over tc_turks_3
         const shared = kartKey(type, st), own = !name && civKartKey(type, civ, st);
-        const ageOf = k => { const n = +k.slice(k.lastIndexOf('_') + 1); return Number.isFinite(n) ? n : -1; };
         const civSet = own && (!shared || ageOf(own) >= ageOf(shared)) ? own : null;
         if (civSet) name = civSet;
-        if (!name) name = kartKey(type, st);
+        if (!name) name = shared;
         if (name && KART.img[name]) {
           const key = name + '|' + st + '|' + pc.c + '|' + civ;
           let s = KART.cache.get(key);

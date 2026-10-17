@@ -87,8 +87,23 @@ test('every recipe style is baked into the manifest with its PNG', () => {
     assert.ok(fs.existsSync(path.join(root, 'game/art/kenney', key + '.png')), key + '.png missing');
   }
 });
+const PILOT = [];
+for (const civ of ['turks', 'saracens']) {
+  for (const a of [0, 1, 2, 3]) PILOT.push('house_' + civ + '_' + a, 'tc_' + civ + '_' + a);
+  for (const a of [2, 3]) PILOT.push('monastery_' + civ + '_' + a);
+}
 test('the pilot covers exactly 20 sprites', () => {
-  assert.equal(Object.values(R.ISLAMIC_RECIPES).reduce((n, r) => n + r.styles.length, 0), 20);
+  const keys = Object.entries(R.ISLAMIC_RECIPES).flatMap(([name, r]) => r.styles.map(s => name + '_' + s)).sort();
+  assert.deepEqual(keys, PILOT.slice().sort());
+  assert.equal(keys.length, 20);
+});
+test('manifest.js holds no turks/saracens sprite outside the pilot set', () => {
+  const art = vm.runInNewContext(fs.readFileSync(path.join(root, 'game/art/kenney/manifest.js'), 'utf8') + ';KENNEY_ART');
+  const stale = Object.keys(art).filter(k => /_(turks|saracens)_\d+$/.test(k) && !PILOT.includes(k));
+  assert.deepEqual(stale, []);
+});
+test('islamicSlots names the valid civs when the recipe has none', () => {
+  assert.throws(() => R.islamicSlots(undefined, 0), /one of turks, saracens .*\(got undefined\)/);
 });
 console.log(`${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

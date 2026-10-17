@@ -7,9 +7,11 @@ const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined
 const EXPECTED = {
   1: ['tc_turks_1', 'house_turks_1', 'tc_saracens_1', 'house_saracens_1', 'monastery_1'],
   3: ['tc_turks_3', 'monastery_turks_3', 'house_turks_3', 'tc_saracens_3', 'monastery_saracens_3', 'house_saracens_3'],
+  // the shared Future Town Center (tc_5) outranks the medieval civ sprite; the other civ sprites still apply
+  5: ['tc_5', 'house_turks_3', 'monastery_turks_3', 'house_saracens_3', 'monastery_saracens_3'],
 };
 
-for (const age of [1, 3]) test(`Turks and Saracens towns use their own buildings in game (age ${age})`, async ({ page }) => {
+for (const age of [1, 3, 5]) test(`Turks and Saracens towns use their own buildings in game (age ${age})`, async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/game/'); await waitForArt(page);
   await page.locator('#btn-tutorial').click();
@@ -27,9 +29,10 @@ for (const age of [1, 3]) test(`Turks and Saracens towns use their own buildings
     KART.cache.clear(); R.spriteCache.clear();
     g.centerCamOn(x0 + 6, y0 + 6);
   }, age);
-  await page.waitForTimeout(500);
+  await page.waitForFunction(names => names.every(n => [...KART.cache.keys()].some(k => k.startsWith(n + '|'))), EXPECTED[age]);
   await page.screenshot({ path: `test-results/islamic-age${age}.png` });
   const used = await page.evaluate(() => [...KART.cache.keys()].map(k => k.split('|')[0]));
   for (const name of EXPECTED[age]) expect(used).toContain(name);
+  if (age === 1) for (const name of ['monastery_turks_1', 'monastery_saracens_1']) expect(used).not.toContain(name);
   expect(errors).toEqual([]);
 });

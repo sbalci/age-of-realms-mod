@@ -7,17 +7,26 @@ const test = async (name, fn) => { try { await fn(); pass++; console.log('PASS '
   const io = await import('../tools/art/bake-io.mjs');
   const manifestPath = path.join(__dirname, '../game/art/kenney/manifest.js');
 
-  await test('parseBakeArgs reads --preview and --only lists', () => {
+  await test('parseBakeArgs reads --preview and --recipes lists', () => {
     assert.deepEqual(io.parseBakeArgs([]), { preview: false, only: null });
+    assert.deepEqual(io.parseBakeArgs([], {}), { preview: false, only: null });
     assert.deepEqual(io.parseBakeArgs(['--preview']), { preview: true, only: null });
     assert.deepEqual(io.parseBakeArgs(['--preview', 'tc_turks,tc']), { preview: true, only: ['tc_turks', 'tc'] });
-    assert.deepEqual(io.parseBakeArgs(['--only', 'house_turks']), { preview: false, only: ['house_turks'] });
-    assert.deepEqual(io.parseBakeArgs(['--only', '--preview']), { preview: true, only: null });
+    assert.deepEqual(io.parseBakeArgs(['--recipes', 'house_turks']), { preview: false, only: ['house_turks'] });
+    assert.deepEqual(io.parseBakeArgs(['--recipes', '--preview']), { preview: true, only: null });
   });
-  await test('parseBakeArgs rejects --only without a list and unknown options', () => {
-    assert.throws(() => io.parseBakeArgs(['--only']), /--only needs/);
-    assert.throws(() => io.parseBakeArgs(['--only', '--x']), /unknown option --x/);
+  await test('parseBakeArgs rejects --recipes without a list and unknown options', () => {
+    assert.throws(() => io.parseBakeArgs(['--recipes']), /--recipes needs/);
+    assert.throws(() => io.parseBakeArgs(['--recipes', '--x']), /unknown option --x/);
     assert.throws(() => io.parseBakeArgs(['--onyl', 'tc']), /unknown option --onyl/);
+    assert.throws(() => io.parseBakeArgs(['--only', 'tc']), /unknown option --only/);
+  });
+  await test('parseBakeArgs rejects what npm run passes when -- is missing', () => {
+    assert.throws(() => io.parseBakeArgs(['tc_turks']), /npm run art:bake -- /);
+    assert.throws(() => io.parseBakeArgs(['--preview', 'a', 'b']), /npm run art:bake -- /);
+    assert.throws(() => io.parseBakeArgs([], { npm_config_recipes: 'true' }), /npm run art:bake -- /);
+    assert.throws(() => io.parseBakeArgs([], { npm_config_recipes: 'tc' }), /npm run art:bake -- /);
+    assert.throws(() => io.parseBakeArgs([], { npm_config_preview: 'true' }), /npm run art:bake -- /);
   });
   await test('the committed manifest.js round-trips byte for byte', () => {
     const src = fs.readFileSync(manifestPath, 'utf8').replace(/\r\n/g, '\n');

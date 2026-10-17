@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Bake Kenney CC0 models into isometric sprites for the Canvas 2D renderer.
-//   node tools/art/bake-kenney.mjs                 -> writes game/art/kenney/*.png and game/art/kenney/manifest.js
-//   node tools/art/bake-kenney.mjs --preview a,b  -> writes tools/art/preview.png (contact sheet), nothing else
-//   node tools/art/bake-kenney.mjs --only a,b     -> bakes only recipes a and b and merges them into manifest.js
+//   npm run art:bake                                 -> writes game/art/kenney/*.png and game/art/kenney/manifest.js
+//   npm run art:bake -- --preview a,b                -> writes tools/art/preview.png (contact sheet), nothing else
+//   npm run art:bake -- --recipes a,b                -> bakes only recipes a and b and merges them into manifest.js
 // Needs the dev dependencies (npm ci): three and @playwright/test with Chromium.
 import { chromium } from '@playwright/test';
 import http from 'node:http';
@@ -14,7 +14,7 @@ import { parseBakeArgs, parseManifest, serializeManifest, mergeManifest } from '
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outDir = path.join(root, 'game/art/kenney');
 let args;
-try { args = parseBakeArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
+try { args = parseBakeArgs(process.argv.slice(2), process.env); } catch (e) { console.error(e.message); process.exit(2); }
 const { preview, only } = args;
 
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.json': 'application/json' };
@@ -50,7 +50,7 @@ if (preview) {
     fs.writeFileSync(path.join(outDir, name + '.png'), Buffer.from(v.png.split(',')[1], 'base64'));
     baked[name] = { w: v.w, h: v.h, ax: v.ax, ay: v.ay, SC: v.SC };
   }
-  // --only merges into the existing manifest so untouched sprites keep their entries; a full bake replaces it
+  // --recipes merges into the existing manifest so untouched sprites keep their entries; a full bake replaces it
   const file = path.join(outDir, 'manifest.js');
   const manifest = only && fs.existsSync(file) ? mergeManifest(parseManifest(fs.readFileSync(file, 'utf8')), baked) : baked;
   fs.writeFileSync(file, serializeManifest(manifest));

@@ -29,6 +29,7 @@ const shade = (hex, f) => '#' + [1, 3, 5].map(i => Math.min(255, Math.round(pars
 // Colour of every kit material slot for one civ at one age. The band slot draws the striped (ablaq) courses:
 // trim-coloured for Saracens from age 2, wall-coloured (a plain ledge) otherwise.
 export function islamicSlots(civ, age) {
+  if (!PALETTES[civ]) throw new Error('islamic kit pieces need recipe.civ to be one of ' + Object.keys(PALETTES).join(', ') + ' (got ' + civ + ')');
   const P = PALETTES[civ][Math.min(3, Math.max(0, age))];
   const band = civ === 'saracens' && age >= 2 ? P.trim : P.wall;
   const out = { wall: P.wall, stone: P.stone, trim: P.trim, roof: P.roof, dome: P.dome, accent: P.accent, band, ...FIXED };
