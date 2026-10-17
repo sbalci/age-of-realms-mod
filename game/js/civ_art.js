@@ -95,7 +95,7 @@ const CIV_ARCH = {
       { wall: '#d6be98', roof: '#2e7c88', trim: '#6e5030', base: '#9a866c', beams: null, stone: '#c2ac8c', accent: '#2494a0', dome: '#2e8490' },
       { wall: '#ded4c2', roof: '#526270', trim: '#288290', base: '#989082', beams: null, stone: '#ccc2b0', accent: '#c83028', dome: '#586878' },
       { wall: '#eae2d2', roof: '#465666', trim: '#228898', base: '#a49c8e', beams: null, stone: '#dad2c0', accent: '#e2b038', dome: '#4a5c6e' },
-      { wall: '#ccc6bc', roof: '#3c4854', trim: '#485460', base: '#7c7c78', beams: null, stone: '#bab4aa', accent: '#c83028', dome: '#4c5c6c' },
+      { wall: '#ece9e2', roof: '#3c4854', trim: '#485460', base: '#7c7c78', beams: null, stone: '#d8d2c6', accent: '#c83028', dome: '#4c5c6c' },
       { wall: '#e6dccb', roof: '#b0503a', trim: '#8c3a2c', base: '#9a8a78', beams: null, stone: '#c9a98e', accent: '#c8102e', dome: '#7d858c' },
     ],
   },

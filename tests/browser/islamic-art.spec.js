@@ -7,8 +7,9 @@ const waitForArt = page => page.waitForFunction(() => typeof KART !== 'undefined
 const EXPECTED = {
   1: ['tc_turks_1', 'house_turks_1', 'tc_saracens_1', 'house_saracens_1', 'monastery_1'],
   3: ['tc_turks_3', 'monastery_turks_3', 'house_turks_3', 'tc_saracens_3', 'monastery_saracens_3', 'house_saracens_3'],
-  // the shared Future Town Center (tc_5) outranks the medieval civ sprite; the other civ sprites still apply
-  5: ['tc_5', 'house_turks_3', 'monastery_turks_3', 'house_saracens_3', 'monastery_saracens_3'],
+  // the Turks have Republican sprites of their own; for the Saracens the shared Future Town Center (tc_5)
+  // outranks their medieval one while their age-3 house and mosque still apply
+  5: ['tc_turks_5', 'house_turks_5', 'monastery_turks_5', 'tc_5', 'house_saracens_3', 'monastery_saracens_3'],
 };
 
 for (const age of [1, 3, 5]) test(`Turks and Saracens towns use their own buildings in game (age ${age})`, async ({ page }) => {

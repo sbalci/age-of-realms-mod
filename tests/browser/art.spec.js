@@ -112,16 +112,18 @@ test('Turks and Saracens use their own building sprites without the painted crow
   await page.goto('/game/'); await waitForArt(page);
   await page.locator('#btn-tutorial').click();
   await expect(page.locator('#hud')).toBeVisible();
-  await page.evaluate(() => KART.loadCiv('turks'));
+  await page.evaluate(() => Promise.all([KART.loadCiv('turks'), KART.loadCiv('saracens')]));
   await page.evaluate(drawProbe);
   const r = await page.evaluate(() => ({
     turks2: drawProbe('tc', 2, 'turks'),
     turks5: drawProbe('tc', 5, 'turks'),
+    saracens5: drawProbe('tc', 5, 'saracens'),
     franks2: drawProbe('tc', 2, 'franks'),
     turksMonastery1: drawProbe('monastery', 1, 'turks'),
   }));
   expect(r.turks2).toEqual({ names: ['tc_turks_2'], domes: 0 });
-  expect(r.turks5.names).toEqual(['tc_5']);   // the dedicated Future Town Center outranks the medieval civ sprite
+  expect(r.turks5.names).toEqual(['tc_turks_5']);    // the Turks' own Republican Town Center
+  expect(r.saracens5.names).toEqual(['tc_5']);        // the shared Future Town Center outranks a medieval civ sprite
   expect(r.franks2.names).toEqual(['tc_2']);
   expect(r.turksMonastery1.names).toEqual(['monastery_1']);
   expect(r.turksMonastery1.domes).toBeGreaterThan(0);

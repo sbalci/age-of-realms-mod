@@ -1,6 +1,6 @@
 // Turks building recipes: one builder per architectural era and building type, assembled from the Islamic kit
 // (see islamic-kit.mjs) plus a few Kenney props. kenney-recipes.js merges TURKS_RECIPES into RECIPES.
-import { I, ROT, CYPRESS, HIDE, TOP, ring, roof, crown, portico, lowWall, courtyard } from './islamic-kit.mjs';
+import { I, ROT, CYPRESS, HIDE, TOP, ring, roof, crown, portico, lowWall, courtyard, porch, sawtooth } from './islamic-kit.mjs';
 
 // The architectural era of each Turkish age.
 export const ERA = ['seljuk', 'seljuk', 'ottoman', 'ottoman', 'tanzimat', 'republican'];
@@ -293,6 +293,81 @@ OTTOMAN.well = k => { crown(k, 'kiosk', 0.5, 0.5, 0, 1.15, true); };
 
 // ---- outpost: timber lookout (age 0) ----
 SELJUK.outpost = k => { k.add(I, 'lookout', 0.5, 0.5, 0); };
+
+// ---- tc: Dolmabahçe-style palace (age 4), First National style hall (age 5) ----
+TANZIMAT.tc = k => {
+  // two-storey pilastered block under a low hipped roof, pedimented porch, clock tower
+  ring(k, 0.5, 0.5, 3, 2, 0, {}, 'wall-pilaster');
+  ring(k, 0.5, 0.5, 3, 2, 1, {}, 'wall-pilaster');
+  k.add(I, 'roof-hip', 2, 1.5, 2, 0, [3, 0.7, 2]);
+  porch(k, 1.5, 2.5, 1, true);
+  crown(k, 'clock-tower', 3.55, 3.35, 0, 0.85);
+  k.add('town', 'fountain-round', 0.6, 3.5, 0, 0, 0.3);
+  k.add('nature', 'tree_cone', 0.3, 0.35, 0, 0, 0.9, CYPRESS);
+};
+REPUBLICAN.tc = k => {
+  // dressed stone with tile-panelled pointed windows under broad eaves, columned entrance, flag
+  ring(k, 0.5, 0.5, 3, 2, 0, {}, 'wall-tile-arch');
+  ring(k, 0.5, 0.5, 3, 2, 1, {}, 'wall-tile-arch');
+  k.add(I, 'eave-broad', 2, 1.5, 2, 0, [3, 1, 2]);
+  porch(k, 1.5, 2.5, 1);
+  k.add(I, 'flagpole', 2.0, 3.65, 0, 0, 1.3);
+  k.add('nature', 'tree_cone', 3.75, 0.35, 0, 0, 0.9, CYPRESS);
+};
+
+// ---- house: Tanzimat Istanbul mansion (age 4), Ankara cubic house (age 5) ----
+TANZIMAT.house = k => {
+  // pilastered storeys, projecting bay, hipped roof
+  ring(k, 0.1, 0.1, 2, 2, 0, {}, 'wall-pilaster');
+  ring(k, 0.1, 0.1, 2, 2, 1, {}, 'wall-pilaster');
+  k.add(I, 'bay-cumba', 1.1, 1.6, 1, ROT.s);
+  k.add(I, 'roof-hip', 1.1, 1.1, 2, 0, [2, 0.8, 2]);
+  k.add('nature', 'tree_cone', 2.3, 0.35, 0, 0, 0.8, CYPRESS);
+};
+REPUBLICAN.house = k => {
+  // flat roofs and ribbon windows, an upper storey over half the plan
+  ring(k, 0.1, 0.1, 2, 2, 0, {}, 'wall-modern');
+  roof(k, 0.1, 0.1, 2, 2, 1);
+  ring(k, 0.1, 0.1, 1, 2, 1.06, {}, 'wall-modern');
+  roof(k, 0.1, 0.1, 1, 2, 2.06);
+  k.add('nature', 'tree_cone', 2.3, 0.35, 0, 0, 0.8, CYPRESS);
+};
+
+// ---- monastery: baroque mosque (age 4), Republican-era mosque (age 5) ----
+TANZIMAT.monastery = k => {
+  // tall pilastered prayer hall under one dome, balustraded roof, columned porch, two slender minarets
+  ring(k, 0.5, 0, 2, 2, 0, {}, 'wall-pilaster');
+  ring(k, 0.5, 0, 2, 2, 1, {}, 'wall-pilaster');
+  roof(k, 0.5, 0, 2, 2, 2, 'balustrade');
+  crown(k, 'dome-lead', 1.5, 1, 2.06, 1.9, true);
+  porch(k, 0.5, 2, 2);
+  for (const x of [0.25, 2.75]) crown(k, 'minaret-pencil', x, 2.3, 0, 1.05);
+};
+REPUBLICAN.monastery = k => {
+  // classical revival in plain dressed stone: one dome, domed portico, two minarets
+  ring(k, 0.5, 0, 2, 2, 0, {}, 'wall-tile-arch');
+  ring(k, 0.5, 0, 2, 2, 1, {}, 'wall-tile-arch');
+  roof(k, 0.5, 0, 2, 2, 2);
+  crown(k, 'dome-lead', 1.5, 1, 2.06, 1.9, true);
+  portico(k, 0.5, 2, 2, 'dome-lead');
+  for (const x of [0.25, 2.75]) crown(k, 'minaret-pencil', x, 0.25, 0, 1.1);
+};
+
+// ---- barracks: Selimiye-style courtyard block (age 4), 1930s military academy (age 5) ----
+TANZIMAT.barracks = k => {
+  // pilastered courtyard block with a balustrade and round corner towers
+  ring(k, 0, 0, 3, 3, 0, {}, 'wall-pilaster');
+  courtyard(k, 0, 0, 3, 3, 1, 'balustrade');
+  for (const [x, y] of [[0.3, 0.3], [2.7, 0.3], [0.3, 2.7], [2.7, 2.7]]) crown(k, 'tower-round', x, y, 0, 0.6);
+};
+REPUBLICAN.barracks = k => {
+  // long flat-roofed block, columned entrance, flag
+  ring(k, 0, 0, 3, 2, 0, {}, 'wall-modern');
+  ring(k, 0, 0, 3, 2, 1, {}, 'wall-modern');
+  roof(k, 0, 0, 3, 2, 2);
+  porch(k, 1, 2, 1);
+  k.add(I, 'flagpole', 2.6, 2.6, 0);
+};
 
 // ---- recipes (keep last) ----
 const BUILDERS = { seljuk: SELJUK, ottoman: OTTOMAN, tanzimat: TANZIMAT, republican: REPUBLICAN };

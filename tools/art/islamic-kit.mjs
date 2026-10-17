@@ -9,7 +9,7 @@ export const PALETTES = {
     { wall: '#d6be98', roof: '#2e7c88', trim: '#6e5030', stone: '#c2ac8c', accent: '#2494a0', dome: '#2e8490' },
     { wall: '#ded4c2', roof: '#526270', trim: '#288290', stone: '#ccc2b0', accent: '#c83028', dome: '#586878' },
     { wall: '#eae2d2', roof: '#465666', trim: '#228898', stone: '#dad2c0', accent: '#e2b038', dome: '#4a5c6e' },
-    { wall: '#ccc6bc', roof: '#3c4854', trim: '#485460', stone: '#bab4aa', accent: '#c83028', dome: '#4c5c6c' },
+    { wall: '#ece9e2', roof: '#3c4854', trim: '#485460', stone: '#d8d2c6', accent: '#c83028', dome: '#4c5c6c' },
     { wall: '#e6dccb', roof: '#b0503a', trim: '#8c3a2c', stone: '#c9a98e', accent: '#c8102e', dome: '#7d858c' },
   ],
   saracens: [
@@ -79,4 +79,15 @@ export function lowWall(k, x0, y0, w, d, h = 0.45, base = 'wall') {
 export function courtyard(k, x0, y0, w, d, z, edge = null) {
   for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) if (i === 0 || j === 0 || i === w - 1 || j === d - 1) k.add(I, 'roof-flat', x0 + i + 0.5, y0 + j + 0.5, z);
   if (edge) ring(k, x0, y0, w, d, z + 0.06, {}, edge);
+}
+// columned porch along the south side of a 1-cell-deep row, roofed at storey 1, with an optional pediment
+export function porch(k, x0, y0, w, pediment = false) {
+  const n = w + 1;
+  for (let i = 0; i < n; i++) k.add(I, 'column', x0 + 0.12 + i * (w - 0.24) / (n - 1), y0 + 0.88, 0);
+  roof(k, x0, y0, w, 1, 1);
+  if (pediment) k.add(I, 'pediment', x0 + w / 2, y0 + 0.5, 1.06, ROT.s, [1, 1, w]);
+}
+// factory roof: one sawtooth piece per cell, north-light glazing facing +x
+export function sawtooth(k, x0, y0, w, d, z) {
+  for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) k.add(I, 'roof-sawtooth', x0 + i + 0.5, y0 + j + 0.5, z);
 }
