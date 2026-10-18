@@ -7,7 +7,7 @@ const msgs = [];
 const ctx = vm.createContext({ console, performance, Math, Proxy, Uint8Array, Int16Array, Int32Array, Float32Array, Uint32Array, Map, Set, Array, Object, JSON, String, Number, RegExp,
   Sound: stub, UI: { selection: [], deselect: noop, onRemoved: noop, showEnd: noop, gameRunning: true, panelKey: '', keys: new Set(), human: () => ctx.W.players[ctx.W.humanId] } });
 const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
-for (const f of ['data.js', 'map.js', 'world.js']) load(f);
+for (const f of ['data.js', 'map.js', 'world.js', 'index.js']) load(f);
 try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
 load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('command.js'); load('victory.js');
 try { load('ui.js'); } catch (e) { console.log('ui.js not loadable headless:', e.message); }

@@ -11,7 +11,7 @@ function makeCtx(search) {
   const load = f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), c, { filename: f });
   let err = null;
   try {
-    for (const f of ['data.js', 'map.js', 'world.js', 'render.js']) load(f);
+    for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'render.js']) load(f);
     try { load('ai.js'); } catch (e) { }
     vm.runInContext(`var RES_ICON = { food: '🍖', wood: '🪵', gold: '🪙', stone: '🪨' };`, c);
     for (const f of ['mod.js', 'water.js', 'wells.js', 'terra.js', 'command.js', 'victory.js', 'terrain.js', 'fx.js', 'extras.js', 'units_hd.js']) load(f);

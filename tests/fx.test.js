@@ -14,7 +14,7 @@ const ctx = vm.createContext({ console, performance, Math, Proxy, Uint8Array, In
 const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 let loadErr = null;
 try {
-  for (const f of ['data.js', 'map.js', 'world.js', 'render.js']) load(f);
+  for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'render.js']) load(f);
   try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
   load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('fx.js');
   if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js','movement.js']) if (!LOADED.has(f)) load(f);

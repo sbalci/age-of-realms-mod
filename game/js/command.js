@@ -445,7 +445,7 @@ function cmdResign(pid) {
   msg(`${p.name} has resigned`, pid === W.humanId ? '#f88' : (p.color && p.color.l) || '#fc8');
   for (const e of W.list.slice()) {
     if (e.owner !== pid || e.dead || e.dying) continue;
-    if (e.kind === 'unit' && e.type === 'sheep') { e.owner = 0; continue; }
+    if (e.kind === 'unit' && e.type === 'sheep') { idxSetOwner(e, 0); continue; }
     if (e.kind === 'unit' || e.kind === 'bld') { if (e.kind === 'unit' && e.inside) { const box = ent(e.inside); if (box) { box.garrison = (box.garrison || []).filter(i => i !== e.id); if (box.cargo) box.cargo = box.cargo.filter(i => i !== e.id); } const c = box ? center(box) : e; e.x = c.x; e.y = c.y; e.inside = 0; } killEnt(e, null); }
   }
   recalcPop();

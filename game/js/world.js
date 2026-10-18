@@ -132,7 +132,7 @@ function spawnFromSpec(o) {
   return spawnRes(o.k, o.x, o.y, o.v | 0, o.depth || 0);
 }
 function newId() { return W.nextId++; }
-function addEnt(e) { W.ents.set(e.id, e); W.list.push(e); GameHooks.emit('entityAdded', e); return e; }
+function addEnt(e) { W.ents.set(e.id, e); W.list.push(e); idxAdd(e); GameHooks.emit('entityAdded', e); return e; }
 function spawnRes(k, x, y, v = 0, depth = 0) {
   const map = W.map; if (!map.inb(x, y)) return null;
   const amounts = { tree: 100, gold: 800, stone: 350, coal: 900, berry: 125, fish: v ? 225 : 200, shrub: 0 };
@@ -179,6 +179,7 @@ function removeEnt(e) {
   if (!W.ents.has(e.id)) return;
   W.ents.delete(e.id); e.dead = true;
   const i = W.list.indexOf(e); if (i >= 0) W.list.splice(i, 1);
+  idxRemove(e);
   const map = W.map;
   if (e.kind === 'bld' && !BUILDINGS[e.type].farm) { const s = bsize(e); for (let y = e.y; y < e.y + s; y++) for (let x = e.x; x < e.x + s; x++) if (map.inb(x, y) && map.blk[map.idx(x, y)] === e.id) map.blk[map.idx(x, y)] = 0; }
   if (e.kind === 'res' && map.blk[map.idx(e.x, e.y)] === e.id) map.blk[map.idx(e.x, e.y)] = 0;
@@ -395,8 +396,9 @@ function adjReachable(u, e) {
 // ---------- spatial grid ----------
 function rebuildGrid() {
   const g = W.grid; g.clear();
-  for (const e of W.list) {
-    if (e.kind !== 'unit' || e.inside || e.dying) continue;
+  idxSync();   // refile units that crossed an index cell; idxAll('unit') is W.list's units in W.list order
+  for (const e of idxAll('unit')) {
+    if (e.inside || e.dying) continue;
     const k = ((e.y >> 2) << 10) | (e.x >> 2);
     let a = g.get(k); if (!a) g.set(k, a = []); a.push(e);
   }
@@ -1237,9 +1239,9 @@ function convertLogic(u, dt) {
   if (hasTag(t.type, 'mounted')) chance *= 0.6;
   if (simRandom() < chance || u.convT > 10) {
     const old = t.owner;
-    t.owner = u.owner; setOrder(t, null);
+    idxSetOwner(t, u.owner); setOrder(t, null);
     t.queue = []; t.stance = undefined; t.defHome = null; t.buildQueue = null; delete t.assistControl;
-    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) { cu.owner = u.owner; cu.queue = []; cu.stance = undefined; cu.defHome = null; delete cu.assistControl; } }
+    if (t.cargo) for (const c of t.cargo) { const cu = ent(c); if (cu) { idxSetOwner(cu, u.owner); cu.queue = []; cu.stance = undefined; cu.defHome = null; delete cu.assistControl; } }
     recalcPop();
     emitFx('convert', t.x, t.y, 12); Sound.play('converted', t.x, t.y);
     if (u.owner === W.humanId) msg(`Converted an enemy ${UNITS[t.type].name}!`, '#dfb');
@@ -1435,7 +1437,7 @@ function sheepCapture(s) {
   const near = unitsNear(s.x, s.y, 4, o => o.owner > 0 && !UNITS[o.type].animal && !UNITS[o.type].naval && !o.dying);
   const owners = new Set(near.map(o => o.owner));
   if (s.owner === 0) {
-    if (owners.size === 1) { s.owner = [...owners][0]; s.capturedT = W.t; if (s.owner === W.humanId) { Sound.play('bleat', s.x, s.y); } }
+    if (owners.size === 1) { idxSetOwner(s, [...owners][0]); s.capturedT = W.t; if (s.owner === W.humanId) { Sound.play('bleat', s.x, s.y); } }
     s.contest = 0; return;
   }
   if (owners.has(s.owner) || owners.size !== 1) { s.contest = 0; s.contestBy = 0; return; }
@@ -1443,7 +1445,7 @@ function sheepCapture(s) {
   if (s.contestBy !== rival) { s.contestBy = rival; s.contest = 0; }
   s.contest += 0.5;
   if (s.contest >= 1.5) {
-    const old = s.owner; s.owner = rival; s.contest = 0; s.contestBy = 0; s.capturedT = W.t; setOrder(s, null);
+    const old = s.owner; idxSetOwner(s, rival); s.contest = 0; s.contestBy = 0; s.capturedT = W.t; setOrder(s, null);
     if (rival === W.humanId) { msg('You captured a sheep!', '#dfd'); Sound.play('bleat', s.x, s.y); }
     else if (old === W.humanId) msg('An enemy stole one of your sheep!', '#f99');
   }
@@ -1559,7 +1561,7 @@ function checkVictory() {
       p.alive = false;
       msg(`${p.name} has been defeated!`, p.color.l);
       // remaining property goes wild
-      for (const e of W.list.slice()) if (e.owner === i && e.kind === 'unit' && e.type === 'sheep') e.owner = 0;
+      for (const e of W.list.slice()) if (e.owner === i && e.kind === 'unit' && e.type === 'sheep') idxSetOwner(e, 0);
     }
   }
   const h = W.players[W.humanId];

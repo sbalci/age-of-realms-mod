@@ -210,14 +210,14 @@ const Editor = {
   mouseUp(e) { if (!this.active) return; this.painting = false; this.pan = null; this.moving = null; },
   moveEnt(e, t) {
     const x = Math.floor(t.x), y = Math.floor(t.y);
-    if (e.kind === 'unit') { const naval = !!UNITS[e.type].naval; if (W.map.isWater(x, y) === naval && !W.map.blk[W.map.idx(x, y)]) { e.x = x + 0.5; e.y = y + 0.5; } return; }
+    if (e.kind === 'unit') { const naval = !!UNITS[e.type].naval; if (W.map.isWater(x, y) === naval && !W.map.blk[W.map.idx(x, y)]) { e.x = x + 0.5; e.y = y + 0.5; idxMoved(e); } return; }
     if (e.kind === 'bld') {
       const s = bsize(e); const nx = x - Math.floor(s / 2), ny = y - Math.floor(s / 2);
       if (nx === e.x && ny === e.y) return;
       // temporarily unblock
       for (let yy = e.y; yy < e.y + s; yy++) for (let xx = e.x; xx < e.x + s; xx++) if (W.map.blk[W.map.idx(xx, yy)] === e.id) W.map.blk[W.map.idx(xx, yy)] = 0;
       const ok = !canPlace(null, e.type, nx, ny, true);
-      if (ok) { e.x = nx; e.y = ny; }
+      if (ok) { e.x = nx; e.y = ny; idxMoved(e); }
       if (!BUILDINGS[e.type].farm) for (let yy = e.y; yy < e.y + s; yy++) for (let xx = e.x; xx < e.x + s; xx++) W.map.blk[W.map.idx(xx, yy)] = e.id;
       return;
     }
@@ -225,7 +225,7 @@ const Editor = {
       const water = W.map.isWater(x, y);
       if (W.map.blk[W.map.idx(x, y)] || (e.type === 'fish') !== water) return;
       if (e.kind === 'res' && e.type !== 'shrub') { W.map.blk[W.map.idx(e.x, e.y)] = 0; W.map.blk[W.map.idx(x, y)] = e.id; }
-      e.x = x; e.y = y;
+      e.x = x; e.y = y; idxMoved(e);
     }
   },
   apply(t) {
