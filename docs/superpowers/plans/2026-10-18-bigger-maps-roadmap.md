@@ -58,7 +58,7 @@ Every phase finishes with these steps:
   - The 44×44 arena (line 19) runs out of flat land before `open(16,6)` at line 164, which crashes the file and hides 10 checks. Set `A = 48`.
   - Acceptance: `node tests/command.test.js` reports 24 passed, 0 failed, and `npm test` has no failing suite.
 - **Task 2. Stabilise the flaky "shared control supports mouse selection…" test in `tests/browser/assist.spec.js`.**
-  - Since 2026-10-18 it times out clicking `#b-assist-return`, because the button keeps detaching while the game is paused. It fails on `main` 38ad66f and on 0c4b261, which passed on 2026-10-17. Debug it systematically: find why the command panel re-renders every frame while paused.
+  - It intermittently times out clicking `#b-assist-return`; 4 of 6 runs failed. The root cause is not the command panel: assist.js:196-214 deletes and rebuilds `#assist-control` and its button on every `renderSelInfo`, which main.js runs every 0.25 s even while paused. Playwright's click therefore hits a detached node. The fix reuses the row while its text is unchanged.
   - Acceptance: 5 consecutive passes.
 - **Task 3. Performance harness `tests/browser/maps-perf.spec.js` and `npm run test:perf`.**
   - It reproduces the evaluation's measurements (E§3 T1–T5):
