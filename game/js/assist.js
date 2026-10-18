@@ -194,21 +194,30 @@ GameHooks.on('topbar', () => {
   button.title = 'Toggle AI management of your economy and army. Your unit orders take priority; Stop and stances hold units until Return to AI.';
 });
 const assistPreviousSelInfo = renderSelInfo;
+// The main loop refreshes this panel four times a second, paused or not. The row and its Return to AI button are
+// reused while their text is unchanged: a button rebuilt on every refresh lives only a few frames on a slow
+// (software-rendered) frame rate, and a click keeps landing on a detached node.
 renderSelInfo = function () {
+  const box = document.querySelector('#selinfo');
+  const kept = box && box.querySelector('#assist-control');
   assistPreviousSelInfo();
-  const box = document.querySelector('#selinfo'); if (!box) return;
-  const old = box.querySelector('#assist-control'); if (old) old.remove();
-  if (!W.aiAssist || W.spectate) return;
-  const units = UI.selection.filter(assistOwn); if (!units.length) return;
+  if (!box) return;
+  const units = W.aiAssist && !W.spectate ? UI.selection.filter(assistOwn) : [];
   const held = units.filter(assistReserved).length;
-  const row = document.createElement('div'); row.id = 'assist-control'; row.className = 'small';
+  const label = held ? `${held}/${units.length} under your control. ` : 'AI controls these units. Your commands take priority.';
+  const parent = box.querySelector('.info') || box;
+  // A single selection rebuilds the panel's HTML: the kept row is moved into the new panel within this same call.
+  if (kept && units.length && kept.dataset.label === label) { if (kept.parentNode !== parent) parent.appendChild(kept); return; }
+  if (kept) kept.remove();
+  if (!units.length) return;
+  const row = document.createElement('div'); row.id = 'assist-control'; row.className = 'small'; row.dataset.label = label;
   const text = document.createElement('span');
-  text.textContent = held ? `${held}/${units.length} under your control. ` : 'AI controls these units. Your commands take priority.';
+  text.textContent = label;
   row.appendChild(text);
   if (held) {
     const button = document.createElement('button'); button.id = 'b-assist-return'; button.className = 'btn small'; button.textContent = 'Return to AI';
-    button.onclick = () => { assistReturn(units); renderCommands(); renderSelInfo(); };
+    button.onclick = () => { assistReturn(UI.selection.filter(assistOwn)); renderCommands(); renderSelInfo(); };
     row.appendChild(button);
   }
-  (box.querySelector('.info') || box).appendChild(row);
+  parent.appendChild(row);
 };

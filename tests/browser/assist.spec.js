@@ -51,6 +51,36 @@ test('shared control supports mouse selection, orders, Stop, handover, toggles a
   await page.screenshot({path:'test-results/ai-assist.png'});
 });
 
+test('the Return to AI button stays the same element while the panel refreshes', async ({ page }) => {
+  await page.locator('#btn-sp').click();
+  await page.locator('#s-opp').selectOption('1');
+  await page.locator('#s-size').selectOption('tiny');
+  await page.locator('#s-seed').fill('5');
+  await page.locator('#s-assist').check();
+  await page.locator('#s-start').click();
+  await expect(page.locator('#b-assist')).toHaveText('AI Assist: On');
+  // The main loop calls renderSelInfo four times a second, paused or not; a button rebuilt on every call
+  // detaches before a click on a slow (software-rendered) frame rate can land on it.
+  const same = await page.evaluate(() => {
+    const g = __game; g.UI.paused = true;
+    const vills = g.W.list.filter(e => e.owner === 1 && e.type === 'villager').slice(0, 3);
+    const out = {};
+    for (const n of [1, 3]) {
+      for (const v of vills) v.assistControl = 'order';
+      g.UI.selection = vills.slice(0, n);
+      renderSelInfo();
+      const first = document.querySelector('#b-assist-return');
+      renderSelInfo(); renderSelInfo();
+      out[n] = !!first && first.isConnected && document.querySelector('#b-assist-return') === first;
+    }
+    return out;
+  });
+  expect(same).toEqual({ 1: true, 3: true });
+  await page.locator('#b-assist-return').click();
+  await expect(page.locator('#assist-control')).toContainText('AI controls');
+  expect(await page.evaluate(() => __game.UI.selection.every(u => !u.assistControl))).toBe(true);
+});
+
 test('spectating disables shared control and the setup choice persists', async ({ page }) => {
   await page.locator('#btn-sp').click();
   await page.locator('#s-assist').check();
