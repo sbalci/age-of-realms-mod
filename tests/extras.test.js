@@ -75,4 +75,9 @@ const N = run(`(() => {
 })()`);
 ok('AI opponent setup: defaults and random slots pick distinct nations, honor explicit nations, pair leader names, and define per-civ AI unit pools',
   N.uniqDef && N.chosen[0] === 'turks' && N.chosen[1] === 'japanese' && N.uniqRandom && N.validLeaders && N.allCivsHavePool, N);
+const TK = run(`(() => { mk('turks','franks',2); const t=W.players[1], f=W.players[2], imp=Object.keys(TECHS).find(k=>TECHS[k].ageUp===3);
+  for (const p of [t,f]) for (const bt of AGE_REQ[3]) for (const e of W.list.filter(e=>e.kind==='bld'&&e.owner===p.id&&e.type===bt)) removeEnt(e);
+  return { turks: civBldName('monastery',1), franks: civBldName('monastery',2), plain: civBldName('barracks',1), neutral: civBldName('monastery',0),
+    msgT: techLocked(t,imp), msgF: techLocked(f,imp) }; })()`);
+ok('the Turkish monastery is called Tekke (helper and requirement messages); other civs keep Monastery', TK.turks === 'Tekke' && TK.franks === 'Monastery' && TK.neutral === 'Monastery' && TK.plain === 'Barracks' && /Tekke/.test(TK.msgT) && !/Monastery/.test(TK.msgT) && /Monastery/.test(TK.msgF), TK);
 console.log(`\n${pass} passed, ${fail} failed`);

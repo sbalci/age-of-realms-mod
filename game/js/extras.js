@@ -68,6 +68,13 @@ function civUnitName(type, owner, e) {
   if (type === 'monk' && p && p.civ === 'turks') return 'Imam';
   return UNITS[type] ? UNITS[type].name : type;
 }
+// Civ-specific building names (the Turkish monastery is a Tekke); the map editor and generic help text keep BUILDINGS[type].name.
+const CIV_BLD_NAMES = { turks: { monastery: 'Tekke' } };
+function civBldName(type, owner) {
+  const p = typeof W !== 'undefined' && W && W.players ? W.players[owner] : null;
+  const n = p && CIV_BLD_NAMES[p.civ] && CIV_BLD_NAMES[p.civ][type];
+  return n || (BUILDINGS[type] ? BUILDINGS[type].name : type);
+}
 // drawing: Imams wear a white robe and turban with a green sash; Janissaries a white börk and a hand cannon
 let EX_IMAM = false;
 if (typeof drawHuman === 'function') {

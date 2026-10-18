@@ -434,13 +434,13 @@ function commandsFor(sel) {
     if (UI.page === 'eco' || UI.page === 'mil') {
       for (const bt of Object.keys(BUILDINGS).filter(k => BUILDINGS[k].cat === UI.page)) {
         const d = BUILDINGS[bt];
-        cmds.push({ key: d.hk, icon: 'bld:' + bt, name: d.name, cost: effCost(p, bt), desc: d.desc, lock: bldLocked(p, bt), fn: () => startPlacement(bt) });
+        cmds.push({ key: d.hk, icon: 'bld:' + bt, name: bldNameFor(bt, p.id), cost: effCost(p, bt), desc: d.desc, lock: bldLocked(p, bt), fn: () => startPlacement(bt) });
       }
       cmds.push({ key: 'Escape', label: 'Esc', icon: 'stop', name: 'Back', desc: 'Return to villager commands', fn: () => { UI.page = 'main'; } });
       return cmds;
     }
     if (types.has('villager')) {
-      cmds.push({ key: 'B', icon: 'ecobuild', name: 'Build Economic Building', desc: 'Houses, Mill, Lumber/Mining Camps, Farms, Wells, Dock, Market, Blacksmith, University, Monastery, Town Center, Wonder', fn: () => { UI.page = 'eco'; } });
+      cmds.push({ key: 'B', icon: 'ecobuild', name: 'Build Economic Building', desc: `Houses, Mill, Lumber/Mining Camps, Farms, Wells, Dock, Market, Blacksmith, University, ${bldNameFor('monastery', p.id)}, Town Center, Wonder`, fn: () => { UI.page = 'eco'; } });
       cmds.push({ key: 'V', icon: 'milbuild', name: 'Build Military Building', desc: 'Barracks, Archery Range, Stable, Siege Workshop, Towers, Walls, Gates, Castle', fn: () => { UI.page = 'mil'; } });
     }
     if (sel.some(u => UNITS[u.type].atk > 0 && u.type !== 'villager')) cmds.push({ key: 'A', icon: 'attackmove', name: 'Attack Move', desc: 'Move to a point, attacking any enemy encountered on the way.', fn: () => { UI.mode = { t: 'attackmove' }; } });
@@ -539,7 +539,7 @@ function renderSelInfo() {
     const key = gs.map(g => g.k + 'x' + g.list.length + ':' + ((g.hp / g.max * 20) | 0)).join('|');
     if (box.dataset.multiKey !== key) {
       box.dataset.multiKey = key;
-      box.innerHTML = `<div class="multi">${gs.map((g, gi) => `<div class="mini grp" data-g="${gi}" title="${typeof civUnitName === 'function' && g.list[0].kind === 'unit' ? civUnitName(g.list[0].type, g.list[0].owner) : (g.list[0].kind === 'bld' ? BUILDINGS : UNITS)[g.list[0].type].name} × ${g.list.length} — click: select only these, shift-click: remove them" style="background-image:url(${iconFor(g.k)})">${g.list.length > 1 ? `<b>${g.list.length}</b>` : ''}<i style="width:${(g.hp / g.max * 100) | 0}%"></i></div>`).join('')}</div><div class="small">${sel.length} selected · ${gs.length} type${gs.length > 1 ? 's' : ''}</div>`;
+      box.innerHTML = `<div class="multi">${gs.map((g, gi) => `<div class="mini grp" data-g="${gi}" title="${typeof civUnitName === 'function' && g.list[0].kind === 'unit' ? civUnitName(g.list[0].type, g.list[0].owner) : (g.list[0].kind === 'bld' ? bldNameFor(g.list[0].type, g.list[0].owner) : UNITS[g.list[0].type].name)} × ${g.list.length} — click: select only these, shift-click: remove them" style="background-image:url(${iconFor(g.k)})">${g.list.length > 1 ? `<b>${g.list.length}</b>` : ''}<i style="width:${(g.hp / g.max * 100) | 0}%"></i></div>`).join('')}</div><div class="small">${sel.length} selected · ${gs.length} type${gs.length > 1 ? 's' : ''}</div>`;
       box.querySelectorAll('.mini').forEach(m => m.onclick = ev => {
         const g = gs[+m.dataset.g]; if (!g) return;
         UI.selection = ev.shiftKey ? UI.selection.filter(e => !g.list.includes(e)) : g.list.filter(e => !e.dead && !e.dying);
@@ -567,7 +567,7 @@ function renderSelInfo() {
     if (e.type === 'monk' && e.recharge > 0) lines.push(`Recovering faith: ${Math.ceil(e.recharge)}s`);
     if (e.tradeGold) lines.push(`Trade goods worth ${e.tradeGold} gold`);
   } else if (e.kind === 'bld') {
-    const d = BUILDINGS[e.type]; name = d.name; icon = 'bld:' + e.type;
+    const d = BUILDINGS[e.type]; name = bldNameFor(e.type, e.owner); icon = 'bld:' + e.type;
     if (!e.built) lines.push(`Under construction ${Math.floor(e.progress * 100)}%`);
     if (d.farm) lines.push(`Food left: ${Math.floor(e.food)}`);
     if (d.garrison) lines.push(`Garrison ${e.garrison.length}/${garrisonCap(e)}`);
@@ -590,7 +590,7 @@ function renderSelInfo() {
 function orderLabel(u) {
   const o = u.order; const t = o.t;
   if (t === 'gather' || t === 'farm') { const e = ent(o.id); return u.phase === 1 ? 'Returning resources' : 'Gathering ' + (e ? (e.kind === 'bld' ? 'food (farm)' : resKind(e)) : ''); }
-  return { move: 'Moving', attack: 'Attacking', build: 'Building', repair: 'Repairing', hunt: 'Hunting', garrison: 'Going to garrison', board: 'Boarding transport', heal: 'Healing', convert: 'Converting…', relic: 'Fetching relic', deposit: 'Carrying relic to Monastery', trade: 'Trading', unload: 'Sailing to unload', attackmove: 'Attack-moving', follow: 'Following', dropoff: 'Dropping off' }[t] || t;
+  return { move: 'Moving', attack: 'Attacking', build: 'Building', repair: 'Repairing', hunt: 'Hunting', garrison: 'Going to garrison', board: 'Boarding transport', heal: 'Healing', convert: 'Converting…', relic: 'Fetching relic', deposit: `Carrying relic to ${bldNameFor('monastery', u.owner)}`, trade: 'Trading', unload: 'Sailing to unload', attackmove: 'Attack-moving', follow: 'Following', dropoff: 'Dropping off' }[t] || t;
 }
 
 // ---------- input ----------

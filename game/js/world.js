@@ -629,6 +629,8 @@ function upgradeTechId(from) { return Object.keys(TECHS).find(id => TECHS[id].up
 function builtCount(p, type) { let c = 0; for (const e of W.list) if (e.kind === 'bld' && e.owner === p.id && e.type === type && e.built) c++; return c; }
 function hasBuilt(p, type) { for (const e of W.list) if (e.kind === 'bld' && e.owner === p.id && e.type === type && e.built) return true; return false; }
 // Returns null if allowed, or a reason string.
+// extras.js loads later and owns civBldName (civ-specific names); this guards early callers and headless tests.
+function bldNameFor(type, owner) { return typeof civBldName === 'function' ? civBldName(type, owner) : BUILDINGS[type].name; }
 function unitLocked(p, type) {
   const d = UNITS[type];
   if (d.age > p.age) return `Requires ${AGES[d.age]}`;
@@ -645,7 +647,7 @@ function techLocked(p, id, b) {
     const need = AGE_REQ[t.ageUp];
     const have = need.filter(bt => hasBuilt(p, bt));
     if (t.ageUp === 3 && hasBuilt(p, 'castle')) return null;
-    if (have.length < 2) return `Requires 2 of: ${need.map(x => BUILDINGS[x].name).join(', ')} (have ${have.length})`;
+    if (have.length < 2) return `Requires 2 of: ${need.map(x => bldNameFor(x, p.id)).join(', ')} (have ${have.length})`;
   }
   if (t.upg && !Object.values(UNITS).length) return null;
   if (id === 'elite_uu' && p.age < 3) return 'Requires Imperial Age';
@@ -654,7 +656,7 @@ function techLocked(p, id, b) {
 function bldLocked(p, type) {
   const d = BUILDINGS[type];
   if (d.age > p.age) return `Requires ${AGES[d.age]}`;
-  if (d.req) for (const r of d.req) if (!hasBuilt(p, r)) return `Requires ${BUILDINGS[r].name}`;
+  if (d.req) for (const r of d.req) if (!hasBuilt(p, r)) return `Requires ${bldNameFor(r, p.id)}`;
   return null;
 }
 function queueUnit(b, type) {
@@ -962,7 +964,7 @@ function updateUnit(u, dt) {
       if (distTo(u, r) > 0.9) { if (!u.path) moveNear(u, r, 1); if (followPath(u, dt) && distTo(u, r) > 1.5) { setOrder(u, null); } }
       else {
         u.relic = r.id; r.carrier = u.id; Sound.play('relic', u.x, u.y);
-        if (u.owner === W.humanId) msg('Relic collected! Bring it to a Monastery.', '#ffd76a');
+        if (u.owner === W.humanId) msg(`Relic collected! Bring it to a ${bldNameFor('monastery', u.owner)}.`, '#ffd76a');
         const m = nearestOwn(u, 'monastery'); setOrder(u, m ? { t: 'deposit', id: m.id } : null);
       }
       break;
@@ -970,7 +972,7 @@ function updateUnit(u, dt) {
     case 'deposit': {
       const m = ent(o.id); if (!m || m.dead || !u.relic) { setOrder(u, null); break; }
       if (distTo(u, m) > 1.2) { if (!u.path) moveNear(u, m, 1); if (followPath(u, dt) && distTo(u, m) > 1.8) setOrder(u, null); }
-      else { const r = ent(u.relic); if (r) { r.carrier = 0; r.inBld = m.id; m.relics.push(r.id); } u.relic = 0; Sound.play('relic', u.x, u.y); if (u.owner === W.humanId) msg('Relic stored in the Monastery: +1 gold every 2 seconds.', '#ffd76a'); setOrder(u, null); }
+      else { const r = ent(u.relic); if (r) { r.carrier = 0; r.inBld = m.id; m.relics.push(r.id); } u.relic = 0; Sound.play('relic', u.x, u.y); if (u.owner === W.humanId) msg(`Relic stored in the ${bldNameFor('monastery', u.owner)}: +1 gold every 2 seconds.`, '#ffd76a'); setOrder(u, null); }
       break;
     }
     case 'trade': tradeLogic(u, dt); break;
