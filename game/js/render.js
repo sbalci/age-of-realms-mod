@@ -1353,7 +1353,7 @@ function drawFog(ctx) {
 // ---------- minimap ----------
 const MM = { cv: null, base: null, baseVer: -1, t: 0 };
 // Trees are most of a map's entities. They are painted once into a map-sized layer (one pixel per tree tile, only the
-// explored ones under fog) and the layer is rebuilt only when a tree is added or removed (IDX.rev) or more of the map
+// explored ones under fog) and the layer is rebuilt only when a tree is added, removed or moved (the editor) (IDX.rev) or more of the map
 // is explored, instead of one rectangle per tree on every minimap refresh.
 function mmTreeLayer(explored) {
   const n = W.n, rev = IDX.rev.get('res:tree') || 0;

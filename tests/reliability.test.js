@@ -31,7 +31,7 @@ test('2.5D wall connections respect map edges, ownership and destroyed neighbors
     spawnBuilding('wall',1,W.n-1,19,true);const other=spawnBuilding('wall',2,0,21,true);
     if(t25dWallMask(wall)!==0)return false;
     const gate=spawnBuilding('gate',1,1,20,true);if(t25dWallMask(wall)!==1)return false;
-    other.owner=1;if(t25dWallMask(wall)!==5)return false;
+    idxSetOwner(other,1);if(t25dWallMask(wall)!==5)return false;
     gate.dead=true;return t25dWallMask(wall)===4;
   })()`),true);
 });

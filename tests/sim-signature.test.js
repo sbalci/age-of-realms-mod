@@ -1,6 +1,7 @@
 // Golden simulation signatures: fixed-seed AI-vs-AI matches must replay to exactly the same state.
 // The entity index (game/js/index.js) may make queries faster but must not change any outcome, so these hashes were
-// recorded on the code before the index existed. A change that is meant to alter the simulation re-records them
+// first recorded on the code before the index existed and held unchanged through the index tasks; commit f012cc0
+// re-recorded them for the deliberate AI stagger. A change that is meant to alter the simulation re-records them
 // deliberately, and its commit says why:  AOR_RECORD=1 node tests/sim-signature.test.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const harness = require('./engine-harness');

@@ -24,6 +24,19 @@ commits the rows it was measured by, so progress against the budgets stays visib
 | 2026-10-18 | phase 2 indexes + stagger | a6ee5e95e | gpu | 200 | 95 / 112 | 0.66 / 3.2 | 1.3 / 4.9 | 14 | 212 / 93 (40/40, 40/40) | 4.5 / 3.81 | 54.1 / 53.8 | 53.9 | 3,172,860 (46) | 982 |
 | 2026-10-18 | phase 2 indexes + stagger | a6ee5e95e | gpu | 256 | 170 / 188 | 0.98 / 3.4 | 1.65 / 7.9 | 5 | 421 / 424 (40/40, 40/40) | 5.39 / 4.64 | 54.3 / 54 | 50.7 | 5,291,779 (67) | 1038 |
 
+### Reading these rows
+
+- Every figure is a single run on the RTX A4000 workstation. Live fps and the save, gen and knight timings vary from run to run.
+- Between the phase 1 and phase 2 runs, the machine's live fps dropped from 60 to about 54. A same-session A/B on 2026-10-18 at 200 × 200 measured:
+
+  | Code | 2D fps z1 / z0.55 | 2D frame ms z1 / z0.55 | 2.5D fps | Tick 8p mean / p99 ms |
+  |---|---|---|---|---|
+  | phase-1 code 50908f5 | 54.1 / 54.1 | 4.55 / 3.71 | 53.1 | 5.19 / 92.2 |
+  | phase-2 code d694b97 | 54.4 / 54.2 | 4.53 / 3.62 | 53.2 | 1.33 / 5.4 |
+
+  So the fps and frame-ms changes come from the environment, not from phase 2. The tick improvement is real.
+- From phase 3 on, compare against a control run of the previous phase's commit made in the same session.
+
 ## Phase 2: vm tick, W.list scans against the index (node tests/perf-vm.js)
 
 8 AI players on land, seed 33, 600 warm-up ticks and 1200 timed ticks in the node vm harness (slower than the browser).

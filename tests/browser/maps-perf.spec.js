@@ -41,7 +41,9 @@ commits the rows it was measured by, so progress against the budgets stays visib
 `;
 // The evaluation's runtime-only patch: the game's own validator source with the 256 cap raised to 1024, evaluated
 // inside the test page only (no outside input reaches it).
-const CAP_PATCH = `(() => { const orig = validateMapSpec; validateMapSpec = eval('(' + orig.toString().replace('n > 256', 'n > 1024') + ')'); })();`;
+const CAP_PATCH = `(() => { const orig = validateMapSpec, src = orig.toString(), patched = src.replace('n > 256', 'n > 1024');
+  if (patched === src) throw new Error("validateMapSpec no longer contains 'n > 256'; update CAP_PATCH");
+  validateMapSpec = eval('(' + patched + ')'); })();`;
 const results = [];
 test.describe.configure({ mode: 'serial' });
 
@@ -160,15 +162,15 @@ for (const n of SIZES) {
     await prepareSize(page, n);
     rec.render25d = await measure25d(page, n);
     rec.errors = errors.slice(0, 5);
-    results.push(rec);
     expect(errors).toEqual([]);
     expect(rec.sim3.tick.n).toBe(TICKS);
     expect(rec.sim8.tick.n).toBe(TICKS);
+    results.push(rec);   // only a run whose assertions all passed is recorded
   });
 }
 
 test.afterAll(() => {
-  if (!results.length) return;
+  if (results.length !== SIZES.length) return;   // a failed or skipped size means nothing is written
   let commit = 'unknown'; try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim(); } catch (e) { }
   const date = new Date().toISOString().slice(0, 10);
   fs.mkdirSync(path.dirname(JSON_OUT), { recursive: true });

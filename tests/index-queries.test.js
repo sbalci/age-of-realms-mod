@@ -75,6 +75,26 @@ ok(`findNearestRes equals the old scan on ${total.res} random queries over 3 see
 ok(`nearestDrop and nearestOwn equal the old scans on ${total.drop} queries each`, total.same.drop === total.drop && total.same.own === total.own, total);
 ok(`builtCount and hasBuilt equal the old scans on ${total.built} queries`, total.same.built === total.built, total);
 
+// ---------- a forced tie: equal distance, equal gatherers -> the lower id wins, as in the old scan ----------
+const T = JSON.parse(run(`(() => {
+  const spec = generateMapSpec({ size: 'small', seed: 5, mapType: 'land', numPlayers: 3 });
+  createWorld(spec, { players: Array.from({ length: 3 }, (_, i) => ({ name: 'P' + i, civ: 'franks', color: PLAYER_COLORS[i], human: i === 0 })), seed: 5, fog: 'normal', startRes: 'high', startAge: 1, difficulty: 'standard' });
+  for (const e of W.list.slice()) if (e.kind === 'res' && e.type === 'tree') removeEnt(e);   // clear every tree
+  const cx = W.n >> 1, cy = W.n >> 1;
+  const lo = spawnRes('tree', cx - 5, cy), hi = spawnRes('tree', cx + 5, cy);   // 5 tiles either side of the query point
+  const u = { x: cx + 0.5, y: cy + 0.5, type: 'villager' }, qx = cx + 0.5, qy = cy + 0.5;
+  const out = { loId: lo.id, hiId: hi.id };
+  const q = () => { const a = findNearestRes(u, ['tree'], qx, qy, 30), b = oldFindNearestRes(u, ['tree'], qx, qy, 30); return [a && a.id, b && b.id]; };
+  out.tie = q();
+  lo.gatherers = 1;   // the lower id now scores worse, so the higher id must win in both
+  out.hiWins = q();
+  lo.gatherers = 0; hi.gatherers = 1;
+  out.loWins = q();
+  return JSON.stringify(out);
+})()`));
+ok(`a forced tie (equal distance and gatherers) picks the lower id, like the old scan; a lower score wins in both`,
+  T.loId < T.hiId && T.tie[0] === T.loId && T.tie[1] === T.loId && T.hiWins[0] === T.hiId && T.hiWins[1] === T.hiId && T.loWins[0] === T.loId && T.loWins[1] === T.loId, T);
+
 // ---------- speed on a 200 map ----------
 const S = JSON.parse(run(`(() => {
   const spec = generateMapSpec({ size: 'gigantic', seed: 4, mapType: 'land', numPlayers: 3 });

@@ -15,7 +15,7 @@ const IDX = {
   all: new Map(),        // category -> Set of every entity in it, in W.list order
   owned: [],             // owner -> { unit, bld, all, types: Map(building type -> []) }, every array sorted by id
   at: new Map(),         // entity -> { cat, cell, owner } where it is filed
-  rev: new Map(),        // category -> count of adds and removes, so caches (the minimap tree layer) notice changes
+  rev: new Map(),        // category -> count of adds, removes, moves (idxMoved) and rebuilds (idxRebuild), so caches (the minimap tree layer) notice changes
   brute: false,          // tests: answer every query by scanning W.list, the reference the buckets must match
   fixes: 0,              // owner changes idxSync found that no idxSetOwner call reported; stays 0 in play
 };
