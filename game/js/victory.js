@@ -512,8 +512,8 @@ function vicBldVisible(p, b) { const c = center(b); return vicTileVis(p, Math.mi
 function vicMemUpdate(p) {
   if (!p.memory) p.memory = new Map();
   const mem = p.memory;
-  for (const b of W.list) {
-    if (b.kind !== 'bld' || b.owner === p.id || b.dead || BUILDINGS[b.type].farm) continue;
+  for (const b of idxAll('bld')) {   // every building, in W.list order
+    if (b.owner === p.id || b.dead || BUILDINGS[b.type].farm) continue;
     if (!vicBldVisible(p, b)) continue;
     mem.set(b.id, { id: b.id, type: b.type, x: b.x, y: b.y, owner: b.owner, built: b.built, progress: b.progress, hpFrac: Math.max(0, b.hp / b.maxhp), style: typeof bldStyle === 'function' ? bldStyle(b) : Math.min(3, W.players[b.owner] ? W.players[b.owner].age : 0), seenT: W.t });
   }
@@ -539,8 +539,8 @@ function vicWithGhosts(fn) {
   const h = W.players[W.humanId];
   if (!vicFogOn() || !h || !h.memory) return fn();
   const hidden = [], ghosts = [];
-  for (const b of W.list) {
-    if (b.kind !== 'bld' || b.owner === W.humanId || BUILDINGS[b.type].farm) continue;
+  for (const b of idxAll('bld')) {   // every building, in W.list order
+    if (b.owner === W.humanId || BUILDINGS[b.type].farm) continue;
     if (vicBldVisible(h, b)) continue;
     hidden.push([b, b.seenBy]); b.seenBy = false;
   }

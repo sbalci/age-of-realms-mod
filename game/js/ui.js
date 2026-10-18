@@ -594,11 +594,20 @@ function orderLabel(u) {
 }
 
 // ---------- input ----------
+// Entities whose hit box can hold the cursor, in W.list order. A hit box reaches about 9 tiles at most from the
+// cursor's ground point at height 0 (a wonder's art is 170 px tall, plus 4 elevation steps), so the index is asked for
+// a square of 12 tiles around it. IDX.brute gives the old scan.
+function hitCandidates(sx, sy) {
+  if (IDX.brute || !idxEnsure()) return W.list;
+  const wx = (sx - R.cw / 2) / R.cam.zoom + R.cam.x, wy = (sy - R.ch / 2) / R.cam.zoom + R.cam.y;
+  const tx = (wx / (TW / 2) + wy / (TH / 2)) / 2, ty = (wy / (TH / 2) - wx / (TW / 2)) / 2, m = 12;
+  return idxRectAll(tx - m, ty - m, tx + m, ty + m);
+}
 function hitTest(sx, sy, opts = {}) {
   const tp = screenToTile(sx, sy);
   let best = null, bestPri = -1, bestDepth = -1e9;
   const human = W.players[W.humanId];
-  for (const e of W.list) {
+  for (const e of hitCandidates(sx, sy)) {
     if (e.kind === 'unit' && (e.inside || e.dying)) continue;
     if (e.kind === 'relic' && (e.carrier || e.inBld)) continue;
     if (!opts.editor) {

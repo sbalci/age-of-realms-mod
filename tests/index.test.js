@@ -114,5 +114,14 @@ const R = JSON.parse(run(`(() => {
 })()`));
 ok('a new world, a replaced W.list and a restored save each rebuild the index; the index is not written into saves', R.created && R.replaced && R.notSaved && R.restored, R);
 
+// ---------- 4. moving an entity bumps the revision of its category ----------
+const M = JSON.parse(run(`(() => {
+  make(9);
+  const t = W.list.find(e => e.kind === 'res' && e.type === 'tree'), before = IDX.rev.get('res:tree');
+  t.x += 1; idxMoved(t);
+  return JSON.stringify({ bumped: IDX.rev.get('res:tree') - before, diffs: idxCheck().length });
+})()`));
+ok('idxMoved bumps the category revision (the minimap tree layer is keyed on it) and keeps the index consistent', M.bumped === 1 && M.diffs === 0, M);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -296,9 +296,15 @@ const T25D = {
     a.needsUpdate=true;
     for(const o of this.props.children) o.visible=this.fogAt(o.position.x,o.position.z,editor)>0;
   },
+  // The entities syncEntities can place: its window is a centre's 2D screen position within -220..cw+220 by
+  // -150..ch+260, so the index is asked for that view (viewCandidates in render.js).
+  candidates() {
+    const z=R.cam.zoom;
+    return viewCandidates(R.cam.x+(-220-R.cw/2)/z,R.cam.x+(R.cw/2+220)/z,R.cam.y+(-150-R.ch/2)/z,R.cam.y+(R.ch/2+260)/z);
+  },
   visibleEntities(opts) {
     const fog = !opts.editor && W.settings.fog !== 'none' && !W.noFog, p=W.players[W.humanId], out=[];
-    for(const e of W.list) {
+    for(const e of this.candidates()) {
       if (e.kind==='unit' && e.inside || e.kind==='relic' && (e.carrier || e.inBld)) continue;
       const c=center(e), f=this.fogAt(c.x,c.y,!!opts.editor);
       if(!f) continue;

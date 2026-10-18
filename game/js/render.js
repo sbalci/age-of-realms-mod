@@ -1255,6 +1255,16 @@ function entDepth(e) {
   if (e.kind === 'res' || e.kind === 'relic') return e.x + e.y + 1;
   return e.x + e.y;
 }
+// Entities that can be drawn in a view rectangle (world pixels at zoom 1, vx0..vx1 by vy0..vy1, tested on an entity's
+// centre at height 0), in W.list order: the index's entities around the view, then whatever W.list holds past the index
+// (the fog-memory ghosts that vicWithGhosts appends while a frame or the minimap is drawn). IDX.brute gives the old scan.
+function viewCandidates(vx0, vx1, vy0, vy1) {
+  if (IDX.brute || !idxEnsure()) return W.list;
+  // iso(x, y, 0) = ((x - y)·TW/2, (x + y)·TH/2), inverted at the rectangle's bounds. A centre lies at most 2.5 tiles
+  // (half a wonder) past the position the index files an entity under, so the tile rectangle is widened by 3.
+  const u0 = vx0 / (TW / 2), u1 = vx1 / (TW / 2), v0 = vy0 / (TH / 2), v1 = vy1 / (TH / 2);
+  return idxRectAll((u0 + v0) / 2 - 3, (v0 - u1) / 2 - 3, (u1 + v1) / 2 + 3, (v1 - u0) / 2 + 3).concat(idxGhosts());
+}
 function renderWorld(ctx, opts = {}) {
   const map = W.map;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1270,7 +1280,7 @@ function renderWorld(ctx, opts = {}) {
   for (const d of W.decals) if (inView(d.x, d.y) && (!fogOn || isExploredForHuman(d.x, d.y))) drawDecal(ctx, d);
   // collect
   const vis = [];
-  for (const e of W.list) {
+  for (const e of viewCandidates(vx0, vx1, vy0, vy1)) {
     if (e.kind === 'unit' && e.inside) continue;
     if (e.kind === 'relic' && (e.carrier || e.inBld)) continue;
     const c = center(e);
@@ -1342,6 +1352,30 @@ function drawFog(ctx) {
 
 // ---------- minimap ----------
 const MM = { cv: null, base: null, baseVer: -1, t: 0 };
+// Trees are most of a map's entities. They are painted once into a map-sized layer (one pixel per tree tile, only the
+// explored ones under fog) and the layer is rebuilt only when a tree is added or removed (IDX.rev) or more of the map
+// is explored, instead of one rectangle per tree on every minimap refresh.
+function mmTreeLayer(explored) {
+  const n = W.n, rev = IDX.rev.get('res:tree') || 0;
+  let seen = -1; if (explored) { seen = 0; for (let i = 0; i < explored.length; i++) seen += explored[i]; }
+  const key = rev + ':' + seen;
+  if (MM.trees && MM.trees.width === n && MM.treeKey === key && MM.treeMap === W.map) return MM.trees;
+  if (!MM.trees || MM.trees.width !== n) { MM.trees = document.createElement('canvas'); MM.trees.width = MM.trees.height = n; }
+  const tg = MM.trees.getContext('2d'), img = tg.createImageData(n, n), d = img.data;
+  for (const e of idxAll('res:tree')) {
+    const x = e.x | 0, y = e.y | 0;
+    if (x < 0 || y < 0 || x >= n || y >= n || (explored && !explored[y * n + x])) continue;
+    const i = (y * n + x) * 4; d[i] = 0x1f; d[i + 1] = 0x4a; d[i + 2] = 0x1a; d[i + 3] = 255;
+  }
+  tg.putImageData(img, 0, 0); MM.treeKey = key; MM.treeMap = W.map;
+  return MM.trees;
+}
+// Every entity the minimap draws one by one: all but the trees, in W.list order, then the fog-memory ghosts.
+function mmEntities() {
+  const out = [];
+  for (const [cat, set] of IDX.all) if (cat !== 'res:tree') for (const e of set) out.push(e);
+  return out.sort(idxById).concat(idxGhosts());
+}
 function renderMinimap(cv, editor) {
   const g = cv.getContext('2d'), n = W.n, S = cv.width;
   const human = W.players[W.humanId];
@@ -1365,8 +1399,10 @@ function renderMinimap(cv, editor) {
   // diamond transform: tile (x,y) -> ((x-y)*k + S/2, (x+y)*k/2 + oy); the diamond is S wide and S/2 tall, centred vertically
   g.setTransform(k, k / 2, -k, k / 2, S / 2, oy);
   g.drawImage(MM.base, 0, 0);
+  const fogged = !editor && W.settings.fog !== 'none' && !W.noFog, layered = !IDX.brute && idxEnsure();
+  if (layered && (!MM.filter || MM.filter === 'all' || mmFilterPass({ kind: 'res', type: 'tree' }, MM.filter))) g.drawImage(mmTreeLayer(fogged ? human.explored : null), 0, 0);
   // entities (MM.filter: 'all', 'mil', 'eco' or 'land')
-  for (const e of W.list) {
+  for (const e of layered ? mmEntities() : W.list) {
     if (e.kind === 'unit' && e.inside) continue;
     if (MM.filter && MM.filter !== 'all' && !mmFilterPass(e, MM.filter)) continue;
     const c = center(e);

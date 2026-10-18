@@ -98,6 +98,7 @@ function idxSetOwner(e, owner) {
 function idxMoved(e) {
   if (!idxEnsure()) return;
   const r = IDX.at.get(e); if (!r) return;
+  IDX.rev.set(r.cat, (IDX.rev.get(r.cat) || 0) + 1);   // a moved entity changes layers keyed on rev (the minimap's tree layer)
   const cell = idxCellOf(e.x, e.y); if (cell === r.cell) return;
   idxUnfileCell(r.cat, r.cell, e); r.cell = cell; idxFileCell(r.cat, cell, e);
 }
