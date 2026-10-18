@@ -14,6 +14,7 @@ function assistReleaseFinished() {
     if (u.assistControl === 'order' && !u.order && !(u.queue && u.queue.length) && !u.inside) delete u.assistControl;
   }
 }
+// The town bell (player's or the AI's) shelters the spare like any villager: safety beats idleness; a new spare is picked afterwards.
 // One villager, the "spare", is never tasked, so '.', the idle button and the top-bar counter always find one.
 function assistSpareFree(u) { return assistOwn(u) && u.type === 'villager' && !u.assistControl && !u.inside && !u.order && !(u.queue && u.queue.length); }
 function assistEnsureSpare(ai) {
@@ -27,8 +28,10 @@ function assistEnsureSpare(ai) {
     if (!spare) {
       const tc = ai.tc();
       const near = u => tc ? Math.hypot(u.x - (tc.x + 1.5), u.y - (tc.y + 1.5)) : 0;
-      const gatherers = vills.filter(u => !u.inside && !u.assistControl && ai.canControl(u) && u.order && u.order.t === 'gather').sort((a, b) => near(a) - near(b));
-      spare = gatherers[0];
+      // Prefer gatherers, then farmers, then builders/repairers; within a class, the one nearest the Town Center.
+      const rank = { gather: 0, farm: 1, build: 2, repair: 2 };
+      const busy = vills.filter(u => !u.inside && !u.assistControl && ai.canControl(u) && u.order && u.order.t in rank).sort((a, b) => rank[a.order.t] - rank[b.order.t] || near(a) - near(b));
+      spare = busy[0];
       // Inside the assist context so this is the assistant's decision, not a player order.
       if (spare) assistContext(ai, () => setOrder(spare, null));
     }

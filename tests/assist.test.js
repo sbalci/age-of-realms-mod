@@ -175,6 +175,26 @@ test('ordering the spare makes a new idle spare next update; with none idle the 
   for (let i = 0; i < 600; i++) { worldTick(0.05); if (!freeIdle().length || spares().length > 1) return false; }
   return true;
 })()`);
+for (const kind of ['farm', 'build', 'repair']) {
+  test('the spare is made from ' + kind + 'ers when every villager is busy with ' + kind, `(() => {
+    const ai = assisted(); for (let i = 0; i < 100; i++) worldTick(0.05);
+    const tc = ai.tc();
+    for (let k = 0; k < 3; k++) spawnUnit('villager', 1, tc.x + 3 + k, tc.y + 4);
+    for (const v of W.list.filter(e => e.owner === 1 && e.type === 'villager')) { delete v.assistSpare; delete v.assistControl; v.queue = []; setOrder(v, { t: '${kind}', id: tc.id }); }
+    if (freeIdle().length || spares().length) return false;
+    ai.update(0.05);
+    const s = spares();
+    return s.length === 1 && !s[0].order && !s[0].assistControl && exIdleList('vil').includes(s[0]);
+  })()`);
+}
+test('the town bell shelters the spare too; after all-clear a spare exists again', `(() => {
+  const ai = assisted(); for (let i = 0; i < 100; i++) worldTick(0.05);
+  const p = W.players[1]; ringBell(p); for (let i = 0; i < 40; i++) worldTick(0.05);
+  allClear(p); for (let i = 0; i < 100; i++) worldTick(0.05);
+  ai.update(0.05);
+  const s = spares();
+  return s.length === 1 && !s[0].order && !s[0].inside && exIdleList('vil').includes(s[0]);
+})()`);
 test('turning AI Assist off clears the spare marker', `(() => {
   assisted(); for (let i = 0; i < 100; i++) worldTick(0.05);
   if (spares().length !== 1) return false;
