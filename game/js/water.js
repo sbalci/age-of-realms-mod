@@ -336,11 +336,12 @@ function wmState() {
   if (!W.wm) W.wm = { acc: 0, spawnT: 0, target: new Map() };
   return W.wm;
 }
+function wmUnitOnTile(x, y) { return idxRect('unit', x - 0.5, y - 0.5, x + 1.5, y + 1.5).some(u => Math.abs(u.x - x - 0.5) < 1 && Math.abs(u.y - y - 0.5) < 1); }
 function wmFishTick(dt) {
   const S = wmState(), map = W.map;
   const byBody = new Map();
-  for (const e of W.list) {
-    if (e.kind !== 'res' || e.type !== 'fish' || e.dead) continue;
+  for (const e of idxAll('res:fish')) {   // every shoal in W.list order (the restocking below draws simRandom per body)
+    if (e.dead) continue;
     const b = waterBodyAt(map, e.x, e.y); if (!b) continue;
     const k = WMOD.kinds[waterKindAt(map, e.x, e.y)];
     if (!e.wm) {   // rescale an original 200/225 shoal to its water type, keeping how full it is
@@ -365,7 +366,7 @@ function wmFishTick(dt) {
       const x = Math.round(parent.x + (simRandom() - 0.5) * 7), y = Math.round(parent.y + (simRandom() - 0.5) * 7);
       if (!map.inb(x, y) || map.blk[map.idx(x, y)]) continue;
       if (!isWaterT(map.ter[map.idx(x, y)]) || waterBodyAt(map, x, y) !== rec.b) continue;
-      if (W.list.some(u => u.kind === 'unit' && Math.abs(u.x - x - 0.5) < 1 && Math.abs(u.y - y - 0.5) < 1)) continue;
+      if (wmUnitOnTile(x, y)) continue;
       const f = spawnRes('fish', x, y, parent.v);
       if (f) { f.max = parent.max; f.amount = f.max * 0.4; f.wm = 1; }
       break;

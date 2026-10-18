@@ -98,7 +98,7 @@ const TB = run(`(() => { fresh(13); const o=flat(12,8);
   const escortOk=guard.order&&guard.order.t==='attack'&&guard.order.id===raider.id;
   [kArch,kFoe,monk,eKn,ram,raider,guard].forEach(removeEnt);
   // Economy: one-sheep-at-a-time and auto-deposit on camp completion
-  for(const s of W.list) if(s.kind==='unit'&&s.type==='sheep'&&Math.hypot(s.x-W.players[2].startX,s.y-W.players[2].startY)<12) s.owner=2;
+  for(const s of W.list) if(s.kind==='unit'&&s.type==='sheep'&&Math.hypot(s.x-W.players[2].startX,s.y-W.players[2].startY)<12) idxSetOwner(s,2);
   const v2s=W.list.filter(u=>u.kind==='unit'&&u.owner===2&&u.type==='villager');
   for(const v of v2s) setOrder(v,null);
   p2.ai.assign(v2s[0],'food'); p2.ai.assign(v2s[1],'food');

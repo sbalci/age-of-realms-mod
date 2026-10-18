@@ -89,21 +89,25 @@ function geologyWorld(w){
 }
 GameHooks.on('worldCreated',geologyWorld);GameHooks.on('worldRestored',geologyWorld);
 const geologyPlace=canPlace;
-canPlace=function(p,type,x,y,ignoreExplored){const error=geologyPlace(p,type,x,y,ignoreExplored);if(error)return error;const size=BUILDINGS[type].size;return W.list.some(e=>e.depth&&e.amount>0&&e.x>=x&&e.x<x+size&&e.y>=y&&e.y<y+size)?'A mineral seam is in the way':null;};
+// Buried seams are gold, stone or coal deposits with a depth; the entity index finds the ones under a footprint.
+function geologySeamUnder(x,y,size){return ['res:gold','res:stone','res:coal'].some(c=>idxRect(c,x,y,x+size-1,y+size-1).some(e=>e.depth&&e.amount>0));}
+canPlace=function(p,type,x,y,ignoreExplored){const error=geologyPlace(p,type,x,y,ignoreExplored);if(error)return error;const size=BUILDINGS[type].size;return geologySeamUnder(x,y,size)?'A mineral seam is in the way':null;};
 
 // AIs budget coal in Imperial and beyond, and use the same excavation orders as human players for coal, gold, and stone seams.
+function geologyBuriedNear(v,res,home){return idxNear('res:'+res,home.x,home.y,35).filter(e=>e.amount>0&&!mineAccessible(e)&&Math.hypot(e.x-home.x,e.y-home.y)<35&&adjReachable(v,e));}
+function geologyCoalNear(p){return idxNear('res:coal',p.startX,p.startY,40).some(e=>Math.hypot(e.x-p.startX,e.y-p.startY)<40);}
 const geologyAssign=AIPlayer.prototype.assign;
 AIPlayer.prototype.assign=function(v,res){
   if(geologyAssign.call(this,v,res))return true;
   if(!['coal','gold','stone'].includes(res)||!TERRA.enabled)return false;
-  const home=this.home(),targets=W.list.filter(e=>e.type===res&&e.amount>0&&!mineAccessible(e)&&Math.hypot(e.x-home.x,e.y-home.y)<35&&adjReachable(v,e));
+  const home=this.home(),targets=geologyBuriedNear(v,res,home);
   targets.sort((a,b)=>Math.hypot(a.x-v.x,a.y-v.y)-Math.hypot(b.x-v.x,b.y-v.y));
   if(!targets.length)return false;setOrder(v,{t:'gather',id:targets[0].id});return true;
 };
 const geologyTask=AIPlayer.prototype.vTask;
 AIPlayer.prototype.vTask=function(v){if(v.order?.t==='terra'&&v.order.job?.mineId)return ent(v.order.job.mineId)?.type||'coal';if(v.order?.t==='gather'&&(v.order.rtype==='coal'||ent(v.order.id)?.type==='coal'))return 'coal';return geologyTask.call(this,v);};
 const geologyEconomy=AIPlayer.prototype.economy;
-AIPlayer.prototype.economy=function(dt){geologyEconomy.call(this,dt);const p=this.p;if(p.age>=3&&p.res.coal<300&&p.res.gold>650&&hasBuilt(p,'market')&&(!TERRA.enabled||!W.list.some(e=>e.type==='coal'&&Math.hypot(e.x-p.startX,e.y-p.startY)<40)))marketTrade(p,'coal',true);};
+AIPlayer.prototype.economy=function(dt){geologyEconomy.call(this,dt);const p=this.p;if(p.age>=3&&p.res.coal<300&&p.res.gold>650&&hasBuilt(p,'market')&&(!TERRA.enabled||!geologyCoalNear(p)))marketTrade(p,'coal',true);};
 
 // The seam marker stays visible for surveying; it is never a gatherable surface pile until opened.
 const geologyDrawRes=drawRes;

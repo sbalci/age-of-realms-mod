@@ -37,9 +37,40 @@ class AIPlayer {
     if (u.order && u.order.user) return false;
     return true;
   }
-  mine(filter) { return W.list.filter(e => e.owner === this.id && filter(e)); }
-  tc() { return W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc' && e.built) || W.list.find(e => e.kind === 'bld' && e.owner === this.id && e.type === 'tc'); }
-  home() { const tc = this.tc(); if (tc) return center(tc); const any = W.list.find(e => e.owner === this.id && e.kind === 'bld'); if (any) return center(any); return { x: this.p.startX, y: this.p.startY }; }
+  // The AI asks the entity index (index.js) instead of scanning W.list. Index lists come in W.list order, so a
+  // first match or a stable sort picks the same entity as the old scan; tests/index-ai.test.js checks every query
+  // below against the scan it replaced.
+  mine(filter) { return idxOwned(this.id, 'all').filter(filter); }
+  tc() { const own = idxOwned(this.id, 'bld'); return own.find(e => e.type === 'tc' && e.built) || own.find(e => e.type === 'tc'); }
+  home() { const tc = this.tc(); if (tc) return center(tc); const any = this.firstBuilding(this.id); if (any) return center(any); return { x: this.p.startX, y: this.p.startY }; }
+  firstBuilding(pid) { return idxOwned(pid, 'bld')[0]; }
+  ownSheep() { return idxOwned(this.id, 'unit').filter(s => s.type === 'sheep'); }
+  naturalFoodNear(home) { return ['res:berry', 'res:carcass'].some(c => idxNear(c, home.x, home.y, 22).some(e => Math.hypot(e.x - home.x, e.y - home.y) < 22)) || this.ownSheep().length > 0; }
+  hasDock() { return idxOwned(this.id, 'bld').some(e => e.type === 'dock'); }
+  treeTilesNear(home) { const trees = new Set(); for (const o of idxRect('res:tree', home.x - 29, home.y - 29, home.x + 29, home.y + 29)) if (Math.abs(o.x - home.x) < 29 && Math.abs(o.y - home.y) < 29) trees.add(W.map.idx(o.x | 0, o.y | 0)); return trees; }
+  villagerCount() { return idxOwned(this.id, 'unit').filter(e => e.type === 'villager').length; }
+  sheepNear(home) { return this.ownSheep().filter(s => !s.dying && Math.hypot(s.x - home.x, s.y - home.y) < 14).sort((a, b) => Math.hypot(a.x - home.x, a.y - home.y) - Math.hypot(b.x - home.x, b.y - home.y)); }
+  carcassesNear(home) { return idxNear('res:carcass', home.x, home.y, 14).filter(e => e.amount > 10 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14); }
+  huntersOf(id) { return idxOwned(this.id, 'unit').filter(u => u.order && u.order.t === 'hunt' && u.order.id === id); }
+  freeFarm() { return idxOwned(this.id, 'bld').find(f => f.type === 'farm' && f.built && !f.farmer); }
+  unfinishedFarm() { return idxOwned(this.id, 'bld').find(f => f.type === 'farm' && !f.built); }
+  deerNear(home) { return idxOwned(0, 'unit').find(a => a.type === 'deer' && Math.hypot(a.x - home.x, a.y - home.y) < 20); }
+  enemyUnitCounts() { let cav = 0, arch = 0; for (let i = 1; i < W.players.length; i++) if (isEnemy(this.id, i)) for (const e of idxOwned(i, 'unit')) { if (hasTag(e.type, 'mounted')) cav++; if (hasTag(e.type, 'archer')) arch++; } return { cav, arch }; }
+  relicFor(m, reg) { return [...idxAll('relic')].filter(r => !r.carrier && !r.inBld && W.map.landReg[W.map.idx(r.x, r.y)] === reg && !idxOwned(this.id, 'unit').some(o => o.type === 'monk' && o.order && o.order.id === r.id)).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0]; }
+  // nearest enemy building (non wall), prefer TC/castle, and track nearby fortifications for siege
+  attackTargets(tp, cx, cy) {
+    let tgt = null, bd = 1e9, fortTgt = null, fbd = 1e9;
+    for (const e of idxOwned(tp, 'all')) {
+      if (e.dead) continue;
+      if (e.kind === 'bld' && (BUILDINGS[e.type].wall)) continue;
+      if (e.kind === 'unit' && (e.inside || UNITS[e.type].naval)) continue;
+      const c = center(e), dist = Math.hypot(c.x - cx, c.y - cy);
+      const d = dist - (e.type === 'tc' || e.type === 'castle' ? 4 : 0) + (e.kind === 'unit' ? 6 : 0);
+      if (d < bd) { bd = d; tgt = e; }
+      if (e.kind === 'bld' && (e.type === 'castle' || e.type === 'tower' || e.type === 'tc') && dist < fbd) { fbd = dist; fortTgt = e; }
+    }
+    return { tgt, fortTgt };
+  }
   update(dt) {
     if (this.paused) return;
     this.acc += dt; this.t += dt;
@@ -80,7 +111,7 @@ class AIPlayer {
     // scouting early for sheep
     this.scouting();
     // herd owned sheep home
-    for (const s of W.list) if (s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.order && Math.hypot(s.x - home.x, s.y - home.y) > 7) setOrder(s, { t: 'move', x: home.x + 3 + simRandom() * 2, y: home.y + 3 + simRandom() * 2 });
+    for (const s of this.ownSheep()) if (!s.order && Math.hypot(s.x - home.x, s.y - home.y) > 7) setOrder(s, { t: 'move', x: home.x + 3 + simRandom() * 2, y: home.y + 3 + simRandom() * 2 });
     // assign idle villagers
     const counts = { food: 0, wood: 0, gold: 0, stone: 0, coal: 0, build: 0 };
     for (const v of vills) { const k = this.vTask(v); if (k) counts[k]++; }
@@ -111,11 +142,11 @@ class AIPlayer {
     // drop sites
     this.dropSites(vills, home);
     // farms when natural food runs out (never more than the food workforce needs)
-    const naturalFood = W.list.some(e => (e.kind === 'res' && (e.type === 'berry' || e.type === 'carcass') && Math.hypot(e.x - home.x, e.y - home.y) < 22) || (e.kind === 'unit' && e.type === 'sheep' && e.owner === this.id));
+    const naturalFood = this.naturalFoodNear(home);
     const farms = this.mine(e => e.kind === 'bld' && e.type === 'farm');
     const fishers = this.mine(e => e.kind === 'unit' && e.type === 'fishingship').length;
     const foodTarget = Math.round(want.food * tot) - (naturalFood ? 4 : 0) - Math.floor(fishers / 2);
-    const wantDock = this.waterNear() && tot >= 8 && !W.list.some(e => e.kind === 'bld' && e.owner === this.id && e.type === 'dock');
+    const wantDock = this.waterNear() && tot >= 8 && !this.hasDock();
     if (wantDock && p.res.wood >= 150) { if (this.buildDock(home)) { this.buildCooldown = 4; return; } }
     if (farms.length < foodTarget && p.res.wood >= 60 + (p.pop + 3 >= p.popCap ? 25 : 0) + (wantDock ? 150 : 0) && hasBuilt(p, 'mill')) {
       const mill = this.mine(e => e.kind === 'bld' && (e.type === 'mill' || e.type === 'tc') && e.built);
@@ -166,7 +197,7 @@ class AIPlayer {
         // a tree with at least six others close by and no camp of ours within 8 tiles; the tree and camp lists are
         // gathered once (scanning the whole world per candidate tree took over a second on a forested map)
         if (this.noLumberSpotT > W.t) continue;
-        const trees = new Set(); for (const o of W.list) if (o.kind === 'res' && o.type === 'tree' && Math.abs(o.x - home.x) < 29 && Math.abs(o.y - home.y) < 29) trees.add(W.map.idx(o.x | 0, o.y | 0));
+        const trees = this.treeTilesNear(home);
         const camps = this.mine(b => b.kind === 'bld' && b.type === 'lumbercamp');
         const dense = e => { let n = 0; const ex = e.x | 0, ey = e.y | 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (W.map.inb(ex + dx, ey + dy) && trees.has(W.map.idx(ex + dx, ey + dy)) && ++n > 5) return true; return false; };
         const tr = findNearestRes({ x: home.x, y: home.y, type: 'villager' }, ['tree'], home.x, home.y, 25, e => dense(e) && !camps.some(b => Math.hypot(b.x - e.x, b.y - e.y) < 8));
@@ -242,7 +273,7 @@ class AIPlayer {
   ratios() {
     const a = this.p.age;
     let r = [{ food: 0.5, wood: 0.44, gold: 0.06, stone: 0 }, { food: 0.42, wood: 0.42, gold: 0.13, stone: 0.03 }, { food: 0.38, wood: 0.36, gold: 0.2, stone: 0.06 }, { food: 0.36, wood: 0.32, gold: 0.25, stone: 0.07 }][Math.min(a, 3)];
-    if (a === 0 && W.list.filter(e => e.owner === this.id && e.type === 'villager').length < 12) r = { food: 0.62, wood: 0.38, gold: 0, stone: 0 };
+    if (a === 0 && this.villagerCount() < 12) r = { food: 0.62, wood: 0.38, gold: 0, stone: 0 };
     // adapt to stockpiles: starve what is hoarded, feed what is missing
     r = Object.assign({ coal: a >= 3 && this.p.res.coal < 900 ? 0.12 : 0 }, r); const R0 = this.p.res;
     for (const k of RES) { if (!r[k]) continue; if (R0[k] > 1500) r[k] *= 0.3; else if (R0[k] > 700) r[k] *= 0.6; else if (R0[k] < 120) r[k] *= 1.6; }
@@ -262,26 +293,25 @@ class AIPlayer {
   assign(v, res) {
     const home = this.home();
     if (res === 'food') {
-      const sheep = W.list.filter(s => s.kind === 'unit' && s.type === 'sheep' && s.owner === this.id && !s.dying && Math.hypot(s.x - home.x, s.y - home.y) < 14)
-        .sort((a, b) => Math.hypot(a.x - home.x, a.y - home.y) - Math.hypot(b.x - home.x, b.y - home.y));
-      const carc = W.list.find(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 10 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14 && e.gatherers < 5);
+      const sheep = this.sheepNear(home);
+      const carcs = this.carcassesNear(home), carc = carcs.find(e => e.gatherers < 5);
       if (carc) { setOrder(v, { t: 'gather', id: carc.id }); return true; }
       // Slaughter one sheep at a time so carcasses do not rot simultaneously
-      const activeCarc = W.list.some(e => e.kind === 'res' && e.type === 'carcass' && e.amount > 10 && (typeof eatsMeat !== 'function' || eatsMeat(this.id, e.animal)) && Math.hypot(e.x - home.x, e.y - home.y) < 14);
-      const huntedSheep = sheep.find(s => W.list.some(u => u.kind === 'unit' && u.owner === this.id && u.order && u.order.t === 'hunt' && u.order.id === s.id));
+      const activeCarc = carcs.length > 0;
+      const huntedSheep = sheep.find(s => this.huntersOf(s.id).length > 0);
       if (huntedSheep) {
-        const hunters = W.list.filter(u => u.kind === 'unit' && u.owner === this.id && u.order && u.order.t === 'hunt' && u.order.id === huntedSheep.id).length;
+        const hunters = this.huntersOf(huntedSheep.id).length;
         if (hunters < 4) { setOrder(v, { t: 'hunt', id: huntedSheep.id }); return true; }
       } else if (!activeCarc && sheep.length) {
         setOrder(v, { t: 'hunt', id: sheep[0].id }); return true;
       }
-      const farm = W.list.find(f => f.kind === 'bld' && f.type === 'farm' && f.owner === this.id && f.built && !f.farmer);
+      const farm = this.freeFarm();
       if (farm) { setOrder(v, { t: 'farm', id: farm.id }); return true; }
       const berry = findNearestRes(v, ['berry'], home.x, home.y, 20);
       if (berry && berry.gatherers < 6) { setOrder(v, { t: 'gather', id: berry.id }); return true; }
-      const deer = W.list.find(a => a.kind === 'unit' && a.type === 'deer' && a.owner === 0 && Math.hypot(a.x - home.x, a.y - home.y) < 20);
+      const deer = this.deerNear(home);
       if (deer) { setOrder(v, { t: 'hunt', id: deer.id }); return true; }
-      const unfinished = W.list.find(f => f.kind === 'bld' && f.type === 'farm' && f.owner === this.id && !f.built);
+      const unfinished = this.unfinishedFarm();
       if (unfinished) { setOrder(v, { t: 'build', id: unfinished.id }); return true; }
       if (this.p.res.wood >= 60 && hasBuilt(this.p, 'mill')) { const b = this.build('farm', home, 2, 9, true, [v]); if (b) return true; }
       if (sheep.length) { setOrder(v, { t: 'hunt', id: sheep[0].id }); return true; }
@@ -414,7 +444,7 @@ class AIPlayer {
   needNaval() {
     const en = this.enemies(); if (!en.length) return false;
     const h = this.home(); const myReg = W.map.landReg[W.map.idx(h.x | 0, h.y | 0)];
-    return en.some(i => { const b = W.list.find(e => e.owner === i && e.kind === 'bld'); if (!b) return false; return W.map.landReg[W.map.idx(b.x, b.y)] !== myReg; });
+    return en.some(i => { const b = this.firstBuilding(i); if (!b) return false; return W.map.landReg[W.map.idx(b.x, b.y)] !== myReg; });
   }
   military(dt) {
     const p = this.p, age = p.age;
@@ -423,8 +453,7 @@ class AIPlayer {
     const armySize = this.army().length;
     const econOK = this.mine(e => e.kind === 'unit' && e.type === 'villager').length >= Math.min(20, this.cfg.maxVill - 5) || this.t > 600;
     const maxArmy = 20 + age * 15;
-    const enemyCav = W.list.filter(e => e.kind === 'unit' && isEnemy(this.id, e.owner) && hasTag(e.type, 'mounted')).length;
-    const enemyArch = W.list.filter(e => e.kind === 'unit' && isEnemy(this.id, e.owner) && hasTag(e.type, 'archer')).length;
+    const { cav: enemyCav, arch: enemyArch } = this.enemyUnitCounts();
     const trainAt = (btype, types) => {
       for (const b of this.mine(e => e.kind === 'bld' && e.type === btype && e.built && e.queue.length < 2)) {
         const pool = typeof this.adaptTypes === 'function' ? this.adaptTypes(btype, types) : types;
@@ -454,7 +483,7 @@ class AIPlayer {
       if (m.order) continue;
       if (m.relic) { if (mon) setOrder(m, { t: 'deposit', id: mon.id }); continue; }
       const reg = W.map.landReg[W.map.idx(m.x | 0, m.y | 0)];
-      const r = W.list.filter(r => r.kind === 'relic' && !r.carrier && !r.inBld && W.map.landReg[W.map.idx(r.x, r.y)] === reg && !W.list.some(o => o.kind === 'unit' && o.type === 'monk' && o.owner === this.id && o.order && o.order.id === r.id)).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
+      const r = this.relicFor(m, reg);
       if (r && mon) setOrder(m, { t: 'relic', id: r.id });
       else { const a = this.army(); if (a.length) setOrder(m, { t: 'follow', id: a[0].id }); }
     }
@@ -503,7 +532,7 @@ class AIPlayer {
     const en = this.enemies(); if (!en.length) return null;
     const h = this.home();
     if (!this.focus || !en.includes(this.focus)) {
-      en.sort((a, b) => { const ba = W.list.find(e => e.owner === a && e.kind === 'bld'), bb = W.list.find(e => e.owner === b && e.kind === 'bld'); return (ba ? Math.hypot(ba.x - h.x, ba.y - h.y) : 1e9) - (bb ? Math.hypot(bb.x - h.x, bb.y - h.y) : 1e9) - (this.attitude[a] || 0) * 0.5 + (this.attitude[b] || 0) * 0.5; });
+      en.sort((a, b) => { const ba = this.firstBuilding(a), bb = this.firstBuilding(b); return (ba ? Math.hypot(ba.x - h.x, ba.y - h.y) : 1e9) - (bb ? Math.hypot(bb.x - h.x, bb.y - h.y) : 1e9) - (this.attitude[a] || 0) * 0.5 + (this.attitude[b] || 0) * 0.5; });
       this.focus = en[0];
     }
     return this.focus;
@@ -511,17 +540,7 @@ class AIPlayer {
   pressAttack(army) {
     const tp = this.targetPlayer(); if (!tp) { this.state = 'boom'; return; }
     const cx = army.reduce((s, u) => s + u.x, 0) / army.length, cy = army.reduce((s, u) => s + u.y, 0) / army.length;
-    // nearest enemy building (non wall), prefer TC/castle, and track nearby fortifications for siege
-    let tgt = null, bd = 1e9, fortTgt = null, fbd = 1e9;
-    for (const e of W.list) {
-      if (e.owner !== tp || e.dead) continue;
-      if (e.kind === 'bld' && (BUILDINGS[e.type].wall)) continue;
-      if (e.kind === 'unit' && (e.inside || UNITS[e.type].naval)) continue;
-      const c = center(e), dist = Math.hypot(c.x - cx, c.y - cy);
-      const d = dist - (e.type === 'tc' || e.type === 'castle' ? 4 : 0) + (e.kind === 'unit' ? 6 : 0);
-      if (d < bd) { bd = d; tgt = e; }
-      if (e.kind === 'bld' && (e.type === 'castle' || e.type === 'tower' || e.type === 'tc') && dist < fbd) { fbd = dist; fortTgt = e; }
-    }
+    const { tgt, fortTgt } = this.attackTargets(tp, cx, cy);
     if (!tgt) return;
     const tc = center(tgt);
     const myReg = W.map.landReg[W.map.idx(cx | 0, cy | 0)], tReg = W.map.landReg[W.map.idx(tc.x | 0, tc.y | 0)];
