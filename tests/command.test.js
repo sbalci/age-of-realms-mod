@@ -21,7 +21,7 @@ createWorld(spec,{players:[{name:'P0',civ:'franks',color:PC[0],human:true},{name
 for(let i=0;i<20;i++) worldTick(0.05);
 var USED=new Set();
 // carve a flat, empty grass arena far from both bases so every scenario has room
-(function(){ const m=W.map, tcs=W.list.filter(e=>e.kind==='bld'&&e.type==='tc'), A=44; let best=null, bd=-1;
+(function(){ const m=W.map, tcs=W.list.filter(e=>e.kind==='bld'&&e.type==='tc'), A=48; let best=null, bd=-1;
   for(let y=1;y+A<m.n-1;y+=3) for(let x=1;x+A<m.n-1;x+=3){ const d=Math.min(...tcs.map(t=>Math.max(Math.max(t.x-(x+A),x-(t.x+4),0),Math.max(t.y-(y+A),y-(t.y+4),0)))); if(d>bd){bd=d;best={x,y};} }
   for(const e of W.list.slice()) if(e.kind!=='bld'&&e.x>=best.x-1&&e.x<best.x+A+1&&e.y>=best.y-1&&e.y<best.y+A+1) removeEnt(e);
   for(let y=best.y;y<best.y+A;y++) for(let x=best.x;x<best.x+A;x++){ const i=m.idx(x,y); m.ter[i]=T.GRASS; m.elev[i]=0; m.blk[i]=0; }
