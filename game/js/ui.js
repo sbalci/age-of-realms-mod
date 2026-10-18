@@ -403,7 +403,8 @@ function updateTopbar() {
   for (const r of RES) $('#r-' + r + ' span').textContent = Math.floor(p.res[r]);
   $('#r-pop span').textContent = `${p.pop}/${p.popCap}`;
   $('#r-pop').classList.toggle('warn', p.pop >= p.popCap);
-  const idle = W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && (e.type === 'villager' || e.type === 'sapper') && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)).length;
+  // one idle-villager definition: exIdleList (extras.js loads later, but this runs at call time)
+  const idle = typeof exIdleList === 'function' ? exIdleList('vil').length : W.list.filter(e => e.kind === 'unit' && e.owner === W.humanId && (e.type === 'villager' || e.type === 'sapper') && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)).length;
   $('#r-vil span').textContent = idle;
   $('#age-label').textContent = AGES[p.age] + (p.researching.has('feudal') || p.researching.has('castleage') || p.researching.has('imperial') ? ' (advancing…)' : '');
   $('#clock').textContent = fmtTime(W.t) + (W.instant ? ' (instant)' : '') + (W.speed !== 1 && !document.querySelector('#r-speed') ? ` ×${W.speed}` : '');
@@ -708,6 +709,7 @@ function onKey(e) {
     return;
   }
   if (k === 'h' || k === 'H') { if (!UI.cmds || !UI.cmds.some(c => c.key === 'H')) { const tc = W.list.find(b => b.kind === 'bld' && b.type === 'tc' && b.owner === W.humanId); if (tc) { selectEnts([tc], false); centerCamOn(center(tc).x, center(tc).y); } return; } }
+  if (k === '.' && typeof exSelectIdle === 'function') { exSelectIdle('vil', e.shiftKey); return; }
   if (k === '.') { const idle = W.list.filter(u => u.kind === 'unit' && u.owner === W.humanId && (u.type === 'villager' || u.type === 'sapper') && !u.order && !u.inside && !u.dying && !(u.queue && u.queue.length)); if (idle.length) { UI.idleIdx = ((UI.idleIdx || 0) + 1) % idle.length; const u = idle[UI.idleIdx]; selectEnts([u], false); centerCamOn(u.x, u.y); } return; }
   if (k === ' ') { const f = UI.selection[0]; if (f) { const c = center(f); centerCamOn(c.x, c.y); } e.preventDefault(); return; }
   if (k.startsWith('Arrow')) { e.preventDefault(); return; }
