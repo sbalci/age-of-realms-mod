@@ -357,15 +357,16 @@ function canGarrisonIn(u, b) {
   return true;
 }
 function garrisonCap(b) { const p = W.players[b.owner]; let c = BUILDINGS[b.type].garrison || 0; if (b.type === 'tower' && p && p.garrisonMul) c *= p.garrisonMul; return c; }
+// The owner's buildings come from the index in id order (W.list order), so ties go to the same building as before.
 function nearestOwn(u, type, exclude) {
   let best = null, bd = 1e9;
-  for (const e of W.list) if (e.kind === 'bld' && e.type === type && e.owner === u.owner && e.built && e.id !== exclude) { const d = distTo(u, e); if (d < bd) { bd = d; best = e; } }
+  for (const e of idxOwned(u.owner, 'bld')) if (e.type === type && e.built && e.id !== exclude) { const d = distTo(u, e); if (d < bd) { bd = d; best = e; } }
   return best;
 }
 function nearestDrop(u, res) {
   let best = null, bd = 1e9;
-  for (const e of W.list) {
-    if (e.kind !== 'bld' || e.owner !== u.owner || !e.built) continue;
+  for (const e of idxOwned(u.owner, 'bld')) {
+    if (!e.built) continue;
     const bdef = BUILDINGS[e.type];
     if (!bdef.drop || !bdef.drop.includes(res)) continue;
     if (!!UNITS[u.type].naval !== (e.type === 'dock')) continue;
@@ -373,17 +374,21 @@ function nearestDrop(u, res) {
   }
   return best;
 }
+// Nearest resource of the given types by distance from (x, y) to the tile centre plus 0.7 per gatherer, below maxD.
+// The index walk visits cells nearest-first and stops once no closer resource can exist; ties go to the lowest id,
+// which is the entity the old W.list scan found first.
 function findNearestRes(u, types, x, y, maxD = 30, filter) {
   let best = null, bd = maxD;
-  for (const e of W.list) {
-    if (e.kind !== 'res' || !types.includes(e.type) || e.amount <= 0 || (typeof mineAccessible === 'function' && !mineAccessible(e))) continue;
-    if (filter && !filter(e)) continue;
+  const landed = !UNITS[u.type].naval && W.map.landReg[W.map.idx(u.x | 0, u.y | 0)];
+  idxWalk(types.map(t => 'res:' + t), x, y, lb => lb <= bd && lb < maxD, e => {
+    if (e.amount <= 0 || (typeof mineAccessible === 'function' && !mineAccessible(e))) return;
+    if (filter && !filter(e)) return;
     const d = Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) + e.gatherers * 0.7;
-    if (d < bd) {
-      if (!UNITS[u.type].naval && W.map.landReg[W.map.idx(u.x | 0, u.y | 0)] && !adjReachable(u, e)) continue;
+    if (d < bd || (d === bd && best && e.id < best.id)) {
+      if (landed && !adjReachable(u, e)) return;
       bd = d; best = e;
     }
-  }
+  });
   return best;
 }
 function adjReachable(u, e) {
@@ -628,8 +633,8 @@ function currentType(p, base) {
   return t;
 }
 function upgradeTechId(from) { return Object.keys(TECHS).find(id => TECHS[id].upg && TECHS[id].upg[0] === from); }
-function builtCount(p, type) { let c = 0; for (const e of W.list) if (e.kind === 'bld' && e.owner === p.id && e.type === type && e.built) c++; return c; }
-function hasBuilt(p, type) { for (const e of W.list) if (e.kind === 'bld' && e.owner === p.id && e.type === type && e.built) return true; return false; }
+function builtCount(p, type) { return idxCount(p.id, type); }
+function hasBuilt(p, type) { return idxCount(p.id, type) > 0; }
 // Returns null if allowed, or a reason string.
 // extras.js loads later and owns civBldName (civ-specific names); this guards early callers and headless tests.
 function bldNameFor(type, owner) { return typeof civBldName === 'function' ? civBldName(type, owner) : BUILDINGS[type].name; }
