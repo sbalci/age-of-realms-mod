@@ -21,7 +21,10 @@ const AI_CIV_UNITS = {
 class AIPlayer {
   constructor(p, diff) {
     this.p = p; this.cfg = AI_DIFF[diff] || AI_DIFF.standard; this.gatherMul = this.cfg.gatherMul;
-    this.t = 0; this.acc = 0; this.state = 'boom'; this.attitude = {}; this.lastAttackBy = {};
+    // Each player's once-a-second update runs on its own tick: player k starts (k - 1) / players of a second into its
+    // clock, so several AIs no longer all think on the same tick (the 1 Hz hitch).
+    const slots = Math.max(1, W.players.length - 1);
+    this.t = 0; this.acc = ((p.id - 1) % slots) / slots; this.state = 'boom'; this.attitude = {}; this.lastAttackBy = {};
     this.scoutPts = null; this.threatT = 0; this.waveN = 0; this.transportPlan = null; this.nextAttack = this.cfg.attackAt;
     this.buildCooldown = 0; this.log = [];
     for (let i = 1; i < W.players.length; i++) this.attitude[i] = 0;
