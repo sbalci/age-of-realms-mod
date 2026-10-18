@@ -4,6 +4,7 @@
 // startup; a civilization's own building set (house_turks_2 ...) loads the first time that civ is drawn.
 'use strict';
 const KART = { on: false, img: {}, cache: new Map(), base: 'art/kenney/', revision: 0, failed: [], requested: new Set(), civs: new Map(), booted: false };
+// CIVS gains the Turks and other civs in extras.js, which loads after this file; kartCiv is only called from load(), after the window load event, so every civ is registered by then.
 // the civilization a sprite key belongs to (house_turks_2 -> 'turks'), or null for shared sprites (tree_anatolian_0)
 function kartCiv(k) {
   const m = /^.+_([a-z]+)_\d+$/.exec(k);

@@ -123,7 +123,7 @@ All in `game/js/civ_art.js`.
      ```
 
      That is cream plaster, red tile, dark brick-red trim, warm pinkish Ankara stone, lead-grey domes, and Turkish red.
-   - `CIV_ARCH.turks.ages[4]` keeps its colours (pale stone, lead roofs, red accent), which suit Tanzimat.
+   - `CIV_ARCH.turks.ages[4]` keeps its colours (pale stone, lead roofs, red accent), which suit Tanzimat. As built: at review point 3 the user chose whiter Tanzimat marble, wall `#ece9e2` and stone `#d8d2c6`, set in both `game/js/civ_art.js` and `tools/art/islamic-kit.mjs`.
    - Classic art and overlays for the Turks at age 5 pick up the new colours too, so every art path agrees.
 
 **The Town Center needs no new rule.** `tc_turks_4` and `tc_turks_5` tie on age with the shared generated `tc_4` / `tc_5`, and the civ sprite wins ties. For other civs `tc_4`/`tc_5` keep outranking their age-3 civ sprites.

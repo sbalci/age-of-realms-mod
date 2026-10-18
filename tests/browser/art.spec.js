@@ -184,7 +184,7 @@ test('a civilization with its own castle draws it before its family castle', asy
     saracens2: drawProbe('castle', 2, 'saracens'), byzantines2: drawProbe('castle', 2, 'byzantines'), franks2: drawProbe('castle', 2, 'franks'),
   }));
   expect(r.turks2).toEqual({ names: ['castle_turks_2'], domes: 0 });
-  expect(r.turks3.names).toEqual(['castle_turks_2']);
+  expect(r.turks3).toEqual({ names: ['castle_turks_2'], domes: 0 });
   expect(r.turks4.names).toEqual(['castle_turks_4']);
   expect(r.saracens2.names).toEqual(['castle_med']);
   expect(r.byzantines2.names).toEqual(['castle_med']);
@@ -225,5 +225,27 @@ test('civ sprites baked for the Modern or Future age skip the painted era add-on
   expect(r.turks5).toEqual({ names: ['tc_turks_5'], opts: { crown: false, era: false } });
   expect(r.saracens4).toEqual({ names: ['house_saracens_3'], opts: { crown: false, era: true } });
   expect(r.withoutEra).toBeLessThan(r.withEra);
+  expect(errors).toEqual([]);
+});
+
+test('the placement ghost uses the sprite of the player\'s current age', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/game/'); await waitForArt(page);
+  await page.locator('#btn-tutorial').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  const keys = await page.evaluate(async () => {
+    const p = UI.human(), saved = { civ: p.civ, age: p.age };
+    p.civ = 'turks'; p.age = 4;
+    await KART.loadCiv('turks');
+    UI.place = { type: 'house' };
+    UI.mouse = { x: R.cw / 2, y: R.ch / 2 };
+    try {
+      KART.cache.clear();
+      drawOverlays(R.ctx);
+      return [...KART.cache.keys()];
+    } finally { UI.place = null; p.civ = saved.civ; p.age = saved.age; KART.cache.clear(); }
+  });
+  expect(keys.some(k => k.startsWith('house_turks_4|'))).toBe(true);
+  expect(keys.some(k => k.startsWith('house_turks_3|'))).toBe(false);
   expect(errors).toEqual([]);
 });

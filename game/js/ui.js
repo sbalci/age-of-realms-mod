@@ -836,7 +836,7 @@ function drawOverlays(ctx) {
       const cx = o.x + s / 2, cy = o.y + s / 2;
       const gp = iso(cx, cy, BUILDINGS[type].water ? -0.35 : W.map.h(cx, cy));
       ctx.save(); ctx.globalAlpha = 0.6;
-      if (!BUILDINGS[type].farm) { const sp = bldSprite(type, type === 'wonder' ? p.age : Math.min(3, p.age), p.color); ctx.drawImage(sp.cv, gp.x - sp.ax, gp.y - sp.ay, sp.w, sp.h); }
+      if (!BUILDINGS[type].farm) { const sp = bldSprite(type, type === 'wonder' ? p.age : Math.min(5, p.age), p.color); ctx.drawImage(sp.cv, gp.x - sp.ax, gp.y - sp.ay, sp.w, sp.h); }
       ctx.restore();
       ctx.save(); ctx.translate(gp.x, gp.y);
       poly(ctx, [P(-s / 2, -s / 2, 0), P(s / 2, -s / 2, 0), P(s / 2, s / 2, 0), P(-s / 2, s / 2, 0)], err ? 'rgba(255,40,40,0.35)' : 'rgba(60,255,60,0.25)', err ? '#f44' : '#4f4', 1.5);

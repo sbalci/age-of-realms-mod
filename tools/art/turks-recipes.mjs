@@ -67,7 +67,7 @@ OTTOMAN.tc = k => {
   k.add('nature', 'tree_cone', 3.75, 0.35, 0, 0, 0.9, CYPRESS);
 };
 
-// ---- monastery: Seljuk Gök Medrese (age 2), Ottoman mosque (age 3) ----
+// ---- monastery: an Ottoman-era (age 2) build in the style of the Seljuk Gök Medrese, Ottoman mosque (age 3) ----
 OTTOMAN.monastery = k => {
   if (k.style === 2) {
     // stone court, tiled portal flanked by twin minarets, domed hall
