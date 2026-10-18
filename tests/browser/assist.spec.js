@@ -72,3 +72,18 @@ test('spectating disables shared control and the setup choice persists', async (
   await expect(page.locator('#b-assist')).toBeHidden();
   expect(await page.evaluate(() => !!__game.W.spectate && !__game.W.aiAssist && __game.W.settings.aiAssist===false)).toBe(true);
 });
+
+test('AI Assist keeps one villager idle: the . key selects it and the top bar counts it', async ({ page }) => {
+  await page.locator('#btn-sp').click();
+  await page.locator('#s-opp').selectOption('1');
+  await page.locator('#s-size').selectOption('tiny');
+  await page.locator('#s-seed').fill('5');
+  await page.locator('#s-assist').check();
+  await page.locator('#s-start').click();
+  await expect(page.locator('#b-assist')).toHaveText('AI Assist: On');
+  await page.waitForTimeout(4000);
+  await page.evaluate(() => { __game.UI.selection = []; });
+  await page.keyboard.press('.');
+  await expect.poll(() => page.evaluate(() => __game.UI.selection.filter(e => e.kind === 'unit' && e.owner === 1 && e.type === 'villager').length)).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => Number(document.querySelector('#r-vil span').textContent))).toBeGreaterThanOrEqual(1);
+});

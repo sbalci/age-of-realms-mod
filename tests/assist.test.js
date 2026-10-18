@@ -138,6 +138,49 @@ test('the assistant never resigns for the human and cannot be enabled for specta
   if(assistSetEnabled(true,false)!==false || W.aiAssist) return false;
   W.spectate=false; W.tutorial={step:0}; return assistSetEnabled(true,false)===false && !W.aiAssist;
 })()`);
+run(`
+  function spares() { return W.list.filter(e => e.owner === 1 && e.assistSpare); }
+  function freeIdle() { return W.list.filter(e => e.owner === 1 && e.type === 'villager' && !e.assistControl && !e.order && !e.inside && !e.dying && !(e.queue && e.queue.length)); }
+`);
+test('AI Assist keeps exactly one idle spare villager that the AI never orders', `(() => {
+  const ai = assisted();
+  for (let i = 0; i < 1200; i++) {
+    worldTick(0.05); const s = spares();
+    if (i < 3 && !s.length) continue;
+    if (s.length !== 1 || s[0].order || s[0].type !== 'villager' || s[0].assistControl || !exIdleList('vil').includes(s[0])) return false;
+    if (i === 1199) return true;
+  }
+  return false;
+})()`);
+test('ordering the spare makes a new idle spare next update; with none idle the gatherer nearest the TC is stopped', `(() => {
+  const ai = assisted(); for (let i = 0; i < 400; i++) worldTick(0.05);
+  const tc = ai.tc(), cx = tc.x + 1.5, cy = tc.y + 1.5, extra = [];
+  for (let k = 0; k < 4; k++) extra.push(spawnUnit('villager', 1, cx + 2 + k * 2, cy + 3));
+  ai.update(0.05);
+  let old = spares()[0]; if (!old) return false;
+  cmdIssue([old], false, () => orderMove([old], old.x + 4, old.y));
+  if (old.assistControl !== 'order') return false;
+  ai.update(0.05);
+  const first = spares()[0];
+  if (spares().length !== 1 || !first || first === old || first.order || !exIdleList('vil').includes(first)) return false;
+  // nothing idle: every other villager gathers, so the one nearest the Town Center must be stopped
+  assistContext(ai, () => { for (const v of freeIdle()) if (v !== first) ai.assign(v, 'wood') || ai.assign(v, 'food'); });
+  cmdIssue([first], false, () => orderMove([first], first.x + 3, first.y));
+  const cand = W.list.filter(e => e.owner === 1 && e.type === 'villager' && !e.assistControl && !e.inside && !e.dying && e.order && e.order.t === 'gather' && ai.canControl(e));
+  if (cand.length < 2 || freeIdle().length) return false;
+  cand.sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+  ai.update(0.05);
+  const next = spares()[0];
+  if (spares().length !== 1 || next !== cand[0] || next.order || next.assistControl) return false;
+  for (let i = 0; i < 600; i++) { worldTick(0.05); if (!freeIdle().length || spares().length > 1) return false; }
+  return true;
+})()`);
+test('turning AI Assist off clears the spare marker', `(() => {
+  assisted(); for (let i = 0; i < 100; i++) worldTick(0.05);
+  if (spares().length !== 1) return false;
+  assistSetEnabled(false, false);
+  return spares().length === 0;
+})()`);
 try { assert.deepStrictEqual(warnings, []); pass++; console.log('PASS all assisted simulations complete without AI warnings'); }
 catch (e) { fail++; console.error('FAIL AI warnings', warnings); }
 console.log(`${pass} passed, ${fail} failed`);

@@ -14,6 +14,27 @@ function assistReleaseFinished() {
     if (u.assistControl === 'order' && !u.order && !(u.queue && u.queue.length) && !u.inside) delete u.assistControl;
   }
 }
+// One villager, the "spare", is never tasked, so '.', the idle button and the top-bar counter always find one.
+function assistSpareFree(u) { return assistOwn(u) && u.type === 'villager' && !u.assistControl && !u.inside && !u.order && !(u.queue && u.queue.length); }
+function assistEnsureSpare(ai) {
+  const vills = W.list.filter(u => assistOwn(u) && u.type === 'villager');
+  let spare = null;
+  // Keep at most one: a spare that was ordered, sheltered or reserved (or a second marker) stops being one.
+  for (const u of vills) if (u.assistSpare) { if (!spare && assistSpareFree(u)) spare = u; else delete u.assistSpare; }
+  if (!spare) {
+    // Refill: prefer a villager that is already idle, otherwise stop the AI's gatherer nearest the Town Center.
+    spare = vills.find(assistSpareFree);
+    if (!spare) {
+      const tc = ai.tc();
+      const near = u => tc ? Math.hypot(u.x - (tc.x + 1.5), u.y - (tc.y + 1.5)) : 0;
+      const gatherers = vills.filter(u => !u.inside && !u.assistControl && ai.canControl(u) && u.order && u.order.t === 'gather').sort((a, b) => near(a) - near(b));
+      spare = gatherers[0];
+      // Inside the assist context so this is the assistant's decision, not a player order.
+      if (spare) assistContext(ai, () => setOrder(spare, null));
+    }
+    if (spare) spare.assistSpare = true;
+  }
+}
 function assistSetEnabled(enabled, announce = true) {
   if (!W || W.menu || W.editor || W.over || W.tutorial || W.spectate || W.settings.spectate) return false;
   const p = W.players[W.humanId]; if (!p || !p.human || !p.alive) return false;
@@ -27,10 +48,13 @@ function assistSetEnabled(enabled, announce = true) {
       if (e.kind === 'bld' && !W.aiAssist) for (const q of e.queue) q.assistUser = true;
     }
     p.ai = W.assistAI;
-  } else if (p.ai === W.assistAI) p.ai = null;
+  } else {
+    if (p.ai === W.assistAI) p.ai = null;
+    for (const u of W.list) if (u.assistSpare) delete u.assistSpare;
+  }
   W.aiAssist = W.settings.aiAssist = enabled;
   UI.panelKey = '';
-  if (announce) msg(enabled ? 'AI Assist on: your orders take priority. Stop and stances keep units under your control; Return to AI hands them back.' : 'AI Assist off. Units continue their current orders.', '#9fd');
+  if (announce) msg(enabled ? 'AI Assist on: your orders take priority. One villager stays idle for you (press .). Stop and stances keep units under your control; Return to AI hands them back.' : 'AI Assist off. Units continue their current orders.', '#9fd');
   return true;
 }
 function assistReturn(units) {
@@ -50,7 +74,7 @@ GameHooks.on('worldRestored', () => { ASSIST.active = null; });
 
 const assistPreviousCanControl = AIPlayer.prototype.canControl;
 AIPlayer.prototype.canControl = function (u) {
-  return assistPreviousCanControl.call(this, u) && !(assistHumanAI(this) && assistReserved(u));
+  return assistPreviousCanControl.call(this, u) && !(assistHumanAI(this) && (assistReserved(u) || u.assistSpare));
 };
 // Updates and immediate damage/training callbacks all count as AI decisions. Simulation order
 // completion, queued waypoints and self-defense remain free to advance the player's orders.
@@ -58,7 +82,7 @@ for (const name of ['update', 'onAttacked', 'onTrained', 'onBuilt']) {
   const previous = AIPlayer.prototype[name];
   AIPlayer.prototype[name] = function (...args) {
     if (assistHumanAI(this)) {
-      if (name === 'update') assistReleaseFinished();
+      if (name === 'update') { assistReleaseFinished(); assistEnsureSpare(this); }
       if (name === 'onTrained' && args[1].rally) { args[0].assistControl = 'order'; return; }
     }
     return assistContext(this, () => previous.apply(this, args));
