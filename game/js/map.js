@@ -140,61 +140,98 @@ class GameMap {
 }
 
 // ---------- Pathfinding (A*, 8-directional) ----------
-const PF = { g: null, par: null, stamp: null, closed: null, cur: 1, heap: [], n: 0 };
+// The open list is a binary heap in typed arrays: keys in a Float64Array and tile indices in an Int32Array, sifted with
+// exactly the comparisons of the old array-of-pairs heap (<= up, strict < down), so equal keys pop in the same order.
+const PF = { g: null, par: null, stamp: null, closed: null, cur: 1, n: 0, hf: new Float64Array(4096), hi: new Int32Array(4096) };
 const PF_DX = [1, -1, 0, 0, 1, 1, -1, -1], PF_DY = [0, 0, 1, -1, 1, -1, 1, -1]; // neighbour offsets (were rebuilt for every neighbour)
 function pfInit(n) {
   if (PF.n === n) return;
   PF.n = n; PF.g = new Float32Array(n * n); PF.par = new Int32Array(n * n); PF.stamp = new Uint32Array(n * n); PF.closed = new Uint32Array(n * n);
 }
-// passFn(i, x, y) -> bool. goal: {x0,y0,x1,y1,r}
-function findPath(map, sx, sy, goal, passFn, maxNodes = 9000) {
+// Grid A* from (sx, sy) to the goal {x0, y0, x1, y1, r}; passFn(i, x, y) -> bool. Returns the tile chain from the start
+// to the goal (ok) or to the expanded tile nearest the goal (not ok), and whether it stopped at maxNodes (budget).
+// lim (optional, from hpa.js) keeps the search inside the clusters whose lim.cm entry equals lim.stamp, takes the
+// steps from the class graph's masks lim.mv (asking passFn only on the gate tiles lim.gt) and weighs the heuristic
+// by lim.w (slightly above 1, so ties go to the tile nearer the goal).
+function pfGrid(map, sx, sy, goal, passFn, maxNodes, lim) {
   const n = map.n; pfInit(n);
-  if (maxNodes === 9000 && n > 110) maxNodes = Math.min(36000, Math.round(n * n * 0.85));
-  sx = Math.max(0, Math.min(n - 1, sx | 0)); sy = Math.max(0, Math.min(n - 1, sy | 0));
   const stamp = ++PF.cur;
-  const g = PF.g, par = PF.par, st = PF.stamp, cl = PF.closed;
-  const heap = []; // [f, idx]
-  const push = (f, i) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; const t = heap[p]; heap[p] = heap[k]; heap[k] = t; k = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (; ;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; const t = heap[m]; heap[m] = heap[k]; heap[k] = t; k = m; } } return top; };
+  const g = PF.g, par = PF.par, st = PF.stamp, cl = PF.closed, DX = PF_DX, DY = PF_DY;
+  let hf = PF.hf, hi = PF.hi, hn = 0;
+  const push = (f, i) => {
+    if (hn === hf.length) { const f2 = new Float64Array(hn * 2), i2 = new Int32Array(hn * 2); f2.set(hf); i2.set(hi); PF.hf = hf = f2; PF.hi = hi = i2; }
+    let k = hn++; hf[k] = f; hi[k] = i;
+    while (k > 0) { const p = (k - 1) >> 1; if (hf[p] <= hf[k]) break; const tf = hf[p], ti = hi[p]; hf[p] = hf[k]; hi[p] = hi[k]; hf[k] = tf; hi[k] = ti; k = p; }
+  };
+  const pop = () => {
+    const top = hi[0], len = --hn;
+    if (len > 0) {
+      hf[0] = hf[len]; hi[0] = hi[len];
+      let k = 0;
+      for (; ;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < len && hf[l] < hf[m]) m = l; if (r < len && hf[r] < hf[m]) m = r; if (m === k) break; const tf = hf[m], ti = hi[m]; hf[m] = hf[k]; hi[m] = hi[k]; hf[k] = tf; hi[k] = ti; k = m; }
+    }
+    return top;
+  };
   // distance to the goal rectangle, without allocating (this runs for every node the search touches)
   const gx0 = goal.x0, gy0 = goal.y0, gx1 = goal.x1, gy1 = goal.y1, gr = goal.r;
   const hfun = (x, y) => { const dx = Math.max(gx0 - x, 0, x - gx1), dy = Math.max(gy0 - y, 0, y - gy1); return dx > dy ? dx + 0.414 * dy : dy + 0.414 * dx; };
   const done = (x, y) => Math.max(gx0 - x, 0, x - gx1) <= gr && Math.max(gy0 - y, 0, y - gy1) <= gr;
+  const cm = lim ? lim.cm : null, cs = lim ? lim.stamp : 0, cw = lim ? lim.cw : 0, w = lim ? lim.w : 1, mv = lim ? lim.mv : null, gt = lim ? lim.gt : null;
   const s = sy * n + sx;
-  g[s] = 0; par[s] = -1; st[s] = stamp; push(hfun(sx, sy), s);
-  let best = s, bestH = hfun(sx, sy), expanded = 0, found = -1;
-  while (heap.length) {
-    const [, c] = pop();
+  g[s] = 0; par[s] = -1; st[s] = stamp; push(hfun(sx, sy) * w, s);
+  let best = s, bestH = hfun(sx, sy), expanded = 0, found = -1, budget = false;
+  while (hn) {
+    const c = pop();
     if (cl[c] === stamp) continue; cl[c] = stamp;
     const cx = c % n, cy = (c / n) | 0;
     if (done(cx, cy)) { found = c; break; }
     const hh = hfun(cx, cy); if (hh < bestH) { bestH = hh; best = c; }
-    if (++expanded > maxNodes) break;
+    if (++expanded > maxNodes) { budget = true; break; }
     for (let d = 0; d < 8; d++) {
-      const dx = PF_DX[d], dy = PF_DY[d];
-      const nx = cx + dx, ny = cy + dy;
+      const nx = cx + DX[d], ny = cy + DY[d];
       if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+      if (cm && cm[(ny >> 4) * cw + (nx >> 4)] !== cs) continue;
       const j = ny * n + nx;
       if (cl[j] === stamp) continue;
-      if (!passFn(j, nx, ny) || !map.canStep(cx, cy, nx, ny)) continue;
-      if (d >= 4 && (!passFn(cy * n + nx, nx, cy) || !passFn(ny * n + cx, cx, ny))) continue;
+      if (mv) {   // the class graph's step rule; the unit's own rule differs from it only on gate tiles
+        if (!((mv[c] >> d) & 1)) continue;
+        if ((gt[j] || (d >= 4 && (gt[cy * n + nx] || gt[ny * n + cx]))) && (!passFn(j, nx, ny) || (d >= 4 && (!passFn(cy * n + nx, nx, cy) || !passFn(ny * n + cx, cx, ny))))) continue;
+      } else {
+        if (!passFn(j, nx, ny) || !map.canStep(cx, cy, nx, ny)) continue;
+        if (d >= 4 && (!passFn(cy * n + nx, nx, cy) || !passFn(ny * n + cx, cx, ny))) continue;
+      }
       const ng = g[c] + (d >= 4 ? 1.414 : 1) + Math.max(0, map.elev[j] - map.elev[c]) * 0.3;
-      if (st[j] !== stamp || ng < g[j]) { st[j] = stamp; g[j] = ng; par[j] = c; push(ng + hfun(nx, ny), j); }
+      if (st[j] !== stamp || ng < g[j]) { st[j] = stamp; g[j] = ng; par[j] = c; push(ng + hfun(nx, ny) * w, j); }
     }
   }
-  const end = found >= 0 ? found : best;
-  const pts = [];
-  for (let c = end; c !== -1 && pts.length < 4000; c = par[c]) pts.push(c);
-  pts.reverse();
-  // string-pull smoothing
-  const out = [];
+  const end = found >= 0 ? found : best, chain = [];
+  for (let c = end; c !== -1 && chain.length <= n * n; c = par[c]) chain.push(c);   // no 4,000-point cap: a chain is at most every tile once
+  chain.reverse();
+  return { chain, ok: found >= 0, budget, expanded };
+}
+// String-pull smoothing of a tile chain into waypoints (tile centres), leaving out the start tile. Each step looks at
+// most K points ahead (K = 0: to the end of the chain, the old unbounded smoothing). clear(a, b) is the straight-line
+// test, lineClear by default.
+function pfSmooth(map, chain, passFn, K, clear) {
+  const n = map.n, out = [];
   let i = 0;
-  while (i < pts.length - 1) {
-    let j = pts.length - 1;
-    for (; j > i + 1; j--) if (lineClear(map, pts[i], pts[j], passFn)) break;
-    out.push(pts[j]); i = j;
+  while (i < chain.length - 1) {
+    let j = K > 0 ? Math.min(chain.length - 1, i + K) : chain.length - 1;
+    for (; j > i + 1; j--) if (clear ? clear(chain[i], chain[j]) : lineClear(map, chain[i], chain[j], passFn)) break;
+    out.push(chain[j]); i = j;
   }
-  return { pts: out.map(c => ({ x: c % n + 0.5, y: ((c / n) | 0) + 0.5 })), ok: found >= 0 };
+  return out.map(c => ({ x: c % n + 0.5, y: ((c / n) | 0) + 0.5 }));
+}
+// passFn(i, x, y) -> bool. goal: {x0,y0,x1,y1,r}. cls ('land', 'mounted' or 'naval', given by pathTo) lets the
+// hierarchical search of hpa.js answer when it is switched on; without cls, or with it off, this is the plain grid A*.
+function findPath(map, sx, sy, goal, passFn, maxNodes = 9000, cls) {
+  const n = map.n; pfInit(n);
+  if (maxNodes === 9000 && n > 110) maxNodes = Math.min(36000, Math.round(n * n * 0.85));
+  sx = Math.max(0, Math.min(n - 1, sx | 0)); sy = Math.max(0, Math.min(n - 1, sy | 0));
+  const hpaOn = typeof HPA === 'object' && HPA.enabled;
+  if (cls && hpaOn) { const r = hpaFindPath(map, sx, sy, goal, passFn, cls); if (r) return r; }
+  const res = pfGrid(map, sx, sy, goal, passFn, maxNodes, null);
+  return { pts: pfSmooth(map, res.chain, passFn, hpaOn ? HPA.smooth : 0), ok: res.ok };
 }
 function lineClear(map, a, b, passFn) {
   const n = map.n; let x0 = a % n, y0 = (a / n) | 0; const x1 = b % n, y1 = (b / n) | 0;

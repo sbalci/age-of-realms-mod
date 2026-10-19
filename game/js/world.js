@@ -206,7 +206,7 @@ function tilePassFor(u, x, y) { if (!W.map.inb(x | 0, y | 0)) return false; retu
 
 // ---------- movement ----------
 function pathTo(u, rect, r) {
-  const res = findPath(W.map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u));
+  const res = findPath(W.map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u), undefined, hpaClassOf(u));
   u.path = res.pts; u.pi = 0; u.pathOk = res.ok; u.goalRect = rect; u.goalR = r;   // callers set u.repathT just before calling; resetting it here made every chasing unit repath every tick
   return res.ok;
 }

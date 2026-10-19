@@ -43,7 +43,7 @@ const Editor = {
     const players = this.players.map((p, i) => ({ name: i === 0 ? 'You (human)' : 'Computer ' + i, civ: p.civ, color: PLAYER_COLORS[p.color % 8], human: i === 0, team: p.team }));
     // players array for createWorld must exist; strip starts so no TCs get auto-created
     const s2 = Object.assign({}, spec, { players: spec.players.map(() => ({ start: null })) });
-    createWorld(s2, { players, seed: 1, fog: 'none', startRes: 'standard', startAge: 0 });
+    createWorld(s2, { players, seed: 1, fog: 'none', startRes: 'standard', startAge: 0, editor: true });
     W.editor = true;
     invalidateTerrain(); R.spriteCache.clear(); MM.baseVer = -1;
     centerCamOn(W.n / 2, W.n / 2); R.cam.zoom = 0.8;

@@ -259,6 +259,154 @@ function hpaRow(G, k, a) {
   for (let b = 0; b < m; b++) c.cost[a * m + b] = hpaD(c.nodes[b]);
 }
 
+// ---------- the abstract search ----------
+const HS = { n: 0, g: null, st: null, par: null, cl: null, cur: 0, hf: new Float64Array(4096), hi: new Int32Array(4096) };
+// A* over the nodes, from the start (its costs to the start cluster's nodes, sCost, and to the goal inside that
+// cluster, sDone) to the goal (goalNodes: node tile -> cost from it to the goal). h(t) is the heuristic of a node
+// tile. Returns the node tiles of the route in order (empty when the goal is reached inside the start cluster), or null.
+function hpaSearch(G, ks, sCost, sDone, goalNodes, h) {
+  const n = G.n, N = n * n, GOAL = N;
+  if (HS.n !== n) { HS.n = n; HS.g = new Float64Array(N + 1); HS.st = new Uint32Array(N + 1); HS.par = new Int32Array(N + 1); HS.cl = new Uint32Array(N + 1); }
+  const stamp = ++HS.cur, g = HS.g, st = HS.st, par = HS.par, cl = HS.cl, ni = G.ni, cls = G.cl;
+  let hf = HS.hf, hi = HS.hi, hn = 0;
+  const push = (f, i) => {
+    if (hn === hf.length) { const f2 = new Float64Array(hn * 2), i2 = new Int32Array(hn * 2); f2.set(hf); i2.set(hi); HS.hf = hf = f2; HS.hi = hi = i2; }
+    let q = hn++; hf[q] = f; hi[q] = i;
+    while (q > 0) { const p = (q - 1) >> 1; if (hf[p] <= hf[q]) break; const tf = hf[p], ti = hi[p]; hf[p] = hf[q]; hi[p] = hi[q]; hf[q] = tf; hi[q] = ti; q = p; }
+  };
+  const pop = () => { const top = hi[0], len = --hn; if (len > 0) { hf[0] = hf[len]; hi[0] = hi[len]; let q = 0; for (; ;) { const l = 2 * q + 1, r = l + 1; let m = q; if (l < len && hf[l] < hf[m]) m = l; if (r < len && hf[r] < hf[m]) m = r; if (m === q) break; const tf = hf[m], ti = hi[m]; hf[m] = hf[q]; hi[m] = hi[q]; hf[q] = tf; hi[q] = ti; q = m; } } return top; };
+  const relax = (t, ng, from) => { if (st[t] !== stamp || ng < g[t]) { st[t] = stamp; g[t] = ng; par[t] = from; push(ng + (t === GOAL ? 0 : h(t)), t); } };
+  const sc = cls[ks];
+  for (let i = 0; i < sc.nodes.length; i++) if (sCost[i] < Infinity) relax(sc.nodes[i], sCost[i], -1);
+  if (sDone < Infinity) relax(GOAL, sDone, -1);
+  while (hn) {
+    const t = pop();
+    if (cl[t] === stamp) continue; cl[t] = stamp;
+    if (t === GOAL) { const out = []; for (let q = par[GOAL]; q !== -1; q = par[q]) out.push(q); return out.reverse(); }
+    const k = hpaCluster(G, t), c = cls[k], a = ni[t], m = c.nodes.length, gt = g[t];
+    if (!c.row[a]) hpaRow(G, k, a);
+    const cost = c.cost, nodes = c.nodes, base = a * m;
+    for (let b = 0; b < m; b++) { const w = cost[base + b]; if (b !== a && w < Infinity) relax(nodes[b], gt + w, t); }
+    const e = c.inter[a]; for (let q = 0; q < e.length; q += 2) relax(e[q], gt + e[q + 1], t);
+    const gc = goalNodes.get(t); if (gc !== undefined) relax(GOAL, gt + gc, t);
+  }
+  return null;
+}
+// Corridor for pfGrid: the clusters of the start and of every node on the abstract route, each widened by ring
+// clusters. The abstract route can be walked inside its own clusters, so a corridor of ring 0 always holds a path.
+// pfGrid then reads the graph's step masks (mv) and asks the unit's own rule only on gate tiles (gt).
+function hpaCorridor(G, ks, route, ring) {
+  const cw = G.cw, cm = G.cm, stamp = ++G.cstamp;
+  const mark = k => { const cx = k % cw, cy = (k / cw) | 0; for (let dy = -ring; dy <= ring; dy++) for (let dx = -ring; dx <= ring; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < cw && y < cw) cm[y * cw + x] = stamp; } };
+  mark(ks); for (const t of route) mark(hpaCluster(G, t));
+  return { cm, stamp, cw, w: HPA.weight, mv: G.mv, gt: G.gt };
+}
+// lineClear(map, a, b, passFn) on the graph's step masks: the same answer, asking passFn only on gate tiles.
+function hpaClear(G, passFn) {
+  const n = G.n, mv = G.mv, gt = G.gt;
+  return (a, b) => {
+    const x0 = a % n, y0 = (a / n) | 0, x1 = b % n, y1 = (b / n) | 0;
+    const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2;
+    let px = x0, py = y0;
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps, x = Math.round(x0 + (x1 - x0) * t), y = Math.round(y0 + (y1 - y0) * t);
+      if (x === px && y === py) continue;
+      const dx = x - px, dy = y - py, d = HPA_DIR[(dy + 1) * 3 + dx + 1];
+      if (!((mv[py * n + px] >> d) & 1)) return false;
+      if ((gt[y * n + x] || (dx && dy && (gt[py * n + x] || gt[y * n + px]))) && (!passFn(y * n + x, x, y) || (dx && dy && (!passFn(py * n + x, x, py) || !passFn(y * n + px, px, y))))) return false;
+      px = x; py = y;
+    }
+    return true;
+  };
+}
+const HPA_DIR = [7, 3, 5, 1, -1, 0, 6, 2, 4];   // (dx, dy) -> bit index of PF_DX / PF_DY
+
+// ---------- findPath's hierarchical answer ----------
+// Same contract as findPath: { pts, ok }. null tells findPath to run its plain grid search (the old answer).
+function hpaFindPath(map, sx, sy, goal, passFn, cls) {
+  if (!W || map !== W.map) return null;
+  HPA.stats.queries++;
+  const n = map.n, C = HPA.C;
+  const gx0 = goal.x0, gy0 = goal.y0, gx1 = goal.x1, gy1 = goal.y1, gr = goal.r;
+  const hxy = (x, y) => { const dx = Math.max(gx0 - x, 0, x - gx1), dy = Math.max(gy0 - y, 0, y - gy1); return dx > dy ? dx + 0.414 * dy : dy + 0.414 * dx; };
+  const h = t => hxy(t % n, (t / n) | 0);
+  // 1. A near goal: the plain search with a small budget. When it finishes (found, or no tile left), it is the old answer.
+  if (hxy(sx, sy) <= HPA.near) {
+    const r = pfGrid(map, sx, sy, goal, passFn, HPA.nearNodes, null);
+    if (!r.budget) { HPA.stats.near++; return { pts: pfSmooth(map, r.chain, passFn, HPA.smooth), ok: r.ok }; }
+  }
+  const G = hpaGraph(cls), cw = G.cw, s = sy * n + sx, ks = (sy >> 4) * cw + (sx >> 4), sc = G.cl[ks];
+  // 2. The start: its costs to its cluster's nodes, and to the goal tiles inside its cluster.
+  const dx0 = Math.max(0, Math.ceil(gx0 - gr)), dx1 = Math.min(n - 1, Math.floor(gx1 + gr)), dy0 = Math.max(0, Math.ceil(gy0 - gr)), dy1 = Math.min(n - 1, Math.floor(gy1 + gr));
+  hpaLocal(G, ks, [s], false);
+  const sCost = new Float64Array(sc.nodes.length);
+  for (let i = 0; i < sc.nodes.length; i++) sCost[i] = hpaD(sc.nodes[i]);
+  let sDone = Infinity;
+  const kx0 = (sx >> 4) * C, ky0 = (sy >> 4) * C;
+  for (let y = Math.max(dy0, ky0); y <= Math.min(dy1, ky0 + C - 1); y++) for (let x = Math.max(dx0, kx0); x <= Math.min(dx1, kx0 + C - 1); x++) sDone = Math.min(sDone, hpaD(y * n + x));
+  // 3. The goal: in each cluster the goal tiles fall in, the cost from every node to the nearest goal tile.
+  const goalNodes = new Map();
+  if (dx0 <= dx1 && dy0 <= dy1) for (let cy = dy0 >> 4; cy <= dy1 >> 4; cy++) for (let cx = dx0 >> 4; cx <= dx1 >> 4; cx++) {
+    const k = cy * cw + cx, srcs = [];
+    for (let y = Math.max(dy0, cy * C); y <= Math.min(dy1, cy * C + C - 1); y++) for (let x = Math.max(dx0, cx * C); x <= Math.min(dx1, cx * C + C - 1); x++) if (G.P[y * n + x]) srcs.push(y * n + x);
+    if (!srcs.length) continue;
+    hpaLocal(G, k, srcs, true);
+    for (const t of G.cl[k].nodes) { const c = hpaD(t); if (c < Infinity) goalNodes.set(t, c); }
+  }
+  // 4. Region reject: the components the start reaches against those the goal is reached from.
+  const comps = new Set();
+  for (let i = 0; i < sc.nodes.length; i++) if (sCost[i] < Infinity) comps.add(G.comp[sc.nodes[i]]);
+  let reach = sDone < Infinity;
+  if (!reach) for (const t of goalNodes.keys()) if (comps.has(G.comp[t])) { reach = true; break; }
+  if (reach) {
+    const route = hpaSearch(G, ks, sCost, sDone, goalNodes, h);
+    if (route) {
+      const r = pfGrid(map, sx, sy, goal, passFn, n * n, hpaCorridor(G, ks, route, 1));
+      if (r.ok) { HPA.stats.routed++; return { pts: pfSmooth(map, r.chain, passFn, HPA.smooth, hpaClear(G, passFn)), ok: true }; }
+    }
+    HPA.stats.fallback++;   // the unit's own rule is stricter than the graph's (a gate it may not use): the old search decides
+    return null;
+  }
+  // 5. Unreachable: a route to the reachable tile nearest the goal, ok false (findPath's best effort; the old search
+  // could only find that tile or a farther one). A cluster's tiles are reachable when they share a connected area
+  // with one of its nodes in the start's components; clusters are scanned nearest first.
+  HPA.stats.unreachable++;
+  let best = s, bh = h(s);
+  hpaLocal(G, ks, [s], false);   // the start cluster's own reachable tiles count too
+  for (let y = ky0; y < Math.min(n, ky0 + C); y++) for (let x = kx0; x < Math.min(n, kx0 + C); x++) { const t = y * n + x; if (hpaD(t) < Infinity) { const ht = hxy(x, y); if (ht < bh) { bh = ht; best = t; } } }
+  const cand = [];
+  for (let k = 0; k < G.cl.length; k++) {
+    const labs = new Set(); for (const t of G.cl[k].nodes) if (comps.has(G.comp[t])) labs.add(G.lab[t]);
+    if (!labs.size) continue;
+    const x0 = (k % cw) * C, y0 = ((k / cw) | 0) * C, ex = Math.max(gx0 - (x0 + C - 1), 0, x0 - gx1), ey = Math.max(gy0 - (y0 + C - 1), 0, y0 - gy1);
+    cand.push({ k, labs, lb: ex > ey ? ex + 0.414 * ey : ey + 0.414 * ex });
+  }
+  cand.sort((a, b) => a.lb - b.lb || a.k - b.k);
+  for (const { k, labs, lb } of cand) {
+    if (lb >= bh) break;
+    const x0 = (k % cw) * C, y0 = ((k / cw) | 0) * C;
+    for (let y = y0; y < Math.min(n, y0 + C); y++) for (let x = x0; x < Math.min(n, x0 + C); x++) { const t = y * n + x; if (G.P[t] && labs.has(G.lab[t])) { const ht = hxy(x, y); if (ht < bh) { bh = ht; best = t; } } }
+  }
+  if (best === s) return { pts: [], ok: false };
+  const bx = best % n, by = (best / n) | 0, toB = { x0: bx, y0: by, x1: bx, y1: by, r: 0 }, kb = hpaCluster(G, best);
+  const hB = t => { const ax = Math.abs(t % n - bx), ay = Math.abs(((t / n) | 0) - by); return ax > ay ? ax + 0.414 * ay : ay + 0.414 * ax; };
+  hpaLocal(G, kb, [best], true);
+  const toBest = new Map(); for (const t of G.cl[kb].nodes) { const c = hpaD(t); if (c < Infinity) toBest.set(t, c); }
+  let sB = Infinity; if (kb === ks) { hpaLocal(G, ks, [s], false); sB = hpaD(best); }
+  const route = hpaSearch(G, ks, sCost, sB, toBest, hB);
+  const r = route && pfGrid(map, sx, sy, toB, passFn, n * n, hpaCorridor(G, ks, route, 1));
+  if (!r || !r.ok) { HPA.stats.fallback++; return null; }
+  return { pts: pfSmooth(map, r.chain, passFn, HPA.smooth, hpaClear(G, passFn)), ok: false };
+}
+// A new or loaded match: build the land and naval graphs and every intra edge now, so the first long order of the
+// match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
+function hpaWarm() {
+  if (!HPA.enabled || !W || !W.map || (W.settings && W.settings.editor)) return;
+  for (const cls of ['land', 'naval']) { const G = hpaGraph(cls); for (let k = 0; k < G.cl.length; k++) for (let a = 0; a < G.cl[k].nodes.length; a++) hpaRow(G, k, a); }
+}
+GameHooks.on('worldCreated', hpaWarm);
+GameHooks.on('worldRestored', hpaWarm);
+
 // The live map changed by hand (tests and tools end such edits with computeRegions): rebuild everything. terraFlush
 // sets HPA.quiet, since terraTouch has already dirtied what it changed.
 if (typeof GameMap === 'function') {
