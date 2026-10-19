@@ -23,6 +23,12 @@ commits the rows it was measured by, so progress against the budgets stays visib
 | 2026-10-18 | phase 2 indexes + stagger | a6ee5e95e | gpu | 120 | 34 / 39 | 0.34 / 1.1 | 0.86 / 2.7 | 9 | 88 / 41 (40/40, 40/40) | 3.67 / 3.39 | 54.3 / 53.5 | 53.9 | 1,252,592 (31) | 353 |
 | 2026-10-18 | phase 2 indexes + stagger | a6ee5e95e | gpu | 200 | 95 / 112 | 0.66 / 3.2 | 1.3 / 4.9 | 14 | 212 / 93 (40/40, 40/40) | 4.5 / 3.81 | 54.1 / 53.8 | 53.9 | 3,172,860 (46) | 982 |
 | 2026-10-18 | phase 2 indexes + stagger | a6ee5e95e | gpu | 256 | 170 / 188 | 0.98 / 3.4 | 1.65 / 7.9 | 5 | 421 / 424 (40/40, 40/40) | 5.39 / 4.64 | 54.3 / 54 | 50.7 | 5,291,779 (67) | 1038 |
+| 2026-10-19 | phase 2 control (ed46ba5) | ed46ba5 | gpu | 120 | 61 / 55 | 0.32 / 1 | 0.83 / 2.7 | 9 | 88 / 41 (40/40, 40/40) | 3.66 / 3.21 | 60 / 60.1 | 60.1 | 1,252,605 (15) | 353 |
+| 2026-10-19 | phase 2 control (ed46ba5) | ed46ba5 | gpu | 200 | 94 / 109 | 0.65 / 2.8 | 1.34 / 4.6 | 9 | 205 / 90 (40/40, 40/40) | 4.39 / 4.46 | 60.1 / 60 | 59.9 | 3,172,830 (38) | 982 |
+| 2026-10-19 | phase 2 control (ed46ba5) | ed46ba5 | gpu | 256 | 174 / 194 | 0.95 / 3.2 | 1.72 / 7.7 | 4 | 419 / 407 (40/40, 40/40) | 5.18 / 4.82 | 59.8 / 59.6 | 56.9 | 5,291,785 (74) | 1038 |
+| 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 120 | 49 / 46 | 0.33 / 1.2 | 0.81 / 2.1 | 5 | 9 / 7 (40/40, 40/40) | 4.04 / 2.88 | 60.1 / 60 | 60 | 1,252,076 (16) | 353 |
+| 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 200 | 118 / 120 | 0.63 / 2.5 | 1.13 / 3.4 | 8 | 16 / 8 (40/40, 40/40) | 3.87 / 3.92 | 60.1 / 60.1 | 59.8 | 3,174,816 (41) | 982 |
+| 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 256 | 170 / 192 | 0.85 / 2.7 | 1.4 / 4.1 | 5 | 13 / 14 (40/40, 40/40) | 4.94 / 4.86 | 60 / 60 | 57.3 | 5,292,814 (71) | 1038 |
 
 ### Reading these rows
 
@@ -45,3 +51,18 @@ commits the rows it was measured by, so progress against the budgets stays visib
 | --- | --- | --- | --- |
 | 200 | 11.04 / 50.9 | 4.39 / 14.7 | 5.86 → 0.94 |
 | 256 | 14.92 / 48.1 | 4.07 / 9.4 | 8.07 → 0.41 |
+
+## Phase 3: Town Center routes at 480 (node tests/hpa-stress.js)
+
+The size cap is lifted inside the vm, as the perf spec's cap patch does in the page. For every pair of Town Centers, a
+villager's route: overland, or on islands a land leg to the shore, a transport's sea leg and a land leg to the Town
+Center. "Old search" is the same request with the hierarchy switched off. Times are vm milliseconds (the vm is
+6–12× slower than the browser on routes).
+
+| map | n | players | Town Center pairs | routes ok, hierarchy | routes ok, old search | legs (land / sea) | ms per route, hierarchy / old | build + edges ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| land | 480 | 8 | 28 | 28/28 | 27/28 | 28 / 0 | 31.5 / 74.9 | 1531 |
+| land | 480 | 2 | 1 | 1/1 | 1/1 | 1 / 0 | 56.5 / 134.8 | 1453 |
+| coastal | 480 | 8 | 28 | 28/28 | 19/28 | 28 / 0 | 45.4 / 92.7 | 1531 |
+| coastal | 480 | 3 | 3 | 3/3 | 2/3 | 3 / 0 | 69.9 / 120.5 | 1458 |
+| islands | 480 | 4 | 6 | 6/6 | 6/6 | 0 / 6 | 4.4 / 17.8 | 1174 |
