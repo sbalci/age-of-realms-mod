@@ -1491,10 +1491,10 @@ function isExploredForHuman(x, y) { const n = W.n; x = Math.max(0, Math.min(n - 
 // ---------- population ----------
 function recalcPop() {
   for (let i = 1; i < W.players.length; i++) { const p = W.players[i]; p.pop = 0; p.popCap = 0; }
-  for (const e of W.list) {
-    const p = W.players[e.owner]; if (!p) continue;
-    if (e.kind === 'unit' && !UNITS[e.type].animal && e.type !== 'cobra' && !e.dying) p.pop++;
-    if (e.kind === 'bld' && e.built && BUILDINGS[e.type].pop) p.popCap += e.type === 'tc' && p.tcPop ? p.tcPop : BUILDINGS[e.type].pop;
+  for (let i = 1; i < W.players.length; i++) {   // each player's own units and buildings (index.js), not the whole of W.list
+    const p = W.players[i];
+    for (const e of idxOwned(i, 'unit')) if (!UNITS[e.type].animal && e.type !== 'cobra' && !e.dying) p.pop++;
+    for (const e of idxOwned(i, 'bld')) if (e.built && BUILDINGS[e.type].pop) p.popCap += e.type === 'tc' && p.tcPop ? p.tcPop : BUILDINGS[e.type].pop;
   }
   for (let i = 1; i < W.players.length; i++) { const p = W.players[i]; p.popCap = Math.min(200, p.popCap); }
 }

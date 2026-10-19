@@ -62,8 +62,8 @@ function wlWellSupply(b) { const s = wlBldSource(b); return Math.round(WELLM.wel
 function wlTcSupply(b) { return WELLM.tcCistern + (wlBldSource(b) === 'fresh' ? WELLM.tcFresh : 0); }
 function wlCapacity(p) {
   let cap = WELLM.base;
-  for (const e of W.list) {
-    if (e.owner !== p.id || e.kind !== 'bld' || !e.built || e.dying) continue;
+  for (const e of idxOwned(p.id, 'bld')) {   // the player's buildings (index.js), in W.list order
+    if (!e.built || e.dying) continue;
     if (e.type === 'tc') cap += wlTcSupply(e); else if (e.type === 'well') cap += wlWellSupply(e);
   }
   return cap;
