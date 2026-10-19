@@ -138,7 +138,8 @@ const R = JSON.parse(run(`(() => {
   const s2 = Object.assign({}, HPA.stats), kf1 = route(kt, X + 3, Y + 5);
   HPA.enabled = false; const kf0 = route(kt, X + 3, Y + 5); HPA.enabled = true;
   out.trenchStartFar = { ok: kf1.ok, valid: legsClear(X + 40, Y + 5, kf1.pts, unitPass(kt)), sameAsOld: JSON.stringify(kf1) === JSON.stringify(kf0), routed: HPA.stats.routed - s2.routed, fallback: HPA.stats.fallback - s2.fallback, n: kf1.pts.length };
-  out.trenchStartOk = out.trenchStartOk && ((kf1.ok && out.trenchStartFar.valid) || out.trenchStartFar.sameAsOld);
+  const kti = m.idx(X + 40, Y + 5); out.trenchSetup = { trench: !!m.trench[kti], mountedP: hpaGraph('mounted').P[kti], own: !!unitPass(kt)(kti) };
+  out.trenchStartOk = out.trenchSetup.trench && out.trenchSetup.mountedP === 0 && out.trenchStartFar.routed === 1 && out.trenchStartFar.fallback === 0 && out.trenchStartOk && ((kf1.ok && out.trenchStartFar.valid) || out.trenchStartFar.sameAsOld);
   // a 3-wide river across the strip: no way over, then a bridge, then the bridge removed
   for (let y = Y - 3; y < Y + 23; y++) for (let x = X + 48; x < X + 51; x++) { const i = m.idx(x, y); m.ter[i] = T.WATER; m.elev[i] = 0; }
   for (let y = 0; y < n; y++) for (let x = X + 48; x < X + 51; x++) { const i = m.idx(x, y); if (!m.blk[i]) { m.ter[i] = T.WATER; m.elev[i] = 0; } }
@@ -165,7 +166,7 @@ const R = JSON.parse(run(`(() => {
 })()`));
 ok('own gate: routed through by the hierarchy; enemy at the same gate: the old search answers (fallback)', R.ownGate && R.foeGate, R);
 ok('trench: a knight (mounted class) goes round through the gap, a villager walks straight over', R.trench, R);
-ok("trench start: a knight standing on a trench tile still gets a valid route off it, or the old search's answer", R.trenchStartOk, [R.trenchStart, R.trenchStartFar]);
+ok("trench start: a knight standing on a trench tile still gets a valid route off it, or the old search's answer", R.trenchStartOk, [R.trenchSetup, R.trenchStart, R.trenchStartFar]);
 ok('a river blocks the route until a bridge is built; a ship sails along the river under it', R.noBridge && R.bridge && R.ship, R);
 ok('a tunnel through a ridge gives the short route', R.tunnel, R);
 
