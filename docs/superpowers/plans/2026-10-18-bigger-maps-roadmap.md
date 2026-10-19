@@ -110,7 +110,7 @@ Every phase finishes with these steps:
   - It is built after `computeRegions`. `hpaDirty(x0,y0,x1,y1)` marks clusters, and they are rebuilt lazily on the next query. It is triggered by building placement and destruction, felled trees, terraform (terra.js) and editor strokes.
   - Acceptance: a node test checks that abstract connectivity matches `landReg` on 20 seeds × 3 map types.
 - **Task 2. Abstract search and local refinement behind `findPath`** (map.js:150-198).
-  - Unreachable goals return at once via the regions.
+  - Unreachable goals return at once. The detailed plan uses the cluster graph's own connected components rather than `landReg`, because `computeRegions` misses diagonal steps past cliff corners (80 cases on 60 medium maps) and would refuse reachable goals.
   - The search queue is a typed-array heap.
   - Paths are refined segment by segment with the existing grid A*, bounded to a cluster pair.
   - Smoothing is bounded.
