@@ -48,7 +48,32 @@ const OLD = {
   coal(p) { return W.list.some(e=>e.type==='coal'&&Math.hypot(e.x-p.startX,e.y-p.startY)<40); },
   fish() { return W.list.filter(e => e.kind === 'res' && e.type === 'fish' && !e.dead); },
   unitOnTile(x, y) { return W.list.some(u => u.kind === 'unit' && Math.abs(u.x - x - 0.5) < 1 && Math.abs(u.y - y - 0.5) < 1); },
+  fishIn(reg) { return W.list.filter(e => e.kind === 'res' && e.type === 'fish' && e.amount > 0 && W.map.waterReg[W.map.idx(e.x, e.y)] === reg).length; },
+  partner(ai) { return W.list.find(e => e.kind === 'bld' && e.type === 'market' && e.built && e.owner !== ai.id && isFriend(e.owner, ai.id)); },
+  naval(ai, from) {
+    let best = null, bd = 1e9;
+    const reg = W.map.waterReg[W.map.idx(from.x | 0, from.y | 0)];
+    for (const e of W.list) {
+      if (!isEnemy(ai.id, e.owner)) continue;
+      let pos = null;
+      if (e.kind === 'unit' && UNITS[e.type].naval && !e.inside) pos = { x: e.x, y: e.y };
+      else if (e.kind === 'bld') { // coastal buildings: nearest water tile within 5
+        const c = center(e); const r = e.type === 'dock' ? 0 : 4;
+        for (let y = (c.y | 0) - 5; y <= (c.y | 0) + 5 && !pos; y++) for (let x = (c.x | 0) - 5; x <= (c.x | 0) + 5; x++) if (W.map.isWater(x, y) && !W.map.blk[W.map.idx(x, y)] && W.map.waterReg[W.map.idx(x, y)] === reg) { pos = { x: x + 0.5, y: y + 0.5 }; break; }
+        if (!pos) continue;
+        void r;
+      }
+      if (!pos) continue;
+      if (W.map.waterReg[W.map.idx(Math.max(0, pos.x | 0), Math.max(0, pos.y | 0))] !== reg && !(e.kind === 'bld')) continue;
+      const d = Math.hypot(pos.x - from.x, pos.y - from.y) + (e.kind === 'bld' ? 10 : 0);
+      if (d < bd) { bd = d; best = pos; }
+    }
+    return best;
+  },
+  strength(pid) { let s = 0; for (const e of W.list) if (e.owner === pid && !e.dying) { if (e.kind === 'unit') s += e.type === 'villager' ? 0.3 : UNITS[e.type].animal ? 0 : 1 + (e.maxhp / 100); else if (e.kind === 'bld') s += e.type === 'castle' ? 8 : e.type === 'tc' ? 5 : 0.3; } return s + W.players[pid].age * 6; },
 };
+// a finished building of the given type on the first free spot in rings round the player's start
+function placeNear(p, type) { for (let r = 6; r < 30; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = (p.startX | 0) + dx, y = (p.startY | 0) + dy; if (Math.max(Math.abs(dx), Math.abs(dy)) === r && W.map.inb(x, y) && !canPlace(p, type, x, y)) return spawnBuilding(type, p.id, x, y, true); } return null; }
 function sameAnswer(a, b) {
   if (a instanceof Set && b instanceof Set) return a.size === b.size && [...a].every(x => b.has(x));
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -59,9 +84,12 @@ function sameAnswer(a, b) {
 const D = JSON.parse(run(`(() => {
   const spec = generateMapSpec({ size: 'small', seed: 21, mapType: 'coastal', numPlayers: 4 });
   createWorld(spec, { players: Array.from({ length: 4 }, (_, i) => ({ name: 'P' + i, civ: Object.keys(CIVS)[i * 2 + 1], color: PLAYER_COLORS[i], human: i === 0 })), seed: 21, fog: 'normal', startRes: 'high', startAge: 2, difficulty: 'standard' });
+  for (const [a, b] of [[1, 2], [3, 4]]) W.players[a].stance[b] = W.players[b].stance[a] = 'ally';   // two teams...
+  for (const p of [W.players[2], W.players[4]]) placeNear(p, 'market');   // ...and an allied market for each team
   for (const p of W.players.slice(1)) p.ai = new AIPlayer(p, 'standard');
   W.spectate = true;
-  const rnd = mulberry32(5), counts = {}, wrong = {};
+  const rnd = mulberry32(5), counts = {}, wrong = {}, found = {};
+  const water = () => { for (let k = 0; k < 400; k++) { const x = (rnd() * W.n) | 0, y = (rnd() * W.n) | 0; if (W.map.isWater(x, y)) return { x: x + 0.5, y: y + 0.5 }; } return { x: 0.5, y: 0.5 }; };
   const check = (name, a, b) => { counts[name] = (counts[name] || 0) + 1; if (!sameAnswer(a, b)) wrong[name] = (wrong[name] || 0) + 1; };
   const filters = [e => e.kind === 'unit' && e.type === 'villager' && !e.dying, e => e.kind === 'bld' && e.built, e => true];
   for (let s = 0; s < 24; s++) {
@@ -92,6 +120,10 @@ const D = JSON.parse(run(`(() => {
       check('geologyCoalNear', geologyCoalNear(p), OLD.coal(p));
       for (const m of ai.mine(e => e.kind === 'unit' && (e.type === 'monk' || e.type === 'villager')).slice(0, 4)) { const reg = W.map.landReg[W.map.idx(m.x | 0, m.y | 0)]; check('relicFor', ai.relicFor(m, reg), OLD.relic(ai, m, reg)); }
       for (let q = 1; q < W.players.length; q++) for (let k = 0; k < 3; k++) { const cx = rnd() * W.n, cy = rnd() * W.n; check('attackTargets', ai.attackTargets(q, cx, cy), OLD.attack(q, cx, cy)); }
+      for (let k = 0; k < 3; k++) { const w = water(), reg = W.map.waterReg[W.map.idx(w.x | 0, w.y | 0)], f = ai.fishIn(reg); check('fishIn', f, OLD.fishIn(reg)); if (f) found.fishIn = (found.fishIn || 0) + 1;
+        const nt = ai.navalTarget(w); check('navalTarget', JSON.stringify(nt), JSON.stringify(OLD.naval(ai, w))); if (nt) found.navalTarget = (found.navalTarget || 0) + 1; }
+      const pm = ai.partnerMarket(); check('partnerMarket', pm, OLD.partner(ai)); if (pm) found.partnerMarket = (found.partnerMarket || 0) + 1;
+      for (let q = 1; q < W.players.length; q++) check('strength', ai.strength(q), OLD.strength(q));
     }
     for (let k = 0; k < 20; k++) { const x = (rnd() * W.n) | 0, y = (rnd() * W.n) | 0, size = 1 + ((rnd() * 5) | 0); check('geologySeamUnder', geologySeamUnder(x, y, size), OLD.seam(x, y, size)); }
     check('fish list', [...idxAll('res:fish')].filter(e => !e.dead), OLD.fish());
@@ -99,9 +131,10 @@ const D = JSON.parse(run(`(() => {
     for (let k = 0; k < 20; k++) { const u = units[(rnd() * units.length) | 0], x = (u.x - 0.5 + (rnd() - 0.5) * 2) | 0, y = (u.y - 0.5 + (rnd() - 0.5) * 2) | 0; check('wmUnitOnTile', wmUnitOnTile(x, y), OLD.unitOnTile(x, y)); }
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return JSON.stringify({ t: W.t, total, wrong, counts });
+  return JSON.stringify({ t: W.t, total, wrong, counts, found });
 })()`));
-ok(`every AI, geology and water query equals its old W.list scan (${D.total} comparisons in 8 game minutes)`, D.total > 5000 && Object.keys(D.wrong).length === 0 && Object.keys(D.counts).length === 25, D);
+ok(`every AI, geology and water query equals its old W.list scan (${D.total} comparisons in 8 game minutes)`, D.total > 5000 && Object.keys(D.wrong).length === 0 && Object.keys(D.counts).length === 29, D);
+ok('the fish count, naval target and allied-market queries were compared on real answers, not only on empty ones', D.found.fishIn > 0 && D.found.navalTarget > 0 && D.found.partnerMarket > 0, D.found);
 
 // ---------- 2. 200 map, 8 AI players: the index plays the brute-force match exactly, with far less AI time ----------
 function aiRun(brute) {

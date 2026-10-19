@@ -58,6 +58,8 @@ class AIPlayer {
   freeFarm() { return idxOwned(this.id, 'bld').find(f => f.type === 'farm' && f.built && !f.farmer); }
   unfinishedFarm() { return idxOwned(this.id, 'bld').find(f => f.type === 'farm' && !f.built); }
   deerNear(home) { return idxOwned(0, 'unit').find(a => a.type === 'deer' && Math.hypot(a.x - home.x, a.y - home.y) < 20); }
+  fishIn(reg) { let c = 0; for (const e of idxAll('res:fish')) if (e.amount > 0 && W.map.waterReg[W.map.idx(e.x, e.y)] === reg) c++; return c; }
+  partnerMarket() { for (const e of idxAll('bld')) if (e.type === 'market' && e.built && e.owner !== this.id && isFriend(e.owner, this.id)) return e; return undefined; }
   enemyUnitCounts() { let cav = 0, arch = 0; for (let i = 1; i < W.players.length; i++) if (isEnemy(this.id, i)) for (const e of idxOwned(i, 'unit')) { if (hasTag(e.type, 'mounted')) cav++; if (hasTag(e.type, 'archer')) arch++; } return { cav, arch }; }
   relicFor(m, reg) { return [...idxAll('relic')].filter(r => !r.carrier && !r.inBld && W.map.landReg[W.map.idx(r.x, r.y)] === reg && !idxOwned(this.id, 'unit').some(o => o.type === 'monk' && o.order && o.order.id === r.id)).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0]; }
   // nearest enemy building (non wall), prefer TC/castle, and track nearby fortifications for siege
@@ -235,7 +237,7 @@ class AIPlayer {
     const docks = this.mine(e => e.kind === 'bld' && e.type === 'dock' && e.built);
     if (docks.length) {
       const fishers = this.mine(e => e.kind === 'unit' && e.type === 'fishingship').length;
-      const fish = W.list.filter(e => e.kind === 'res' && e.type === 'fish' && e.amount > 0 && W.map.waterReg[W.map.idx(e.x, e.y)] === W.map.waterReg[W.map.idx(docks[0].x + 1, docks[0].y + 1)]).length;
+      const fish = this.fishIn(W.map.waterReg[W.map.idx(docks[0].x + 1, docks[0].y + 1)]);
       if (fishers < Math.min(fish, 6) && p.res.wood >= 75 && docks[0].queue.length < 2) queueUnit(docks[0], 'fishingship');
       for (const f of this.mine(e => e.kind === 'unit' && e.type === 'fishingship' && !e.order)) {
         const r = findNearestRes(f, ['fish'], f.x, f.y, 60, e => W.map.waterReg[W.map.idx(e.x, e.y)] === W.map.waterReg[W.map.idx(f.x | 0, f.y | 0)]);
@@ -253,7 +255,7 @@ class AIPlayer {
     // trade carts with allies' markets
     const market = this.mine(e => e.kind === 'bld' && e.type === 'market' && e.built)[0];
     if (market && age >= 2) {
-      const partner = W.list.find(e => e.kind === 'bld' && e.type === 'market' && e.built && e.owner !== this.id && isFriend(e.owner, this.id));
+      const partner = this.partnerMarket();
       const carts = this.mine(e => e.kind === 'unit' && e.type === 'tradecart');
       if (partner && carts.length < 4 && p.res.gold >= 100 && market.queue.length < 1) queueUnit(market, 'tradecart');
       for (const c of carts) if (!c.order && partner) setOrder(c, { t: 'trade', home: market.id, dest: partner.id });
@@ -594,8 +596,11 @@ class AIPlayer {
   navalTarget(from) {
     let best = null, bd = 1e9;
     const reg = W.map.waterReg[W.map.idx(from.x | 0, from.y | 0)];
-    for (const e of W.list) {
-      if (!isEnemy(this.id, e.owner)) continue;
+    // the enemies' units and buildings, merged into W.list order: the strict < below keeps the first of equal distances
+    const foes = [];
+    for (let i = 1; i < W.players.length; i++) if (isEnemy(this.id, i)) for (const e of idxOwned(i, 'all')) foes.push(e);
+    foes.sort((a, b) => a.id - b.id);
+    for (const e of foes) {
       let pos = null;
       if (e.kind === 'unit' && UNITS[e.type].naval && !e.inside) pos = { x: e.x, y: e.y };
       else if (e.kind === 'bld') { // coastal buildings: nearest water tile within 5
@@ -629,7 +634,7 @@ class AIPlayer {
   onBuilt(b) { }
   onTribute(from, res, amt) { this.attitude[from] = (this.attitude[from] || 0) + amt / 25; if (from === W.humanId) msg(`${this.p.name}: "Thank you for the ${res}."`, this.p.color.l); }
   strength(pid) {
-    let s = 0; for (const e of W.list) if (e.owner === pid && !e.dying) { if (e.kind === 'unit') s += e.type === 'villager' ? 0.3 : UNITS[e.type].animal ? 0 : 1 + (e.maxhp / 100); else if (e.kind === 'bld') s += e.type === 'castle' ? 8 : e.type === 'tc' ? 5 : 0.3; }
+    let s = 0; for (const e of idxOwned(pid, 'all')) if (!e.dying) { if (e.kind === 'unit') s += e.type === 'villager' ? 0.3 : UNITS[e.type].animal ? 0 : 1 + (e.maxhp / 100); else if (e.kind === 'bld') s += e.type === 'castle' ? 8 : e.type === 'tc' ? 5 : 0.3; }   // id order, so the float sum is the old one
     return s + W.players[pid].age * 6;
   }
   // Evaluate a diplomatic proposal from another player. Returns {ok, reason}
