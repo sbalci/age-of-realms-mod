@@ -29,8 +29,8 @@ commits the rows it was measured by, so progress against the budgets stays visib
 | 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 120 | 49 / 46 | 0.33 / 1.2 | 0.81 / 2.1 | 5 | 9 / 7 (40/40, 40/40) | 4.04 / 2.88 | 60.1 / 60 | 60 | 1,252,076 (16) | 353 |
 | 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 200 | 118 / 120 | 0.63 / 2.5 | 1.13 / 3.4 | 8 | 16 / 8 (40/40, 40/40) | 3.87 / 3.92 | 60.1 / 60.1 | 59.8 | 3,174,816 (41) | 982 |
 | 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 256 | 170 / 192 | 0.85 / 2.7 | 1.4 / 4.1 | 5 | 13 / 14 (40/40, 40/40) | 4.94 / 4.86 | 60 / 60 | 57.3 | 5,292,814 (71) | 1038 |
-| 2026-10-19 | phase 3 final (group fix) | b5af246 | gpu | 200 | 117 / 112 | 0.58 / 2 | 0.94 / 2.5 | 7 | 19 / 10 (40/40, 40/40) | 3.65 / 3.36 | 56.7 / 56.6 | 56.8 | 3,174,814 (37) | 982 |
-| 2026-10-19 | phase 3 final (group fix) | b5af246 | gpu | 256 | 175 / 193 | 0.73 / 2.1 | 1.25 / 3 | 5 | 17 / 11 (40/40, 40/40) | 4.83 / 4.35 | 56.7 / 56.5 | 54 | 5,292,820 (63) | 1038 |
+| 2026-10-19 | phase 3 final (median of 5) | 29fcfd4 | gpu | 200 | 116 / 113 | 0.58 / 2 | 0.92 / 2.4 | 6 | 20 / 10 (40/40, 40/40) | 3.39 / 3.22 | 56.7 / 56.6 | 56.6 | 3,174,823 (36) | 982 |
+| 2026-10-19 | phase 3 final (median of 5) | 29fcfd4 | gpu | 256 | 178 / 189 | 0.75 / 2.1 | 1.23 / 3.2 | 7 | 17 / 11 (40/40, 40/40) | 4.45 / 4.13 | 56.8 / 56.7 | 54.3 | 5,292,826 (60) | 1038 |
 
 ### Reading these rows
 
@@ -44,8 +44,8 @@ commits the rows it was measured by, so progress against the budgets stays visib
 
   So the fps and frame-ms changes come from the environment, not from phase 2. The tick improvement is real.
 - From phase 3 on, compare against a control run of the previous phase's commit made in the same session.
-- Phase 3, 200 × 200: the 3-player 40-knight order measured 16 ms, exactly the ≤ 16 ms budget (a single, rounded run; planning measured 12 ms). Treat it as at the limit, and re-check it with a median of several runs in phase 4.
-- The "phase 3 final (group fix)" rows supersede the earlier phase 3 rows for the group-order column (40 knights), which were measured before the group join and leave rule was bounded to points near the slot. Their 40-knight order measured 19 / 10 ms at 200 × 200 and 17 / 11 ms at 256 × 256 (3 / 8 players): the 3-player orders are over the 16 ms budget (single runs; the earlier rows read 16 / 8 and 13 / 14). The other columns are unchanged within run-to-run variation.
+- Phase 3, 200 × 200: the earlier "phase 3 hierarchy + group routes" row shows a 3-player 40-knight order of 16 ms, exactly the ≤ 16 ms budget (a single, rounded run; planning measured 12 ms). That single run is superseded by the median rows below.
+- The "phase 3 final (median of 5)" rows measure commit 29fcfd4 (bounded group join and leave rule), as medians of 5 runs at each size (min–max in brackets). They supersede the earlier phase 3 rows for the group-order column (40 knights), which were measured before the join and leave rule was bounded to points near the slot. The 3-player 40-knight medians are 20 ms (18–21) at 200 × 200 and 17 ms (16–20) at 256 × 256, against the ≤ 16 ms budget: the budget is missed at both sizes (256 × 256 only touches it at its best run). The 8-player medians are 10 ms (10–10) and 11 ms (11–14). The other columns are unchanged within run-to-run variation.
 
 ## Phase 2: vm tick, W.list scans against the index (node tests/perf-vm.js)
 
