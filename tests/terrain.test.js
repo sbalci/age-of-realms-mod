@@ -6,7 +6,7 @@ const stub = new Proxy({}, { get: (t, k) => (k in t ? t[k] : noop) });
 const ctx = vm.createContext({ console, performance, Math, Proxy, Uint8Array, Uint8ClampedArray, Int16Array, Int32Array, Float32Array, Uint32Array, Map, Set, Array, Object, JSON, String, Number, Date,
   Sound: stub, UI: { selection: [], deselect: noop, onRemoved: noop, showEnd: noop, gameRunning: true, panelKey: '' } });
 const LOADED = new Set(); const load = f => (LOADED.add(f), 0) || vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
-for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'render.js']) load(f);
+for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'hpa.js', 'render.js']) load(f);
 try { load('ai.js'); } catch (e) { console.log('ai skipped', e.message); }
 load('mod.js'); load('water.js'); load('wells.js'); load('terra.js'); load('terrain.js');
 if (process.env.AOR_FULL) for (const f of ['mod.js','water.js','wells.js','terra.js','command.js','victory.js','terrain.js','fx.js','extras.js','units_hd.js','movement.js']) if (!LOADED.has(f)) load(f);
@@ -90,7 +90,7 @@ ok('roof materials by age: thatch, clay tile, slate', M.roofs[0] === 'thatch' &&
 // ?hd=off: nothing installed
 const ctx2 = vm.createContext({ console, performance, Math, Proxy, Uint8Array, Uint8ClampedArray, Int16Array, Int32Array, Float32Array, Uint32Array, Map, Set, Array, Object, JSON, String, Number, Date, URLSearchParams,
   location: { search: '?hd=off' }, Sound: stub, UI: { selection: [], deselect: noop, onRemoved: noop, showEnd: noop, gameRunning: true, panelKey: '' } });
-for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'render.js', 'terrain.js']) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx2, { filename: f });
+for (const f of ['data.js', 'map.js', 'world.js', 'index.js', 'hpa.js', 'render.js', 'terrain.js']) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx2, { filename: f });
 ok('?hd=off disables the HD renderer', vm.runInContext('HD.on === false', ctx2));
 
 console.log(`${pass} passed, ${fail} failed`);

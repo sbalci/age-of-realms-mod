@@ -138,7 +138,7 @@ function spawnRes(k, x, y, v = 0, depth = 0) {
   const amounts = { tree: 100, gold: 800, stone: 350, coal: 900, berry: 125, fish: v ? 225 : 200, shrub: 0 };
   if (k === 'relic') return addEnt({ id: newId(), kind: 'relic', type: 'relic', x, y, owner: 0, carrier: 0, inBld: 0 });
   const e = addEnt({ id: newId(), kind: 'res', type: k, x, y, v, depth, amount: amounts[k] || 0, max: amounts[k] || 1, felled: false, owner: 0, gatherers: 0 });
-  if (k !== 'shrub' && !depth) map.blk[map.idx(x, y)] = e.id;
+  if (k !== 'shrub' && !depth) { map.blk[map.idx(x, y)] = e.id; hpaDirty(x, y, x, y); }
   return e;
 }
 function statU(u, k) {
@@ -167,7 +167,7 @@ function spawnBuilding(type, owner, x, y, built) {
   b.maxhp = bldMaxHp(b);
   b.hp = built ? b.maxhp : 1;
   if (d.farm) b.food = W.players[owner] ? W.players[owner].farmFood : 175;
-  if (!d.farm) for (let yy = y; yy < y + s; yy++) for (let xx = x; xx < x + s; xx++) if (map.inb(xx, yy)) map.blk[map.idx(xx, yy)] = b.id;
+  if (!d.farm) { for (let yy = y; yy < y + s; yy++) for (let xx = x; xx < x + s; xx++) if (map.inb(xx, yy)) map.blk[map.idx(xx, yy)] = b.id; hpaDirty(x, y, x + s - 1, y + s - 1); }
   return b;
 }
 function bldMaxHp(b) {
@@ -181,8 +181,8 @@ function removeEnt(e) {
   const i = W.list.indexOf(e); if (i >= 0) W.list.splice(i, 1);
   idxRemove(e);
   const map = W.map;
-  if (e.kind === 'bld' && !BUILDINGS[e.type].farm) { const s = bsize(e); for (let y = e.y; y < e.y + s; y++) for (let x = e.x; x < e.x + s; x++) if (map.inb(x, y) && map.blk[map.idx(x, y)] === e.id) map.blk[map.idx(x, y)] = 0; }
-  if (e.kind === 'res' && map.blk[map.idx(e.x, e.y)] === e.id) map.blk[map.idx(e.x, e.y)] = 0;
+  if (e.kind === 'bld' && !BUILDINGS[e.type].farm) { const s = bsize(e); for (let y = e.y; y < e.y + s; y++) for (let x = e.x; x < e.x + s; x++) if (map.inb(x, y) && map.blk[map.idx(x, y)] === e.id) map.blk[map.idx(x, y)] = 0; hpaDirty(e.x, e.y, e.x + s - 1, e.y + s - 1); }
+  if (e.kind === 'res' && map.blk[map.idx(e.x, e.y)] === e.id) { map.blk[map.idx(e.x, e.y)] = 0; hpaDirty(e.x, e.y, e.x, e.y); }
   if (typeof UI !== 'undefined' && UI.onRemoved) UI.onRemoved(e);
 }
 
@@ -1187,6 +1187,7 @@ function clearFoundation(b) {
 function completeBuilding(b) {
   if (b.built) return;
   b.built = true; b.progress = 1; b.hp = b.maxhp;
+  if (BUILDINGS[b.type].gate) hpaDirty(b.x, b.y, b.x + bsize(b) - 1, b.y + bsize(b) - 1);   // a finished gate opens for its owner's side
   const p = W.players[b.owner];
   p.stats.built++;
   if (BUILDINGS[b.type].farm) b.food = p.farmFood;

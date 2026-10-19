@@ -216,15 +216,17 @@ const Editor = {
       if (nx === e.x && ny === e.y) return;
       // temporarily unblock
       for (let yy = e.y; yy < e.y + s; yy++) for (let xx = e.x; xx < e.x + s; xx++) if (W.map.blk[W.map.idx(xx, yy)] === e.id) W.map.blk[W.map.idx(xx, yy)] = 0;
+      hpaDirty(e.x, e.y, e.x + s - 1, e.y + s - 1);
       const ok = !canPlace(null, e.type, nx, ny, true);
       if (ok) { e.x = nx; e.y = ny; idxMoved(e); }
       if (!BUILDINGS[e.type].farm) for (let yy = e.y; yy < e.y + s; yy++) for (let xx = e.x; xx < e.x + s; xx++) W.map.blk[W.map.idx(xx, yy)] = e.id;
+      hpaDirty(e.x, e.y, e.x + s - 1, e.y + s - 1);
       return;
     }
     if (e.kind === 'res' || e.kind === 'relic') {
       const water = W.map.isWater(x, y);
       if (W.map.blk[W.map.idx(x, y)] || (e.type === 'fish') !== water) return;
-      if (e.kind === 'res' && e.type !== 'shrub') { W.map.blk[W.map.idx(e.x, e.y)] = 0; W.map.blk[W.map.idx(x, y)] = e.id; }
+      if (e.kind === 'res' && e.type !== 'shrub') { W.map.blk[W.map.idx(e.x, e.y)] = 0; W.map.blk[W.map.idx(x, y)] = e.id; hpaDirty(e.x, e.y, e.x, e.y); hpaDirty(x, y, x, y); }
       e.x = x; e.y = y; idxMoved(e);
     }
   },
@@ -320,6 +322,7 @@ const Editor = {
     const map = W.map; map.computeVH(); R.mapVersion = map.version;
     let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1; for (const q of tiles) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
     invalidateTiles(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
+    hpaDirty(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
   },
   play() {
     this.name = $('#ed-name').value.trim() || this.name || 'My Map';

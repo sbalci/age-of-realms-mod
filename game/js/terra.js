@@ -122,11 +122,13 @@ function terraPlan(op, a, b) {
 function terraTouch(x, y) {
   const d = W.terraDirty || (W.terraDirty = { x0: x, y0: y, x1: x, y1: y });
   d.x0 = Math.min(d.x0, x); d.y0 = Math.min(d.y0, y); d.x1 = Math.max(d.x1, x); d.y1 = Math.max(d.y1, y);
+  hpaDirty(x - 2, y - 2, x + 2, y + 2);   // a canal also lowers and sands its neighbours
 }
 function terraFlush() {
   const d = W.terraDirty; if (!d) return; W.terraDirty = null;
   const m = W.map;
-  m.computeVH(); m.computeRegions();
+  HPA.quiet = true;   // terraTouch has already dirtied the hierarchy's clusters
+  try { m.computeVH(); m.computeRegions(); } finally { HPA.quiet = false; }
   if (typeof R !== 'undefined') { R.mapVersion = m.version; if (typeof invalidateTiles === 'function') invalidateTiles(d.x0 - 2, d.y0 - 2, d.x1 + 2, d.y1 + 2); }
 }
 function terraNudgeUnits(x, y) {
