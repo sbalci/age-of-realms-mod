@@ -145,5 +145,46 @@ const FO = JSON.parse(run(`JSON.stringify(forestTrial(false))`)), F1 = JSON.pars
 ok(`40 knights ordered into a forest: as many reach their slot as before (${F1.pathOk} against ${FO.pathOk}), at most 2 full searches (${F1.full}), the budget charged once per full search (${F1.budget}), under a tenth of the old time (${F1.ms} ms against ${FO.ms} ms), and the same paths on a repeat`,
   F1.dense >= 40 && F1.pathOk >= FO.pathOk && F1.full <= 2 && F1.budget === F1.full && F1.ms * 10 < FO.ms && F1.hash === F2.hash, { FO, F1, F2 });
 
+// ---------- 7. groups spread round a Town Center or standing in a block, ordered 14-40 tiles: no longer, no backwards ----------
+// Members joined the shared route at its first waypoint and walked all of it, so they took longer ways and some first walked
+// away from their slot. Against the same units each searching alone: total planned path, first legs away from the slot,
+// and the game seconds until every order is done.
+run(`
+function armTrial(share, seed, dist, spread, layout) {
+  HPA.enabled = true;
+  const g0 = hpaGroupOrder;
+  if (!share) hpaGroupOrder = function (units, slotOf, x, y, t) { for (const u of units) { const s = slotOf(u); setOrder(u, { t, x: s.x, y: s.y }); } };
+  try {
+    world(160, seed, 'land', 2);
+    const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), rnd = mulberry32(seed * 31 + dist), us = [];
+    for (let k = 0; k < 16; k++) {
+      let p;
+      if (layout === 'spread') { const ang = rnd() * 6.283, r = 3 + rnd() * spread; p = nearestLandTile((a.x + 1.5 + Math.cos(ang) * r) | 0, (a.y + 1.5 + Math.sin(ang) * r) | 0, true); }
+      else p = nearestLandTile((a.x + 6 + (k % 4)) | 0, (a.y - 2 + ((k / 4) | 0)) | 0, true);
+      if (p) us.push(spawnUnit('spearman', 1, p.x + 0.5, p.y + 0.5));
+    }
+    const pos = us.map(u => ({ x: u.x, y: u.y }));
+    orderMove(us, a.x + 1.5 + dist, a.y + 1.5 - dist * 0.4);
+    let len = 0, back = 0;
+    us.forEach((u, i) => {
+      let px = pos[i].x, py = pos[i].y; for (const p of (u.path || [])) { len += Math.hypot(p.x - px, p.y - py); px = p.x; py = p.y; }
+      const p0 = u.path && u.path[0], s = { x: u.order.x, y: u.order.y };
+      if (p0 && Math.hypot(p0.x - s.x, p0.y - s.y) - Math.hypot(pos[i].x - s.x, pos[i].y - s.y) > 1) back++;
+    });
+    let t = 0; while (t < 120 && us.some(u => u.order)) { worldTick(0.05); t += 0.05; }
+    return { len, back, sec: t };
+  } finally { hpaGroupOrder = g0; }
+}
+function armSum(share, layout) {
+  const out = { len: 0, back: 0, sec: 0 };
+  for (const [seed, dist, spread] of [[7, 14, 6], [7, 20, 8], [3, 14, 6], [3, 25, 8], [11, 18, 8], [11, 40, 8]]) { const r = armTrial(share, seed, dist, spread, layout); out.len += r.len; out.back += r.back; out.sec += r.sec; }
+  return JSON.stringify({ len: +out.len.toFixed(0), back: out.back, sec: +out.sec.toFixed(1) });
+}`);
+for (const layout of ['spread', 'block']) {
+  const S = JSON.parse(run(`armSum(false, '${layout}')`)), G = JSON.parse(run(`armSum(true, '${layout}')`));
+  ok(`${layout} groups (6 orders of 14-40 tiles, 16 spearmen): the shared route plans at most 1.05x the per-unit paths (${G.len} against ${S.len}), nobody's first leg walks away from the slot (${G.back}, per-unit ${S.back}), and the last arrival is within 1.05x (${G.sec} s against ${S.sec} s)`,
+    G.len <= S.len * 1.05 && G.back <= S.back && G.back === 0 && G.sec <= S.sec * 1.05, { S, G });
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

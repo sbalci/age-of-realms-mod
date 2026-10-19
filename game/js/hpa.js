@@ -27,6 +27,7 @@ const HPA = {
   map: null, g: {},       // the GameMap the graphs describe; class -> graph
   quiet: false,           // set by terraFlush around its computeRegions (terraTouch has dirtied the exact rectangle)
   pocketNodes: 1500,      // the same, from the end of a route that stops short (a click in a forest pocket): unreachable slots exhaust their pocket and stop early
+  joinWays: 12,           // a group member joins the shared route at the cheapest of its first this many waypoints
   joinNodes: 600,         // a group member's own search onto the shared route
   groupR: 12,             // units farther than this from their group's leader route on their own
   stats: { queries: 0, near: 0, routed: 0, unreachable: 0, fallback: 0, rebuilt: 0, groups: 0, shared: 0 },
@@ -417,8 +418,11 @@ function hpaGroupOrder(units, slotOf, x, y, t) {
   for (const [cls, grp] of byClass) {
     if (grp.length < 2) continue;
     let cx = 0, cy = 0; for (const u of grp) { cx += u.x; cy += u.y; } cx /= grp.length; cy /= grp.length;
+    // an order point near the group's middle: the members' own searches are short and exactly the old ones, and a shared
+    // route would only send them round its waypoints. Such a group still shares its breach answer (cmdFindBreach).
+    const ax = Math.abs(x - cx), ay = Math.abs(y - cy), solo = (ax > ay ? ax + 0.414 * ay : ay + 0.414 * ax) <= HPA.near;
     let L = grp[0], ld = Infinity; for (const u of grp) { const d = Math.hypot(u.x - cx, u.y - cy); if (d < ld) { ld = d; L = u; } }
-    const g = { cls, leader: L, owner: L.owner, x: Math.max(0.3, Math.min(W.n - 0.3, x)), y: Math.max(0.3, Math.min(W.n - 0.3, y)), route: null, breach: null };
+    const g = { cls, leader: L, owner: L.owner, x: Math.max(0.3, Math.min(W.n - 0.3, x)), y: Math.max(0.3, Math.min(W.n - 0.3, y)), route: null, breach: null, solo };
     for (const u of grp) if (u.owner === g.owner && Math.hypot(u.x - L.x, u.y - L.y) <= HPA.groupR) groupOf.set(u, g);
   }
   for (const u of units) {
@@ -429,13 +433,13 @@ function hpaGroupOrder(units, slotOf, x, y, t) {
   HPA.stats.groups += new Set(groupOf.values()).size;
 }
 // Will u's next path request take its group's route? (polish.js does not charge such a request to PATHB.)
-function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && u.order === r.o); }
+function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && !r.g.solo && u.order === r.o); }
 // The group of u's current order, if it has one.
 function hpaGroupOf(u) { const r = HPA_GROUP.get(u); return r && u.order === r.o ? r.g : null; }
 // pathTo's first call for a member: its route from the group's, or null to search on its own.
 function hpaShared(u, rect, r) {
   const rec = HPA_GROUP.get(u);
-  if (!rec || rec.used || u.order !== rec.o) return null;
+  if (!rec || rec.used || rec.g.solo || u.order !== rec.o) return null;
   rec.used = true;
   const g = rec.g;
   if (!g.route) {
@@ -466,40 +470,56 @@ function hpaSnap(map, x, y, pass) {
   }
   return { x, y };
 }
-// A member's own copy of the group route: a leg from where it stands onto the route's first waypoint, the waypoints,
-// and its slot (rect) at the end.
+// A member's own copy of the group route. With a route that reaches the order point: straight to the slot when it is in
+// sight; otherwise onto whichever of the route's first HPA.joinWays waypoints is cheapest (the straight way there plus the
+// route after it), along the waypoints, and off the route at the first waypoint the slot can be seen from. A route that
+// stops short is walked to its end and the slot reached from there.
 function hpaJoin(u, route, rect) {
   const map = W.map, n = map.n, pass = unitPass(u), pts = route.pts;
   const T = p => Math.max(0, Math.min(n - 1, p.y | 0)) * n + Math.max(0, Math.min(n - 1, p.x | 0));
-  const ux = Math.max(0, Math.min(n - 1, u.x | 0)), uy = Math.max(0, Math.min(n - 1, u.y | 0)), ui = uy * n + ux, first = T(pts[0]);
+  const ux = Math.max(0, Math.min(n - 1, u.x | 0)), uy = Math.max(0, Math.min(n - 1, u.y | 0)), ui = uy * n + ux;
+  const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, slotOk = pass(st, rect.x0, rect.y0);
+  const tile = t => ({ x0: t % n, y0: (t / n) | 0, x1: t % n, y1: (t / n) | 0, r: 0 });
+  if (route.ok) {
+    if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
+    if (lineClear(map, ui, st, pass)) return { pts: [slot], ok: true };
+    // the way onto the route: the waypoint nearest in route terms (straight distance there plus the length after it)
+    const rem = new Array(pts.length).fill(0);
+    for (let i = pts.length - 2; i >= 0; i--) rem[i] = rem[i + 1] + Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    const m = Math.min(pts.length, HPA.joinWays);
+    let b = 0, bc = Infinity;
+    for (let i = 0; i < m; i++) { const c = Math.hypot(u.x - pts[i].x, u.y - pts[i].y) + rem[i]; if (c < bc) { bc = c; b = i; } }
+    let head = null, tb = T(pts[b]);
+    if (lineClear(map, ui, tb, pass)) head = [];
+    else { const j = findPath(map, ux, uy, tile(tb), pass, HPA.joinNodes); if (j.ok) head = j.pts.slice(0, -1); }
+    if (!head) {   // today's rule: the route's first waypoint, else the leader's start tile
+      b = 0; tb = T(pts[0]);
+      if (lineClear(map, ui, tb, pass)) head = [];
+      else if (lineClear(map, ui, route.sy * n + route.sx, pass)) head = [{ x: route.sx + 0.5, y: route.sy + 0.5 }];
+      else { const j = findPath(map, ux, uy, tile(tb), pass, HPA.joinNodes); if (!j.ok) return null; head = j.pts.slice(0, -1); }
+    }
+    const lastI = pts.length - 1;
+    for (let k = b; k < lastI; k++) if (lineClear(map, T(pts[k]), st, pass)) return { pts: head.concat(pts.slice(b, k + 1), [slot]), ok: true };
+    if (T(pts[lastI]) === st) return { pts: head.concat(pts.slice(b, lastI), [slot]), ok: true };   // the order point is the slot
+    // the slot is out of sight of the route's last leg (the click was on an obstacle, say): a short search from the waypoint before
+    // the order point to the slot, so the members spread to their own slots instead of all converging on the order point
+    const body = pts.slice(b, lastI), prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
+    const j = findPath(map, prev % n, (prev / n) | 0, tile(st), pass, HPA.joinNodes);
+    return j.ok ? { pts: head.concat(body, j.pts), ok: true } : null;
+  }
+  // The route stops at the reachable tile nearest the goal (findPath's best effort: the click was in a pocket, on an island...).
+  // The member's slot is walked to from there: in plain sight, else by a bounded search whose best effort is kept when it
+  // cannot reach (as the old code's own search would). A null (the member's own full search) never comes from here: it comes
+  // only from the group having no route at all (a boxed-in leader), a failed head join, or a slot that cannot be stood on.
+  const first = T(pts[0]);
   let head;
   if (lineClear(map, ui, first, pass)) head = [];
   else if (lineClear(map, ui, route.sy * n + route.sx, pass)) head = [{ x: route.sx + 0.5, y: route.sy + 0.5 }];
-  else {
-    const j = findPath(map, ux, uy, { x0: first % n, y0: (first / n) | 0, x1: first % n, y1: (first / n) | 0, r: 0 }, pass, HPA.joinNodes);
-    if (!j.ok) return null;
-    head = j.pts.slice(0, -1);
-  }
-  const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, body = pts.slice(0, -1), slotOk = pass(st, rect.x0, rect.y0);
-  if (!route.ok) {
-    // The route stops at the reachable tile nearest the goal (findPath's best effort: the click was in a pocket, on an island...).
-    // The member's slot is walked to from there: in plain sight, else by a bounded search whose best effort is kept when it
-    // cannot reach (as the old code's own search would). A null (the member's own full search) never comes from here: it comes
-    // only from the group having no route at all (a boxed-in leader), a failed head join, or a slot that cannot be stood on.
-    const all = head.concat(pts), end = T(all[all.length - 1]);
-    if (slotOk && lineClear(map, end, st, pass)) return { pts: all.concat([slot]), ok: true };
-    const j = findPath(map, end % n, (end / n) | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x0, y1: rect.y0, r: 0 }, pass, HPA.pocketNodes);
-    return { pts: all.concat(j.pts), ok: j.ok };
-  }
-  if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
-  const prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
-  // leave the route before the order point when the slot is in plain sight; otherwise go through the order point (a
-  // slot that cannot be walked to from there gets the member's own repath when it is blocked)
-  if (st === T(pts[pts.length - 1]) || lineClear(map, prev, st, pass)) return { pts: head.concat(body, [slot]), ok: true };
-  // the slot is out of sight of the route's last leg (the click was on an obstacle, say): a short search from there to the slot,
-  // so the members spread to their own slots instead of all converging on the order point
-  const j = findPath(map, prev % n, (prev / n) | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x0, y1: rect.y0, r: 0 }, pass, HPA.joinNodes);
-  return j.ok ? { pts: head.concat(body, j.pts), ok: true } : null;
+  else { const j = findPath(map, ux, uy, tile(first), pass, HPA.joinNodes); if (!j.ok) return null; head = j.pts.slice(0, -1); }
+  const all = head.concat(pts), end = T(all[all.length - 1]);
+  if (slotOk && lineClear(map, end, st, pass)) return { pts: all.concat([slot]), ok: true };
+  const j = findPath(map, end % n, (end / n) | 0, tile(st), pass, HPA.pocketNodes);
+  return { pts: all.concat(j.pts), ok: j.ok };
 }
 // A new or loaded match: build the land and naval graphs and every intra edge now, so the first long order of the
 // match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
