@@ -189,7 +189,7 @@ if (typeof orderMove === 'function') {
     for (const grp of [land, sea]) {
       if (grp.length === 1) { _orderMove(grp, x, y); continue; }
       const slots = cmdFormation(grp, x, y);
-      for (const u of grp) { const s = slots.get(u); setOrder(u, { t: 'move', x: s.x, y: s.y }); }
+      hpaGroupOrder(grp, u => slots.get(u), x, y, 'move');   // one route for the group, formation slots at its end
     }
   };
 }
@@ -303,22 +303,31 @@ function cmdBreachable(owner, id) {
   return !!(e && e.kind === 'bld' && (BUILDINGS[e.type].wall || BUILDINGS[e.type].gate) && isEnemy(owner, e.owner)) ? e : null;
 }
 // path as if enemy walls were open; the first wall tile on it is what blocks us
+// With the hierarchy on (hpa.js), a group order keeps one answer per target for all its units, and the search starts
+// where the unit's failed route ends (at the walls), so it stays short on any map.
 function cmdFindBreach(u, rect, r) {
   const map = W.map, base = unitPass(u);
   const pass = i => base(i) || !!cmdBreachable(u.owner, map.blk[i]);
-  const res = findPath(map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, pass);
-  if (!res.ok) return null;
-  let px = u.x, py = u.y;
-  for (const q of res.pts) {
-    const steps = Math.max(1, Math.ceil(Math.hypot(q.x - px, q.y - py) / 0.2));
-    for (let s = 1; s <= steps; s++) {
-      const x = px + (q.x - px) * s / steps, y = py + (q.y - py) * s / steps;
-      if (!map.inb(x | 0, y | 0)) continue;
-      const w = cmdBreachable(u.owner, map.blk[map.idx(x | 0, y | 0)]); if (w) return w;
+  const g = hpaGroupOf(u), key = rect.x0 + ',' + rect.y0 + ',' + rect.x1 + ',' + rect.y1 + ',' + r;
+  if (g && g.breach && g.breach.key === key && W.t - g.breach.t < 5) { const w = g.breach.id ? ent(g.breach.id) : null; if (!g.breach.id || (w && !w.dead)) return w; }
+  const lead = HPA.enabled && !u.pathOk && u.path && u.path.length ? u.path.slice(u.pi) : [];
+  const from = lead.length ? lead[lead.length - 1] : u;
+  const res = findPath(map, from.x | 0, from.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, pass);
+  let wall = null;
+  if (res.ok) {
+    let px = u.x, py = u.y;
+    scan: for (const q of lead.concat(res.pts)) {
+      const steps = Math.max(1, Math.ceil(Math.hypot(q.x - px, q.y - py) / 0.2));
+      for (let s = 1; s <= steps; s++) {
+        const x = px + (q.x - px) * s / steps, y = py + (q.y - py) * s / steps;
+        if (!map.inb(x | 0, y | 0)) continue;
+        const w = cmdBreachable(u.owner, map.blk[map.idx(x | 0, y | 0)]); if (w) { wall = w; break scan; }
+      }
+      px = q.x; py = q.y;
     }
-    px = q.x; py = q.y;
   }
-  return null;
+  if (g) g.breach = { key, t: W.t, id: wall ? wall.id : 0 };
+  return wall;
 }
 function cmdBreachCheck(u) {
   const o = u.order;

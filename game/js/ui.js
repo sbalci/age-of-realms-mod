@@ -791,7 +791,7 @@ function issueMove(x, y) {
 function handleModeClick(sx, sy, t, e) {
   const m = UI.mode; const sel = UI.selection.filter(u => u.owner === W.humanId);
   const target = hitTest(sx, sy);
-  if (m.t === 'attackmove') { for (const u of sel) setOrder(u, { t: 'attackmove', x: t.x, y: t.y }); Sound.speak(sel[0], 'attack'); UI.flash = { x: t.x, y: t.y, t: performance.now(), col: '#f44' }; }
+  if (m.t === 'attackmove') { hpaGroupOrder(sel, () => ({ x: t.x, y: t.y }), t.x, t.y, 'attackmove'); Sound.speak(sel[0], 'attack'); UI.flash = { x: t.x, y: t.y, t: performance.now(), col: '#f44' }; }
   else if (m.t === 'garrison') {
     if (target && target.owner === W.humanId) {
       let n = 0;

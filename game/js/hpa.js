@@ -398,6 +398,78 @@ function hpaFindPath(map, sx, sy, goal, passFn, cls) {
   if (!r || !r.ok) { HPA.stats.fallback++; return null; }
   return { pts: pfSmooth(map, r.chain, passFn, HPA.smooth, hpaClear(G, passFn)), ok: false };
 }
+// ---------- group orders ----------
+// A group order computes one route. orderMove and the attack-move command hand their units to hpaGroupOrder: per
+// movement class, the unit nearest the group's middle leads, and every unit of the leader's owner within HPA.groupR
+// of it is a member. A member's first path request for the order (setOrder's moveToPoint, or attack-move's first
+// tick) takes the group route, which the first such request computes once from the leader to the order point:
+// a short leg onto the route, the shared waypoints, then the member's own slot. Every later request, including
+// followPath's repath when the member is blocked, searches on its own. The one search counts against PATHB.
+// cmdFindBreach keeps one breach answer per group and target (hpaGroupOf).
+const HPA_GROUP = new WeakMap();   // unit -> { g, o, used }: its group and the order object it was given
+// units: the ordered units; slotOf(u) -> {x, y} its destination; (x, y) the order point; t 'move' or 'attackmove'.
+function hpaGroupOrder(units, slotOf, x, y, t) {
+  const orderFor = u => { const s = slotOf(u); return { t, x: s.x, y: s.y }; };
+  if (!HPA.enabled || units.length < 2 || !W || !W.map) { for (const u of units) setOrder(u, orderFor(u)); return; }
+  const byClass = new Map(), groupOf = new Map();
+  for (const u of units) { const c = hpaClassOf(u); if (!byClass.has(c)) byClass.set(c, []); byClass.get(c).push(u); }
+  for (const [cls, grp] of byClass) {
+    if (grp.length < 2) continue;
+    let cx = 0, cy = 0; for (const u of grp) { cx += u.x; cy += u.y; } cx /= grp.length; cy /= grp.length;
+    let L = grp[0], ld = Infinity; for (const u of grp) { const d = Math.hypot(u.x - cx, u.y - cy); if (d < ld) { ld = d; L = u; } }
+    const g = { cls, leader: L, owner: L.owner, x: Math.max(0.3, Math.min(W.n - 0.3, x)), y: Math.max(0.3, Math.min(W.n - 0.3, y)), route: null, breach: null };
+    for (const u of grp) if (u.owner === g.owner && Math.hypot(u.x - L.x, u.y - L.y) <= HPA.groupR) groupOf.set(u, g);
+  }
+  for (const u of units) {
+    const o = orderFor(u), g = groupOf.get(u);
+    if (g) HPA_GROUP.set(u, { g, o, used: false }); else HPA_GROUP.delete(u);
+    setOrder(u, o);
+  }
+  HPA.stats.groups += new Set(groupOf.values()).size;
+}
+// Will u's next path request take its group's route? (polish.js does not charge such a request to PATHB.)
+function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && u.order === r.o); }
+// The group of u's current order, if it has one.
+function hpaGroupOf(u) { const r = HPA_GROUP.get(u); return r && u.order === r.o ? r.g : null; }
+// pathTo's first call for a member: its route from the group's, or null to search on its own.
+function hpaShared(u, rect, r) {
+  const rec = HPA_GROUP.get(u);
+  if (!rec || rec.used || u.order !== rec.o) return null;
+  rec.used = true;
+  const g = rec.g;
+  if (!g.route) {
+    const L = g.leader.dead || g.leader.dying || g.leader.inside ? u : g.leader;
+    if (typeof PATHB === 'object') PATHB.used++;   // the group's one search, charged to the per-tick path budget
+    const res = findPath(W.map, L.x | 0, L.y | 0, { x0: g.x | 0, y0: g.y | 0, x1: g.x | 0, y1: g.y | 0, r: 0 }, unitPass(L), undefined, g.cls);
+    g.route = { pts: res.pts, ok: res.ok, sx: L.x | 0, sy: L.y | 0 };
+  }
+  if (!g.route.pts.length) return null;
+  const out = hpaJoin(u, g.route, rect);
+  if (out) HPA.stats.shared++;
+  return out;
+}
+// A member's own copy of the group route: a leg from where it stands onto the route's first waypoint, the waypoints,
+// and its slot (rect) at the end.
+function hpaJoin(u, route, rect) {
+  const map = W.map, n = map.n, pass = unitPass(u), pts = route.pts;
+  const T = p => Math.max(0, Math.min(n - 1, p.y | 0)) * n + Math.max(0, Math.min(n - 1, p.x | 0));
+  const ux = Math.max(0, Math.min(n - 1, u.x | 0)), uy = Math.max(0, Math.min(n - 1, u.y | 0)), ui = uy * n + ux, first = T(pts[0]);
+  let head;
+  if (lineClear(map, ui, first, pass)) head = [];
+  else if (lineClear(map, ui, route.sy * n + route.sx, pass)) head = [{ x: route.sx + 0.5, y: route.sy + 0.5 }];
+  else {
+    const j = findPath(map, ux, uy, { x0: first % n, y0: (first / n) | 0, x1: first % n, y1: (first / n) | 0, r: 0 }, pass, HPA.joinNodes);
+    if (!j.ok) return null;
+    head = j.pts.slice(0, -1);
+  }
+  if (!route.ok) return { pts: head.concat(pts), ok: false };
+  const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, body = pts.slice(0, -1);
+  const prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
+  // leave the route before the order point when the slot is in plain sight; otherwise go through the order point (a
+  // slot that cannot be walked to from there gets the member's own repath when it is blocked)
+  if (st === T(pts[pts.length - 1]) || lineClear(map, prev, st, pass)) return { pts: head.concat(body, [slot]), ok: true };
+  return { pts: head.concat(pts, [slot]), ok: true };
+}
 // A new or loaded match: build the land and naval graphs and every intra edge now, so the first long order of the
 // match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
 function hpaWarm() {

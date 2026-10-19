@@ -13,14 +13,16 @@ if (typeof pathTo === 'function') {
   const _pt = pathTo;
   pathTo = function (u, rect, r) {
     if (W && (W !== PATHB.world || W.tick !== PATHB.tick)) { PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0; }
-    if (PATHB.used >= PATHB.perTick && u.path && u.pi < u.path.length && u.goalRect &&
+    // a group member taking its group's route (hpa.js) is not charged: the group's one search is, when it runs
+    const shared = typeof hpaShares === 'function' && hpaShares(u);
+    if (!shared && PATHB.used >= PATHB.perTick && u.path && u.pi < u.path.length && u.goalRect &&
         pathBudgetSameGoal(u.goalRect, rect) && u.goalR === r &&
         u._pathMapVersion === W.map.version) {
       PATHB.deferred++;
       u.repathT = 0.1 + simRandomSafe() * 0.3;
       return u.pathOk;
     }
-    PATHB.used++;
+    if (!shared) PATHB.used++;
     const ok = _pt(u, rect, r);
     u._pathMapVersion = W.map.version;
     return ok;

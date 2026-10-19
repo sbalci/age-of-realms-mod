@@ -206,7 +206,7 @@ function tilePassFor(u, x, y) { if (!W.map.inb(x | 0, y | 0)) return false; retu
 
 // ---------- movement ----------
 function pathTo(u, rect, r) {
-  const res = findPath(W.map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u), undefined, hpaClassOf(u));
+  const res = hpaShared(u, rect, r) || findPath(W.map, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u), undefined, hpaClassOf(u));
   u.path = res.pts; u.pi = 0; u.pathOk = res.ok; u.goalRect = rect; u.goalR = r;   // callers set u.repathT just before calling; resetting it here made every chasing unit repath every tick
   return res.ok;
 }
@@ -261,12 +261,12 @@ function orderMove(units, x, y) {
   // formation: spread in a grid around the target
   const land = units.filter(u => !UNITS[u.type].naval), sea = units.filter(u => UNITS[u.type].naval);
   for (const grp of [land, sea]) {
-    const k = Math.ceil(Math.sqrt(grp.length));
+    const k = Math.ceil(Math.sqrt(grp.length)), slots = new Map();
     grp.forEach((u, i) => {
       const ox = (i % k - (k - 1) / 2) * (grp.length > 1 ? 0.9 : 0), oy = (((i / k) | 0) - (k - 1) / 2) * (grp.length > 1 ? 0.9 : 0);
-      if (u.type === 'transport' || u.order && u.order.t === 'unload') { }
-      setOrder(u, { t: 'move', x: x + ox, y: y + oy });
+      slots.set(u, { x: x + ox, y: y + oy });
     });
+    hpaGroupOrder(grp, u => slots.get(u), x, y, 'move');   // one route for the group (hpa.js); with the hierarchy off, one setOrder each as before
   }
 }
 function canAttack(u, t) {
