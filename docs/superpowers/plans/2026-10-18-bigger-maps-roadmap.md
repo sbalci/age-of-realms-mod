@@ -112,7 +112,7 @@ Every phase finishes with these steps:
 - **Task 2. Abstract search and local refinement behind `findPath`** (map.js:150-198).
   - Unreachable goals return at once. The detailed plan uses the cluster graph's own connected components rather than `landReg`, because `computeRegions` misses diagonal steps past cliff corners (80 cases on 60 medium maps) and would refuse reachable goals.
   - The search queue is a typed-array heap.
-  - Paths are refined segment by segment with the existing grid A*, bounded to a cluster pair.
+  - The abstract route is refined by one grid A* over the corridor of clusters it passes through (the route's clusters and their neighbours), then smoothed, instead of segment by segment.
   - Smoothing is bounded.
   - The 4,000-point cap (map.js:187) goes.
   - Acceptance: routes are at most 1.1× the length of the optimal grid A* on 500 random pairs. All movement, command, tactics, engineering and actors suites stay green.

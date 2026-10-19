@@ -518,14 +518,22 @@ function hpaJoin(u, route, rect) {
   else { const j = findPath(map, ux, uy, tile(first), pass, HPA.joinNodes); if (!j.ok) return null; head = j.pts.slice(0, -1); }
   const all = head.concat(pts), end = T(all[all.length - 1]);
   if (slotOk && lineClear(map, end, st, pass)) return { pts: all.concat([slot]), ok: true };
-  const j = findPath(map, end % n, (end / n) | 0, tile(st), pass, HPA.pocketNodes);
+  // The pocket search is the same for every member of the group whose slot is this tile (attack-move gives them all one), so
+  // the group keeps its answer and charges the path budget once per search actually run.
+  const rec = HPA_GROUP.get(u), g = rec && rec.g, key = st;
+  let j = g && g.pocket && g.pocket.get(key);
+  if (!j) {
+    if (typeof PATHB === 'object') PATHB.used++;
+    j = findPath(map, end % n, (end / n) | 0, tile(st), pass, HPA.pocketNodes);
+    if (g) (g.pocket || (g.pocket = new Map())).set(key, j);
+  }
   return { pts: all.concat(j.pts), ok: j.ok };
 }
-// A new or loaded match: build the land and naval graphs and every intra edge now, so the first long order of the
+// A new or loaded match: build the land and naval graphs (and the mounted one on a map with trenches) and every intra edge now, so the first long order of the
 // match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
 function hpaWarm() {
   if (!HPA.enabled || !W || !W.map || (W.settings && W.settings.editor)) return;
-  for (const cls of ['land', 'naval']) { const G = hpaGraph(cls); for (let k = 0; k < G.cl.length; k++) for (let a = 0; a < G.cl[k].nodes.length; a++) hpaRow(G, k, a); }
+  for (const cls of W.map.trench ? ['land', 'mounted', 'naval'] : ['land', 'naval']) { const G = hpaGraph(cls); for (let k = 0; k < G.cl.length; k++) for (let a = 0; a < G.cl[k].nodes.length; a++) hpaRow(G, k, a); }
 }
 GameHooks.on('worldCreated', hpaWarm);
 GameHooks.on('worldRestored', hpaWarm);

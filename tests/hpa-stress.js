@@ -34,8 +34,10 @@ for (const [type, np] of [['land', 8], ['land', 2], ['coastal', 8], ['coastal', 
     const route = (u, rect, r, cls) => { const t = performance.now(); const res = findPath(m, u.x | 0, u.y | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, r }, unitPass(u), undefined, cls); return { ok: res.ok, ms: performance.now() - t }; };
     const out = { pairs: 0, ok: 0, okOld: 0, land: 0, sea: 0, ms: 0, msOld: 0, routes: 0, build: +build.toFixed(0), fails: [] };
     for (let a = 0; a < tcs.length; a++) for (let b = a + 1; b < tcs.length; b++) {
-      const A = tcs[a], B = tcs[b], start = freeTileNear(A, false), v = spawnUnit('villager', A.owner, start.x, start.y);
+      const A = tcs[a], B = tcs[b], start = freeTileNear(A, false);
       out.pairs++;
+      if (!start) { out.fails.push(A.owner + '-' + B.owner + ' (no free tile beside the start Town Center)'); continue; }   // a failure, not a throw
+      const v = spawnUnit('villager', A.owner, start.x, start.y);
       let good = false, goodOld = false;
       for (const on of [true, false]) {
         HPA.enabled = on;
@@ -63,8 +65,8 @@ for (const [type, np] of [['land', 8], ['land', 2], ['coastal', 8], ['coastal', 
     out.ms = +(out.ms / out.routes).toFixed(1); out.msOld = +(out.msOld / out.routes).toFixed(1);
     return JSON.stringify(out);
   })()`));
-  if (r.ok !== r.pairs) failed++;
-  console.log(`| ${type} | ${n} | ${np} | ${r.pairs} | ${r.ok}/${r.pairs} | ${r.okOld}/${r.pairs} | ${r.land} / ${r.sea} | ${r.ms} / ${r.msOld} | ${r.build} |${r.fails.length ? ' failed: ' + r.fails.join(' ') : ''}`);
+  if (r.ok !== r.pairs || r.pairs === 0) failed++;   // a map with no Town Center pair proves nothing
+  console.log(`| ${type} | ${n} | ${np} | ${r.pairs} | ${r.ok}/${r.pairs} | ${r.okOld}/${r.pairs} | ${r.land} / ${r.sea} | ${r.ms} / ${r.msOld} | ${r.build} |${r.fails.length ? ' failed: ' + r.fails.join(' ') : ''}${r.pairs === 0 ? ' FAILED: no Town Center pairs' : ''}`);
 }
 console.log(failed ? `FAIL: ${failed} map types have a Town Center pair without a route` : 'PASS: every Town Center pair has a route');
 process.exit(failed ? 1 : 0);

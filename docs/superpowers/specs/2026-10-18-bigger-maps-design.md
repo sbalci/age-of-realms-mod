@@ -121,9 +121,9 @@ That keeps the early game and balance unchanged.
 **Pathfinding** (map.js:150-211, world.js:207-268, polish.js:8-27):
 - Clusters are 16×16 tiles, with entrance points on their borders and an abstract graph per movement class (land, naval).
 - Only the clusters affected by changes to `blk`, `ter` or `elev` are rebuilt.
-- A route is found on the abstract graph, then refined locally segment by segment.
-- Region reject: unreachable goals return at once, using `computeRegions`.
-- Group orders compute one route and give units formation offsets along it. They count against the per-tick path budget.
+- A route is found on the abstract graph, then refined by one grid A* confined to the corridor of clusters the route passes through, and smoothed.
+- Region reject: unreachable goals are told apart at once by the graph's own connected components (not `computeRegions`); the best effort is then a route to the reachable tile nearest the goal.
+- Group orders share one route (computed once, counted once against the per-tick path budget) and give each member a formation slot. A member joins the route where it helps (straight to its slot when in sight, else at the cheapest of the first 12 waypoints) and leaves it at the first waypoint its slot is in sight from; an order point within 24 tiles of the group's middle is not shared, since the members' own searches are short. A click on a tree, mine or building snaps to the nearest passable tile, and when the goal cannot be reached each member runs a bounded search to its slot from the end of the route.
 - The search queue is a typed-array heap, and smoothing is bounded.
 - Callers keep the `pathTo` / `findPath` API: movement.js, command.js:305-320 and engineering.js:57.
 

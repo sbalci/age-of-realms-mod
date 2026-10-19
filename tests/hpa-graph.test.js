@@ -128,5 +128,17 @@ const D = JSON.parse(run(`(() => {
   return JSON.stringify({ checks, bad, rebuilt: HPA.stats.rebuilt, classes: Object.keys(HPA.g) });
 })()`));
 ok(`after buildings, gates, walls, docks, trees, fish, terraforming, bridges, tunnels, trenches and editor strokes, the kept graph equals a fresh build (${D.checks} comparisons)`, D.checks >= 100 && D.bad.length === 0 && D.classes.includes('mounted'), D);
+// A world created with a trench layer builds the mounted graph at load (hpaWarm), not on its first cavalry order.
+const WM = JSON.parse(run(`(() => {
+  HPA.enabled = true;
+  const mk = trench => {
+    const spec = generateMapSpec({ size: 'tiny', seed: 5, mapType: 'land', numPlayers: 2 });
+    if (trench) spec.trench = new Array(MAP_SIZES.tiny * MAP_SIZES.tiny).fill(0);
+    createWorld(spec, { players: [0, 1].map(i => ({ name: 'P' + i, civ: ['franks', 'turks'][i], color: PLAYER_COLORS[i], human: i === 0 })), seed: 5, fog: 'none', startRes: 'high', startAge: 1 });
+    return { trench: !!W.map.trench, classes: Object.keys(HPA.g), rows: HPA.g.mounted ? HPA.g.mounted.cl.length : 0 };
+  };
+  return JSON.stringify({ without: mk(false), withT: mk(true) });
+})()`));
+ok('a world created with a trench layer has the mounted graph built after creation; one without does not build it', WM.withT.trench && WM.withT.classes.includes('mounted') && WM.withT.classes.includes('land') && !WM.without.classes.includes('mounted'), WM);
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

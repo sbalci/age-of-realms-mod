@@ -110,6 +110,7 @@ Task 7 switches the hierarchy on. That changes unit routes, and tactics.js:157 a
   - Editor worlds are skipped.
   - Later rebuilds stay lazy, one dirty cluster at a time.
 - **Group orders.** One route per group: the unit nearest the group's middle leads, and members of its owner within 12 tiles share it. A member walks a leg onto the route, the shared waypoints, then its own formation slot (command.js `cmdFormation`). Its later path requests, including followPath's repath when it is blocked, are its own.
+  - *As built* (final review): an order point within `HPA.near` (24) of the group's middle is not shared at all (the group is kept for the shared breach answer only). A member joining a route that reaches the order point goes straight to its slot when `lineClear` sees it; else joins at whichever of the first 12 waypoints minimises the straight distance to it plus the route length after it (reached by `lineClear` or the 600-node search, falling back to the first waypoint or the leader's start tile), and leaves the route at the first waypoint from which the slot is in sight. Joining at the first waypoint and walking all of them had made spread groups plan 14% more path with 15 of 16 members first walking away from their slot.
   - The attack-move command (ui.js:794) becomes a group order. Without that change, `cmdFindBreach` would have no group to share its answer with.
   - The AI's own attack-moves (ai.js:557) stay per unit.
 

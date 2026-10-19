@@ -134,16 +134,16 @@ function forestTrial(on) {
   let best = null, bn = -1;   // the tree with the most trees within 3 tiles (at least 40: the middle of a forest, not its edge)
   for (let i = 0; i < trees.length; i += 7) { const t = trees[i]; let c = 0; for (const q of trees) if (Math.abs(q.x - t.x) <= 3 && Math.abs(q.y - t.y) <= 3) c++; if (c > bn) { bn = c; best = t; } }
   PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0;
-  const fp = findPath; let full = 0; findPath = function (m, sx, sy, g, p, mx, cls) { if (cls) full++; return fp.apply(this, arguments); };
+  const fp = findPath; let full = 0, pocket = 0; findPath = function (m, sx, sy, g, p, mx, cls) { if (cls) full++; else if (mx === HPA.pocketNodes) pocket++; return fp.apply(this, arguments); };
   const s0 = HPA.stats.shared, t0 = performance.now();
   try { orderMove(us, best.x + 0.5, best.y + 0.5); } finally { findPath = fp; }
   const ms = performance.now() - t0; let h = 0; const str = JSON.stringify(us.map(u => u.path));
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return { on, dense: bn, ms: +ms.toFixed(1), full, budget: PATHB.used, shared: HPA.stats.shared - s0, pathOk: us.filter(u => u.pathOk).length, hash: h };
+  return { on, dense: bn, ms: +ms.toFixed(1), full, pocket, budget: PATHB.used, shared: HPA.stats.shared - s0, pathOk: us.filter(u => u.pathOk).length, hash: h };
 }`);
 const FO = JSON.parse(run(`JSON.stringify(forestTrial(false))`)), F1 = JSON.parse(run(`JSON.stringify(forestTrial(true))`)), F2 = JSON.parse(run(`JSON.stringify(forestTrial(true))`));
-ok(`40 knights ordered into a forest: as many reach their slot as before (${F1.pathOk} against ${FO.pathOk}), at most 2 full searches (${F1.full}), the budget charged once per full search (${F1.budget}), under a tenth of the old time (${F1.ms} ms against ${FO.ms} ms), and the same paths on a repeat`,
-  F1.dense >= 40 && F1.pathOk >= FO.pathOk && F1.full <= 2 && F1.budget === F1.full && F1.ms * 10 < FO.ms && F1.hash === F2.hash, { FO, F1, F2 });
+ok(`40 knights ordered into a forest: as many reach their slot as before (${F1.pathOk} against ${FO.pathOk}), at most 2 full searches (${F1.full}), the budget charged once per search actually run, full or pocket (${F1.budget} = ${F1.full} + ${F1.pocket}), under a tenth of the old time (${F1.ms} ms against ${FO.ms} ms), and the same paths on a repeat`,
+  F1.dense >= 40 && F1.pathOk >= FO.pathOk && F1.full <= 2 && F1.budget === F1.full + F1.pocket && F1.ms * 10 < FO.ms && F1.hash === F2.hash, { FO, F1, F2 });
 
 // ---------- 7. groups spread round a Town Center or standing in a block, ordered 14-40 tiles: no longer, no backwards ----------
 // Members joined the shared route at its first waypoint and walked all of it, so they took longer ways and some first walked
@@ -185,6 +185,24 @@ for (const layout of ['spread', 'block']) {
   ok(`${layout} groups (6 orders of 14-40 tiles, 16 spearmen): the shared route plans at most 1.05x the per-unit paths (${G.len} against ${S.len}), nobody's first leg walks away from the slot (${G.back}, per-unit ${S.back}), and the last arrival is within 1.05x (${G.sec} s against ${S.sec} s)`,
     G.len <= S.len * 1.05 && G.back <= S.back && G.back === 0 && G.sec <= S.sec * 1.05, { S, G });
 }
+
+// ---------- 8. attack-move onto unreachable land: the members' identical pocket search runs once, charged once ----------
+const AM = JSON.parse(run(`(() => {
+  HPA.enabled = true; world(160, 5, 'islands', 2);
+  const m = W.map, n = m.n, a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), pass = passLand(1);
+  const us = []; for (let k = 0; k < 20; k++) { const p = nearestLandTile((a.x + 5 + (k % 5)) | 0, (a.y + 6 + ((k / 5) | 0)) | 0, true); us.push(spawnUnit('spearman', 1, p.x + 0.5, p.y + 0.5)); }
+  let tgt = null, bd = Infinity;
+  for (let y = 2; y < n - 2; y += 2) for (let x = 2; x < n - 2; x += 2) {
+    const d = Math.hypot(x - a.x, y - a.y); if (d < 30 || d > 70 || d >= bd || !pass(m.idx(x, y))) continue;
+    const r = findPath(m, a.x | 0, a.y | 0, { x0: x, y0: y, x1: x, y1: y, r: 0 }, pass, undefined, 'land'); if (!r.ok) { bd = d; tgt = { x: x + 0.5, y: y + 0.5 }; }
+  }
+  if (!tgt) return JSON.stringify({ none: true });
+  const fp = findPath; let pocket = 0; findPath = function (mm, sx, sy, g, p, mx) { if (mx === HPA.pocketNodes) pocket++; return fp.apply(this, arguments); };
+  PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0;
+  try { hpaGroupOrder(us, () => ({ x: tgt.x, y: tgt.y }), tgt.x, tgt.y, "attackmove"); worldTick(0.05); } finally { findPath = fp; }
+  return JSON.stringify({ pocket, groups: new Set(us.map(u => HPA_GROUP.get(u) && HPA_GROUP.get(u).g)).size, gotPath: us.filter(u => u.path && u.path.length).length });
+})()`));
+ok(`20 units attack-moving onto unreachable land run 1 pocket search (${AM.pocket}), not 20; all of them walk (the charge to the path budget is checked by the forest order above)`, !AM.none && AM.groups === 1 && AM.pocket === 1 && AM.gotPath === 20, AM);
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
