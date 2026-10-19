@@ -20,7 +20,8 @@ const K = JSON.parse(run(`(() => {
   let far = null, fd = -1; for (const t of tcs) { const d = Math.hypot(t.x - a.x, t.y - a.y); if (d > fd) { fd = d; far = t; } }
   const us = knights(a), out = { straight: +fd.toFixed(0) };
   const s0 = Object.assign({}, HPA.stats); PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0;
-  let t0 = performance.now(); orderMove(us, far.x + 2, far.y + 6); out.groupMs = +(performance.now() - t0).toFixed(1);
+  const fp0 = findPath, lc0 = lineClear; let joins = 0, sights = 0; findPath = function (m, sx, sy, g, p, mx) { if (mx === HPA.joinNodes) joins++; return fp0.apply(this, arguments); }; lineClear = function () { sights++; return lc0.apply(this, arguments); };
+  let t0 = performance.now(); try { orderMove(us, far.x + 2, far.y + 6); } finally { findPath = fp0; lineClear = lc0; } out.groupMs = +(performance.now() - t0).toFixed(1); out.joinSearches = joins; out.sightLines = sights;
   out.searches = HPA.stats.queries - s0.queries; out.shared = HPA.stats.shared - s0.shared; out.groups = HPA.stats.groups - s0.groups; out.budget = PATHB.used;
   out.pathOk = us.filter(u => u.pathOk).length;
   const slots = us.map(u => ({ x: u.order.x, y: u.order.y }));
@@ -38,7 +39,8 @@ const K = JSON.parse(run(`(() => {
 })()`));
 ok('a 40-knight order across a 256 map runs one hierarchical search and charges the path budget once', K.searches === 1 && K.groups === 1 && K.shared === 40 && K.budget === 1 && K.pathOk === 40, K);
 ok(`every knight arrives: its move ends within 8 tiles of the order point and 4 of its own slot (${K.seconds} game seconds for ${K.straight} tiles)`, K.done === 40 && K.within === 40 && K.worstSlot <= 4 && K.atSlot >= 25, K);
-ok(`the order takes a fraction of the old per-unit searches in the vm (${K.groupMs} ms against ${K.oldMs} ms)`, K.groupMs * 4 < K.oldMs, K);
+// 6ef62aa: 49 ms against about 3200 ms (1.5%); a join that searched for nearly every member cost 175 ms (5.5%)
+ok(`the order takes a small fraction of the old per-unit searches in the vm (${K.groupMs} ms against ${K.oldMs} ms: under 1/40), with at most 10 member join searches (${K.joinSearches}) and 1000 sight lines (${K.sightLines})`, K.groupMs * 40 < K.oldMs && K.joinSearches <= 10 && K.sightLines <= 1000, K);
 
 // ---------- 2. members repath on their own only when blocked; a far straggler routes alone ----------
 const B = JSON.parse(run(`(() => {

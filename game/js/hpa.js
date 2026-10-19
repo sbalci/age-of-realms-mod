@@ -28,6 +28,9 @@ const HPA = {
   quiet: false,           // set by terraFlush around its computeRegions (terraTouch has dirtied the exact rectangle)
   pocketNodes: 1500,      // the same, from the end of a route that stops short (a click in a forest pocket): unreachable slots exhaust their pocket and stop early
   joinWays: 12,           // a group member joins the shared route at the cheapest of its first this many waypoints
+  joinReach: 48,          // ...only among the waypoints this close to the member (longer sight lines and searches cost more than they save)
+  joinSlack: 1,           // ...and a waypoint this much dearer than the cheapest is joined too when it is in sight (saves a search)
+  joinShare: 10,          // ...or a neighbour's search to the same waypoint, when its first point is in sight within this many tiles
   joinNodes: 600,         // a group member's own search onto the shared route
   groupR: 12,             // units farther than this from their group's leader route on their own
   stats: { queries: 0, near: 0, routed: 0, unreachable: 0, fallback: 0, rebuilt: 0, groups: 0, shared: 0 },
@@ -482,24 +485,44 @@ function hpaJoin(u, route, rect) {
   const tile = t => ({ x0: t % n, y0: (t / n) | 0, x1: t % n, y1: (t / n) | 0, r: 0 });
   if (route.ok) {
     if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
-    if (lineClear(map, ui, st, pass)) return { pts: [slot], ok: true };
-    // the way onto the route: the waypoint nearest in route terms (straight distance there plus the length after it)
+    // Sight lines are only tried over short distances (an order closer than HPA.near is not shared at all), so a long route
+    // costs a member a few short lines, not one across the map.
+    const near2 = HPA.near * HPA.near, reach2 = HPA.joinReach * HPA.joinReach, d2 = (x0, y0, x1, y1) => (x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1);
+    if (d2(u.x, u.y, slot.x, slot.y) <= near2 && lineClear(map, ui, st, pass)) return { pts: [slot], ok: true };
+    // the way onto the route: the waypoints among the first HPA.joinWays that are nearest in route terms (straight distance
+    // there plus the length after it), cheapest first; the first one in sight is joined, else the leader's start tile, else
+    // today's search to the first waypoint
     const rem = new Array(pts.length).fill(0);
     for (let i = pts.length - 2; i >= 0; i--) rem[i] = rem[i + 1] + Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
-    const m = Math.min(pts.length, HPA.joinWays);
-    let b = 0, bc = Infinity;
-    for (let i = 0; i < m; i++) { const c = Math.hypot(u.x - pts[i].x, u.y - pts[i].y) + rem[i]; if (c < bc) { bc = c; b = i; } }
-    let head = null, tb = T(pts[b]);
-    if (lineClear(map, ui, tb, pass)) head = [];
-    else { const j = findPath(map, ux, uy, tile(tb), pass, HPA.joinNodes); if (j.ok) head = j.pts.slice(0, -1); }
-    if (!head) {   // today's rule: the route's first waypoint, else the leader's start tile
-      b = 0; tb = T(pts[0]);
-      if (lineClear(map, ui, tb, pass)) head = [];
+    const cand = [];
+    for (let i = 0; i < Math.min(pts.length, HPA.joinWays); i++) if (d2(u.x, u.y, pts[i].x, pts[i].y) <= reach2) cand.push({ i, c: Math.sqrt(d2(u.x, u.y, pts[i].x, pts[i].y)) + rem[i] });
+    cand.sort((p, q) => p.c - q.c || p.i - q.i);
+    let b = -1, head = null;
+    for (const { i, c } of cand) { if (c > cand[0].c + HPA.joinSlack) break; if (lineClear(map, ui, T(pts[i]), pass)) { b = i; head = []; break; } }
+    if (!head && cand.length) {   // none in sight: a short search to the cheapest
+      // A neighbour's search to the same waypoint serves a member that can see its first point within HPA.joinShare, when that
+      // point is not farther from the slot than the member is (members in a block all need the same way round the same obstacle)
+      const share2 = HPA.joinShare * HPA.joinShare, rec = HPA_GROUP.get(u), g = rec && rec.g, bi = cand[0].i, lst = (g && g.heads && g.heads.get(bi)) || [];
+      for (const h of lst) {
+        const p0 = h[0];
+        if (d2(u.x, u.y, p0.x, p0.y) <= share2 && d2(p0.x, p0.y, slot.x, slot.y) <= d2(u.x, u.y, slot.x, slot.y) && lineClear(map, ui, T(p0), pass)) { b = bi; head = h; break; }
+      }
+      if (!head) {
+        const j = findPath(map, ux, uy, tile(T(pts[bi])), pass, HPA.joinNodes);
+        if (j.ok) {
+          b = bi; head = j.pts.slice(0, -1);
+          if (g && head.length) { if (!g.heads) g.heads = new Map(); if (!g.heads.has(bi)) g.heads.set(bi, []); g.heads.get(bi).push(head); }
+        }
+      }
+    }
+    if (!head) {   // today's rule: the route's first waypoint, else the leader's start tile, else a short search
+      b = 0;
+      if (d2(u.x, u.y, pts[0].x, pts[0].y) <= near2 && lineClear(map, ui, T(pts[0]), pass)) head = [];
       else if (lineClear(map, ui, route.sy * n + route.sx, pass)) head = [{ x: route.sx + 0.5, y: route.sy + 0.5 }];
-      else { const j = findPath(map, ux, uy, tile(tb), pass, HPA.joinNodes); if (!j.ok) return null; head = j.pts.slice(0, -1); }
+      else { const j = findPath(map, ux, uy, tile(T(pts[0])), pass, HPA.joinNodes); if (!j.ok) return null; head = j.pts.slice(0, -1); }
     }
     const lastI = pts.length - 1;
-    for (let k = b; k < lastI; k++) if (lineClear(map, T(pts[k]), st, pass)) return { pts: head.concat(pts.slice(b, k + 1), [slot]), ok: true };
+    for (let k = b; k < lastI; k++) if (d2(pts[k].x, pts[k].y, slot.x, slot.y) <= near2 && lineClear(map, T(pts[k]), st, pass)) return { pts: head.concat(pts.slice(b, k + 1), [slot]), ok: true };
     if (T(pts[lastI]) === st) return { pts: head.concat(pts.slice(b, lastI), [slot]), ok: true };   // the order point is the slot
     // the slot is out of sight of the route's last leg (the click was on an obstacle, say): a short search from the waypoint before
     // the order point to the slot, so the members spread to their own slots instead of all converging on the order point
