@@ -94,4 +94,6 @@ const S = run(`(() => { mk('coastal','small',8,3); for(let i=1;i<W.players.lengt
       const x=(6+Math.random()*(m.n-12))|0,y=(6+Math.random()*(m.n-12))|0; const plan=terraPlan(op,{x,y},{x:x+((Math.random()*8)|0)-4,y:y+((Math.random()*8)|0)-4}); if(plan.keep.length){ terraOrder([v],op,plan.keep); jobs++; } } } } } catch(e){ err=e.stack; }
   const m=W.map; const a=JSON.stringify(Array.from(m.landReg)); m.computeRegions(); return {err,jobs,bridges:m.bridge?m.bridge.reduce((s,v)=>s+v,0):0,same:a===JSON.stringify(Array.from(m.landReg))}; })()`);
 ok('5 min soak with bridges/tunnels/canals, no exceptions', !S.err && S.jobs > 3 && S.same, S);
+const H = JSON.parse(run('JSON.stringify(HPA.stats)'));
+ok('these routes went through the hierarchical search (hpa.js), not around it', H.queries > 0 && H.rebuilt > 0, H);
 console.log(`\n${pass} passed, ${fail} failed`);

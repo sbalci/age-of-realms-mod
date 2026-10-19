@@ -230,6 +230,8 @@ const SK = run(`(() => { const warns=[]; const cw=console.warn; console.warn=(..
   const missFx=(W.missFx||[]).length, breaches=W.list.reduce((a,u)=>a+(u.breaches||0),0), rescued=W.list.reduce((a,u)=>a+(u.rescued||0),0);
   return {err, warns:warns.slice(0,3), t:Math.round(W.t), kills:W.players[1].stats.kills+W.players[2].stats.kills, missFx, breaches, rescued, units:W.list.filter(e=>e.kind==='unit').length}; })()`);
 ok('12 min AI soak with all features: no exceptions or AI errors', !SK.err && !SK.warns.length && SK.t >= 700, SK);
+const HS2 = JSON.parse(run('JSON.stringify(HPA.stats)'));
+ok('these routes and group orders went through the hierarchy (hpa.js), not around it', HS2.queries > 0 && HS2.groups > 0, HS2);
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

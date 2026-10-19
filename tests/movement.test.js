@@ -71,4 +71,6 @@ const P = run(`(() => { mk(6); const o=open(16,8); const us=[];
 ok('chasing units repath on a timer, not every tick', P.calls < 900, P);
 const Q = run(`(() => { const p=W.players[1]; p.res.wood=10; p.res.gold=0; return shortfallMsg(p,{wood:60,gold:20,food:0}); })()`);
 ok('missing resources are named', Q === 'Need 50 more wood and 20 more gold', Q);
+const H = JSON.parse(run('JSON.stringify(HPA.stats)'));
+ok('these routes went through the hierarchical search (hpa.js), not around it', H.queries > 0, H);
 console.log(`\n${pass} passed, ${fail} failed`);

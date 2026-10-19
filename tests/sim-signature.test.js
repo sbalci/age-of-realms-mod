@@ -1,8 +1,10 @@
 // Golden simulation signatures: fixed-seed AI-vs-AI matches must replay to exactly the same state.
 // The entity index (game/js/index.js) may make queries faster but must not change any outcome, so these hashes were
 // first recorded on the code before the index existed and held unchanged through the index tasks; commit f012cc0
-// re-recorded them for the deliberate AI stagger. A change that is meant to alter the simulation re-records them
-// deliberately, and its commit says why:  AOR_RECORD=1 node tests/sim-signature.test.js
+// re-recorded them for the deliberate AI stagger, and phase 3 for hierarchical routes and group orders (AOR_HPA=off
+// plays with the hierarchy switched off: the routes before phase 3, whose hashes are in git at ed46ba5). A change that
+// is meant to alter the simulation re-records them deliberately, and its commit says why:
+//   AOR_RECORD=1 node tests/sim-signature.test.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const harness = require('./engine-harness');
 const FIXTURE = path.join(__dirname, 'fixtures', 'sim-signatures.json');
@@ -14,6 +16,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x !== undefined ? '  ' + JSON.stringify(x) : '')); };
 function play(s) {
   const { run, warnings } = harness();
+  if (process.env.AOR_HPA === 'off') run('HPA.enabled = false');
   run(`(() => {
     const spec = generateMapSpec({ size: '${s.size}', seed: ${s.seed}, mapType: '${s.mapType}', numPlayers: ${s.players} });
     const civs = Object.keys(CIVS);

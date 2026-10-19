@@ -18,7 +18,7 @@
 // Switch: HPA.enabled (URL ?hpa=off / ?hpa=on). Off, findPath and orderMove behave exactly as they did before.
 'use strict';
 const HPA = {
-  enabled: false,         // the switch: off, findPath and orderMove are the old ones (URL ?hpa=on / ?hpa=off)
+  enabled: true,          // the switch: off, findPath and orderMove are the old ones (URL ?hpa=off / ?hpa=on)
   C: 16,                  // cluster side in tiles (pfGrid's corridor test and hpaCluster shift by 4)
   near: 24,               // a goal this close tries a bounded plain grid search first...
   nearNodes: 2000,        // ...of this many nodes; when that search finishes, its answer is exactly the old findPath's
