@@ -42,6 +42,7 @@ commits the rows it was measured by, so progress against the budgets stays visib
 
   So the fps and frame-ms changes come from the environment, not from phase 2. The tick improvement is real.
 - From phase 3 on, compare against a control run of the previous phase's commit made in the same session.
+- Phase 3, 200 × 200: the 3-player 40-knight order measured 16 ms, exactly the ≤ 16 ms budget (a single, rounded run; planning measured 12 ms). Treat it as at the limit, and re-check it with a median of several runs in phase 4.
 
 ## Phase 2: vm tick, W.list scans against the index (node tests/perf-vm.js)
 
