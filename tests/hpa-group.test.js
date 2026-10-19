@@ -82,5 +82,48 @@ const W2 = JSON.parse(run(`(() => {
   return JSON.stringify({ breached, firstBreachSearches, opened: walls.some(w => w.dead), campDown: !!camp.dead, t: +t.toFixed(0) });
 })()`));
 ok('a grouped attack-move blocked by walls makes one breach search for the group, breaches and takes the camp', W2.breached >= 4 && W2.firstBreachSearches === 1 && W2.opened && W2.campDown, W2);
+// ---------- 4. a group order onto a tree, a mine or a building: the formation holds, as the old code did ----------
+run(`
+function blockedTrial(on, kind) {
+  HPA.enabled = on; world(160, 7, 'land', 2);
+  const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1);
+  const us = []; for (let k = 0; k < 20; k++) { const p = nearestLandTile((a.x + 5 + (k % 5)) | 0, (a.y + 6 + ((k / 5) | 0)) | 0, true); us.push(spawnUnit('spearman', 1, p.x + 0.5, p.y + 0.5)); }
+  const far = e => { const d = Math.hypot(e.x - a.x, e.y - a.y); return d > 30 && d < 70; };
+  const r = kind === 'mine' ? W.list.find(e => e.kind === 'res' && (e.type === 'gold' || e.type === 'stone') && far(e))
+    : kind === 'tree' ? W.list.find(e => e.kind === 'res' && (e.type === 'tree' || e.type === 'wood' || e.type === 'forest' || e.res === 'wood') && far(e))
+    : (() => { const p = nearestLandTile((a.x + 30) | 0, (a.y + 8) | 0, true); return spawnBuilding('barracks', 1, p.x, p.y, true); })();   // our own, so nothing shoots at the group
+  const tgt = { x: r.x + 0.5, y: r.y + 0.5 }, pass = passLand(1);
+  orderMove(us, tgt.x, tgt.y);
+  const slots = us.map(u => u.order ? { x: u.order.x, y: u.order.y } : null), pathOk = us.filter(u => u.pathOk).length;
+  let t = 0; while (t < 200 && us.some(u => u.order)) { worldTick(0.05); t += 0.05; }
+  const off = us.map((u, i) => slots[i] ? Math.hypot(u.x - slots[i].x, u.y - slots[i].y) : 99);
+  return { kind, on, clickPassable: pass(W.map.idx(tgt.x | 0, tgt.y | 0)), pathOk, atSlot: off.filter(d => d < 1.5).length, worst: +Math.max(...off).toFixed(1) };
+}`);
+for (const kind of ['tree', 'mine', 'building']) {
+  const o = JSON.parse(run(`JSON.stringify(blockedTrial(false, '${kind}'))`)), n = JSON.parse(run(`JSON.stringify(blockedTrial(true, '${kind}'))`));
+  ok(`a group order clicked on a ${kind} keeps the formation (old ${o.pathOk} pathOk, ${o.atSlot} at slot; new ${n.pathOk}, ${n.atSlot})`, !n.clickPassable && n.pathOk >= Math.min(19, o.pathOk - 1) && n.atSlot >= Math.min(19, o.atSlot - 1) && n.atSlot >= o.atSlot - 1 && n.pathOk >= o.pathOk - 1, { o, n });
+}
+
+// ---------- 5. a group order onto an island its units cannot reach: nobody is sent to one shared tile ----------
+run(`
+function islandTrial(on) {
+  HPA.enabled = on; world(160, 5, 'islands', 2);
+  const m = W.map, n = m.n, a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), pass = passLand(1);
+  const us = []; for (let k = 0; k < 12; k++) { const p = nearestLandTile((a.x + 5 + (k % 4)) | 0, (a.y + 6 + ((k / 4) | 0)) | 0, true); us.push(spawnUnit('spearman', 1, p.x + 0.5, p.y + 0.5)); }
+  // a land tile no land route reaches: the nearest one by straight distance whose search fails, 30 to 70 tiles off
+  let tgt = null, bd = Infinity;
+  for (let y = 2; y < n - 2; y += 2) for (let x = 2; x < n - 2; x += 2) {
+    const d = Math.hypot(x - a.x, y - a.y); if (d < 30 || d > 70 || d >= bd || !pass(m.idx(x, y))) continue;
+    const r = findPath(m, a.x | 0, a.y | 0, { x0: x, y0: y, x1: x, y1: y, r: 0 }, pass, undefined, 'land'); if (!r.ok) { bd = d; tgt = { x: x + 0.5, y: y + 0.5 }; }
+  }
+  if (!tgt) return { none: true };
+  orderMove(us, tgt.x, tgt.y);
+  const ends = new Set(us.map(u => u.path && u.path.length ? (u.path[u.path.length - 1].x | 0) + ',' + (u.path[u.path.length - 1].y | 0) : 'none'));
+  const slots = new Set(us.map(u => u.order ? (u.order.x | 0) + ',' + (u.order.y | 0) : 'none'));
+  return { on, pathOk: us.filter(u => u.pathOk).length, distinctEnds: ends.size, distinctSlots: slots.size };
+}`);
+const IO = JSON.parse(run(`JSON.stringify(islandTrial(false))`)), IN = JSON.parse(run(`JSON.stringify(islandTrial(true))`));
+ok(`a group order onto an unreachable island gives up as before: nobody pathOk, as many distinct path ends as the old code (old ${IO.distinctEnds}, new ${IN.distinctEnds})`, !IO.none && !IN.none && IN.pathOk === 0 && IO.pathOk === 0 && IN.distinctEnds >= IO.distinctEnds, { IO, IN });
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

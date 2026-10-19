@@ -440,13 +440,30 @@ function hpaShared(u, rect, r) {
   if (!g.route) {
     const L = g.leader.dead || g.leader.dying || g.leader.inside ? u : g.leader;
     if (typeof PATHB === 'object') PATHB.used++;   // the group's one search, charged to the per-tick path budget
-    const res = findPath(W.map, L.x | 0, L.y | 0, { x0: g.x | 0, y0: g.y | 0, x1: g.x | 0, y1: g.y | 0, r: 0 }, unitPass(L), undefined, g.cls);
+    // aim at a passable tile: the click may be on a tree, a mine or a building, which the search cannot end on
+    const lp = unitPass(L), tg = hpaSnap(W.map, g.x | 0, g.y | 0, lp);
+    const res = findPath(W.map, L.x | 0, L.y | 0, { x0: tg.x, y0: tg.y, x1: tg.x, y1: tg.y, r: 0 }, lp, undefined, g.cls);
     g.route = { pts: res.pts, ok: res.ok, sx: L.x | 0, sy: L.y | 0 };
   }
-  if (!g.route.pts.length) return null;
-  const out = hpaJoin(u, g.route, rect);
-  if (out) HPA.stats.shared++;
+  // a request that falls through to the member's own full search is charged to the path budget like any other
+  const out = g.route.pts.length ? hpaJoin(u, g.route, rect) : null;
+  if (out) HPA.stats.shared++; else if (typeof PATHB === 'object') PATHB.used++;
   return out;
+}
+// The tile itself if passable, else the nearest passable tile in growing rings (up to 8 tiles out), else the tile.
+function hpaSnap(map, x, y, pass) {
+  const n = map.n; x = Math.max(0, Math.min(n - 1, x)); y = Math.max(0, Math.min(n - 1, y));
+  if (pass(y * n + x, x, y)) return { x, y };
+  for (let d = 1; d <= 8; d++) {
+    let best = null, bd = Infinity;
+    for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== d) continue;
+      const px = x + dx, py = y + dy; if (px < 0 || py < 0 || px >= n || py >= n || !pass(py * n + px, px, py)) continue;
+      const dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = { x: px, y: py }; }
+    }
+    if (best) return best;
+  }
+  return { x, y };
 }
 // A member's own copy of the group route: a leg from where it stands onto the route's first waypoint, the waypoints,
 // and its slot (rect) at the end.
@@ -462,13 +479,20 @@ function hpaJoin(u, route, rect) {
     if (!j.ok) return null;
     head = j.pts.slice(0, -1);
   }
-  if (!route.ok) return { pts: head.concat(pts), ok: false };
-  const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, body = pts.slice(0, -1);
+  const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, body = pts.slice(0, -1), slotOk = pass(st, rect.x0, rect.y0);
+  if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
+  if (!route.ok) {   // the route stops short: keep the member's slot when it is in plain sight of where the route ends, else search alone
+    const all = head.concat(pts);
+    return slotOk && lineClear(map, T(all[all.length - 1]), st, pass) ? { pts: all.concat([slot]), ok: false } : null;
+  }
   const prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
   // leave the route before the order point when the slot is in plain sight; otherwise go through the order point (a
   // slot that cannot be walked to from there gets the member's own repath when it is blocked)
   if (st === T(pts[pts.length - 1]) || lineClear(map, prev, st, pass)) return { pts: head.concat(body, [slot]), ok: true };
-  return { pts: head.concat(pts, [slot]), ok: true };
+  // the slot is out of sight of the route's last leg (the click was on an obstacle, say): a short search from there to the slot,
+  // so the members spread to their own slots instead of all converging on the order point
+  const j = findPath(map, prev % n, (prev / n) | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x0, y1: rect.y0, r: 0 }, pass, HPA.joinNodes);
+  return j.ok ? { pts: head.concat(body, j.pts), ok: true } : null;
 }
 // A new or loaded match: build the land and naval graphs and every intra edge now, so the first long order of the
 // match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
