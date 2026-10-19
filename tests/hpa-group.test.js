@@ -125,5 +125,25 @@ function islandTrial(on) {
 const IO = JSON.parse(run(`JSON.stringify(islandTrial(false))`)), IN = JSON.parse(run(`JSON.stringify(islandTrial(true))`));
 ok(`a group order onto an unreachable island gives up as before: nobody pathOk, as many distinct path ends as the old code (old ${IO.distinctEnds}, new ${IN.distinctEnds})`, !IO.none && !IN.none && IN.pathOk === 0 && IO.pathOk === 0 && IN.distinctEnds >= IO.distinctEnds, { IO, IN });
 
+// ---------- 6. 40 knights ordered into the middle of a forest on a 256 map: slots in pockets, no full search per knight ----------
+run(`
+function forestTrial(on) {
+  HPA.enabled = on; world(256, 33, 'land', 3);
+  const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), us = knights(a);
+  const trees = W.list.filter(e => e.kind === 'res' && e.type === 'tree' && Math.hypot(e.x - a.x, e.y - a.y) > 60 && Math.hypot(e.x - a.x, e.y - a.y) < 170);
+  let best = null, bn = -1;   // the tree with the most trees within 3 tiles (at least 40: the middle of a forest, not its edge)
+  for (let i = 0; i < trees.length; i += 7) { const t = trees[i]; let c = 0; for (const q of trees) if (Math.abs(q.x - t.x) <= 3 && Math.abs(q.y - t.y) <= 3) c++; if (c > bn) { bn = c; best = t; } }
+  PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0;
+  const fp = findPath; let full = 0; findPath = function (m, sx, sy, g, p, mx, cls) { if (cls) full++; return fp.apply(this, arguments); };
+  const s0 = HPA.stats.shared, t0 = performance.now();
+  try { orderMove(us, best.x + 0.5, best.y + 0.5); } finally { findPath = fp; }
+  const ms = performance.now() - t0; let h = 0; const str = JSON.stringify(us.map(u => u.path));
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return { on, dense: bn, ms: +ms.toFixed(1), full, budget: PATHB.used, shared: HPA.stats.shared - s0, pathOk: us.filter(u => u.pathOk).length, hash: h };
+}`);
+const FO = JSON.parse(run(`JSON.stringify(forestTrial(false))`)), F1 = JSON.parse(run(`JSON.stringify(forestTrial(true))`)), F2 = JSON.parse(run(`JSON.stringify(forestTrial(true))`));
+ok(`40 knights ordered into a forest: as many reach their slot as before (${F1.pathOk} against ${FO.pathOk}), at most 2 full searches (${F1.full}), the budget charged once per full search (${F1.budget}), under a tenth of the old time (${F1.ms} ms against ${FO.ms} ms), and the same paths on a repeat`,
+  F1.dense >= 40 && F1.pathOk >= FO.pathOk && F1.full <= 2 && F1.budget === F1.full && F1.ms * 10 < FO.ms && F1.hash === F2.hash, { FO, F1, F2 });
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

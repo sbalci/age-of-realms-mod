@@ -26,6 +26,7 @@ const HPA = {
   weight: 1.001,          // corridor search: heuristic weight, so ties go to the tile nearer the goal
   map: null, g: {},       // the GameMap the graphs describe; class -> graph
   quiet: false,           // set by terraFlush around its computeRegions (terraTouch has dirtied the exact rectangle)
+  pocketNodes: 1500,      // the same, from the end of a route that stops short (a click in a forest pocket): unreachable slots exhaust their pocket and stop early
   joinNodes: 600,         // a group member's own search onto the shared route
   groupR: 12,             // units farther than this from their group's leader route on their own
   stats: { queries: 0, near: 0, routed: 0, unreachable: 0, fallback: 0, rebuilt: 0, groups: 0, shared: 0 },
@@ -480,11 +481,17 @@ function hpaJoin(u, route, rect) {
     head = j.pts.slice(0, -1);
   }
   const slot = { x: rect.x0 + 0.5, y: rect.y0 + 0.5 }, st = rect.y0 * n + rect.x0, body = pts.slice(0, -1), slotOk = pass(st, rect.x0, rect.y0);
-  if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
-  if (!route.ok) {   // the route stops short: keep the member's slot when it is in plain sight of where the route ends, else search alone
-    const all = head.concat(pts);
-    return slotOk && lineClear(map, T(all[all.length - 1]), st, pass) ? { pts: all.concat([slot]), ok: false } : null;
+  if (!route.ok) {
+    // The route stops at the reachable tile nearest the goal (findPath's best effort: the click was in a pocket, on an island...).
+    // The member's slot is walked to from there: in plain sight, else by a bounded search whose best effort is kept when it
+    // cannot reach (as the old code's own search would). A null (the member's own full search) never comes from here: it comes
+    // only from the group having no route at all (a boxed-in leader), a failed head join, or a slot that cannot be stood on.
+    const all = head.concat(pts), end = T(all[all.length - 1]);
+    if (slotOk && lineClear(map, end, st, pass)) return { pts: all.concat([slot]), ok: true };
+    const j = findPath(map, end % n, (end / n) | 0, { x0: rect.x0, y0: rect.y0, x1: rect.x0, y1: rect.y0, r: 0 }, pass, HPA.pocketNodes);
+    return { pts: all.concat(j.pts), ok: j.ok };
   }
+  if (!slotOk) return null;   // a slot that cannot be stood on is the old code's business: the member searches alone
   const prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
   // leave the route before the order point when the slot is in plain sight; otherwise go through the order point (a
   // slot that cannot be walked to from there gets the member's own repath when it is blocked)
