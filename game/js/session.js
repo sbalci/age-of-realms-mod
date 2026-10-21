@@ -67,9 +67,10 @@ const MatchSave = {
   // and a value is a number, string, boolean or null as itself, [i] for node i, or [] for undefined.
   // walk(value, out, slice) visits the objects breadth first and fills out.root, out.shapes and out.nodes; a typed array's
   // node holds a copy of it, which pack() turns into text. Both are generators: given slice (ms) they yield when a slice
-  // is used up (the sliced autosave); with slice 0 they run to the end in one go.
-  *walk(value, out, slice = 0) {
-    const nodes = [], seen = new Map(), shapes = [], shapeOf = new Map(), queue = [];
+  // is used up (the sliced autosave); with slice 0 they run to the end in one go. Given snap (freeze()), value is the
+  // snapshot's copy, whose typed arrays are copies already and whose flat records are read from the snapshot.
+  *walk(value, out, slice = 0, snap = null) {
+    const nodes = [], seen = new Map(), shapes = [], shapeOf = new Map(), queue = [], snapShape = [];
     const val = v => {
       if (v === undefined) return [];
       if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
@@ -79,17 +80,25 @@ const MatchSave = {
       return [id];
     };
     out.root = val(value);
-    let t0 = performance.now();
+    // tq: when the last stretch (128 nodes, or 4096 items of a list) began; a slice ends before a stretch as long as the
+    // last one would take it past slice ms
+    let t0 = performance.now(), tq = t0;
+    const due = () => { const now = performance.now(), over = now - t0 + (now - tq) > slice; tq = now; return over; };
     for (let q = 0; q < queue.length; q++) {
-      const v = queue[q]; let node;
-      if (ArrayBuffer.isView(v)) {
+      const v = queue[q], r = snap ? snap.at(v) : -1; let node;
+      if (r >= 0) {   // a flat record of the snapshot: the node the entity had at the moment of the snapshot
+        const k = snap.shape[r], keys = snap.shapes[k], o = snap.start[r];
+        let s = snapShape[k];
+        if (s === undefined) { const sk = 'Object\u0000' + keys.join('\u0000'); s = shapeOf.get(sk); if (s === undefined) { s = shapes.length; shapeOf.set(sk, s); shapes.push(['Object', ...keys]); } snapShape[k] = s; }
+        node = [s]; for (let j = 0; j < keys.length; j++) node.push(val(snap.vals[o + j]));
+      } else if (ArrayBuffer.isView(v)) {
         if (!Object.prototype.hasOwnProperty.call(CODEC_TYPES, v.constructor.name)) throw new Error('Cannot save a ' + v.constructor.name + '.');
-        node = [v.constructor.name, v.length, v.slice()];
+        node = [v.constructor.name, v.length, snap ? v : v.slice()];
       } else if (v instanceof Map) { node = ['M']; for (const [k, x] of v) node.push(val(k), val(x)); }
       else if (v instanceof Set) { node = ['S']; for (const x of v) node.push(val(x)); }
       else if (Array.isArray(v)) {   // W.list holds every entity: a long array may span slices
         node = ['A'];
-        for (let i = 0; i < v.length; i++) { node.push(val(v[i])); if (slice && (i & 4095) === 4095 && performance.now() - t0 > slice) { yield; t0 = performance.now(); } }
+        for (let i = 0; i < v.length; i++) { node.push(val(v[i])); if (slice && (i & 4095) === 4095 && due()) { yield; t0 = tq = performance.now(); } }
       }
       else {
         const type = v instanceof GameMap ? 'GameMap' : v instanceof Player ? 'Player' : typeof AIPlayer !== 'undefined' && v instanceof AIPlayer ? 'AIPlayer' : 'Object';
@@ -98,7 +107,7 @@ const MatchSave = {
         node = [s]; for (const k of keys) node.push(val(v[k]));
       }
       nodes[q] = node;
-      if (slice && (q & 127) === 127 && performance.now() - t0 > slice) { yield; t0 = performance.now(); }
+      if (slice && (q & 127) === 127 && due()) { yield; t0 = tq = performance.now(); }
     }
     out.nodes = nodes; out.shapes = shapes;
   },
@@ -107,16 +116,17 @@ const MatchSave = {
   // one-shot save codes it the same way.
   *pack(out, slice = 0) {
     const CH = 196608;
-    let t0 = performance.now();
-    const due = () => slice && performance.now() - t0 > slice;
+    // step is the last chunk's time: a slice ends before a chunk that would take it past slice ms, not after
+    let t0 = performance.now(), step = 0;
+    const due = () => slice && performance.now() - t0 + step > slice, timed = f => { const t = performance.now(), r = f(); step = performance.now() - t; return r; };
     for (const node of out.nodes) {
       if (typeof node[0] !== 'string' || !ArrayBuffer.isView(node[2])) continue;
       const a = node[2], bytes = new Uint8Array(a.buffer, a.byteOffset, a.byteLength), runs = [];
       let len = 0;
-      for (let i = 0; i < bytes.length || !runs.length; i += CH) { const r = rleEncode(bytes.subarray(i, i + CH)); runs.push(r); len += r.length; if (due()) { yield; t0 = performance.now(); } }
+      for (let i = 0; i < bytes.length || !runs.length; i += CH) { if (due()) { yield; t0 = performance.now(); } const r = timed(() => rleEncode(bytes.subarray(i, i + CH))); runs.push(r); len += r.length; }
       const all = runs.length === 1 ? runs[0] : new Uint8Array(len), text = [];
       if (runs.length > 1) { let o = 0; for (const r of runs) { all.set(r, o); o += r.length; } }
-      for (let i = 0; i < all.length || !text.length; i += CH) { text.push(b64Encode(all.subarray(i, i + CH))); if (due()) { yield; t0 = performance.now(); } }
+      for (let i = 0; i < all.length || !text.length; i += CH) { if (due()) { yield; t0 = performance.now(); } text.push(timed(() => b64Encode(all.subarray(i, i + CH)))); }
       node[2] = text.join('');
     }
   },
@@ -277,7 +287,170 @@ const MatchSave = {
     rebuildGrid(); GameHooks.emit('worldRestored', W);
     return data;
   },
-  save(auto = false) { localStorage.setItem(auto ? this.autoKey : this.key, this.serialize()); },
+  // ---------- slots in IndexedDB (store.js): manual slots '1' to '5' and 'auto'; a summary of each in the meta store ----------
+  slots: ['1', '2', '3', '4', '5'],
+  async saveTo(slot, text, head = this.lastHead) {
+    if (![...this.slots, 'auto'].includes(slot)) throw new Error('Unknown save slot.');
+    await Store.put('saves', slot, text);
+    await Store.put('meta', 'save:' + slot, { slot, savedAt: head.savedAt, meta: head.meta, n: head.n, version: head.version, chars: text.length });
+  },
+  async loadFrom(slot) { if (![...this.slots, 'auto'].includes(slot)) throw new Error('Unknown save slot.'); return Store.get('saves', slot); },
+  // slot -> its summary, or null when it is empty
+  async slotInfos() { const out = {}; for (const s of [...this.slots, 'auto']) out[s] = (await Store.get('meta', 'save:' + s)) || null; return out; },
+  slotLabel(slot, info) {
+    const name = slot === 'auto' ? 'Autosave' : 'Slot ' + slot;
+    if (!info) return name + ' · empty';
+    const mt = info.meta, date = info.savedAt ? new Date(info.savedAt).toLocaleString() : '';
+    const summary = mt ? [mt.civ, mt.age, mt.mapLabel, typeof fmtTime === 'function' && Number.isFinite(mt.time) ? fmtTime(mt.time) : '', mt.players ? mt.players + 'P' : ''].filter(Boolean).join(' · ') : '';
+    return name + ' · ' + [summary, date].filter(Boolean).join(' — ');
+  },
+  // ---------- the autosave: a snapshot of one moment, then the text in idle slices ----------
+  // serializeSliced() copies what the save holds in one go (freeze), between two ticks, and then builds the text from
+  // that copy in slices of at most sliceMs, one per idle period (requestIdleCallback, else a timeout), while the match
+  // plays on: the walk, the packing of the layers and the JSON. Nothing holds the simulation, and the text is
+  // serialize()'s at the moment of the snapshot, whatever the simulation and the player's input do meanwhile.
+  // Slices aim at sliceMs: the walk (every 128 nodes, or 4096 items of a list), the packing and the JSON each end a
+  // slice before a step as long as their last one would take it past sliceMs, so no slice passes 8 ms.
+  sliceMs: 6, busy: false, stats: null,
+  later(fn, soon) { if (!soon && typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 100 }); else if (typeof setTimeout === 'function') setTimeout(fn, 0); else Promise.resolve().then(fn); },
+  sliced(gen, stats) {
+    return new Promise((resolve, reject) => {
+      const step = () => {
+        const t0 = performance.now();
+        let r; try { r = gen.next(); } catch (e) { reject(e); return; }
+        stats.slices.push(+(performance.now() - t0).toFixed(2));
+        if (r.done) resolve(); else this.later(step);
+      };
+      this.later(step);
+    });
+  },
+  // freeze(value) copies, at once, all that the save of value holds, so that walk(), pack() and the JSON can run later
+  // and still write this moment. Typed arrays are copied, into the copies the previous snapshot made where it can
+  // (GameMap's derived layers are not: walk() leaves them out). Every other object is copied with its prototype, its
+  // keys in order and its shared references, so walking the copy gives the graph that walking the match gives now.
+  // The exception is W.list's flat records, plain objects that hold only numbers, strings, booleans, null and
+  // undefined: the trees, mines and other resources, nearly all of a big map's entities. Copied as objects they cost
+  // 11 ms at 480 x 480 with 8 players (48,800 entities: the copies outlive the young generation). Instead their values
+  // go into one array, their keys into one list per shape, and the snapshot keeps the entity itself only as the
+  // identity that walk() numbers (at(): its index in items, or -1).
+  spares: new WeakMap(),   // a typed array of the match -> the copy the last snapshot made of it
+  bufs: null,              // the last snapshot's arrays for its flat records, once its walk is done (release())
+  freeze(value, list, nextId) {   // list: W.list, nextId: W.nextId (or a sample of the list, rehearse())
+    const n = list.length, top = Math.max(1, nextId | 0), grow = k => Math.ceil(k * 1.25) + 64;
+    let b = this.bufs; this.bufs = null;   // taken: a snapshot made before this one is released gets arrays of its own
+    if (!b || b.slot.length <= top || b.shape.length < n || b.vals.length < n * 13) b = { slot: new Int32Array(grow(top)), shape: new Int32Array(grow(n)), start: new Int32Array(grow(n)), vals: new Array(grow(n * 13)) };
+    const items = list.slice(), slot = b.slot, shape = b.shape, start = b.start;
+    slot.fill(0, 0, top + 1); shape.fill(-1, 0, n);
+    const { shapes, flat } = this.flatPass(items, n, top, slot, shape, start, b.vals);
+    let polluted = false; for (const k in Object.prototype) { polluted = true; break; }
+    const at = v => { if (Object.getPrototypeOf(v) !== Object.prototype) return -1; const id = v.id; if (!(id >= 1 && id <= top)) return -1; const s = slot[id] - 1; return s >= 0 && items[s] === v ? s : -1; };
+    const seen = new Map([[list, items]]), stack = [];
+    const copy = v => {
+      if (v === null || typeof v !== 'object') return v;
+      let c = seen.get(v); if (c !== undefined) return c;
+      if (at(v) >= 0) return v;
+      if (ArrayBuffer.isView(v)) {
+        if (typeof v.slice !== 'function') c = v;
+        else { c = this.spares.get(v); if (c && c.constructor === v.constructor && c.length === v.length) c.set(v); else { c = v.slice(); this.spares.set(v, c); } }
+        seen.set(v, c); return c;
+      }
+      // plain objects and arrays are copied whole (spread, slice: one step, not one store per key), their object values below
+      const proto = Object.getPrototypeOf(v);
+      c = Array.isArray(v) ? v.slice() : v instanceof Map ? new Map() : v instanceof Set ? new Set() : proto === Object.prototype && !polluted ? { ...v } : Object.create(proto);
+      seen.set(v, c); stack.push(v, c); return c;
+    };
+    const root = copy(value);
+    for (let i = 0; i < n; i++) if (shape[i] < 0) items[i] = copy(items[i]);
+    while (stack.length) {
+      const c = stack.pop(), v = stack.pop();
+      if (Array.isArray(v)) { for (let i = 0; i < c.length; i++) { const x = c[i]; if (x !== null && typeof x === 'object') c[i] = copy(x); } }
+      else if (v instanceof Map) { for (const [k, x] of v) c.set(copy(k), copy(x)); }
+      else if (v instanceof Set) { for (const x of v) c.add(copy(x)); }
+      else if (Object.getPrototypeOf(c) === Object.prototype && !polluted) { for (const k in c) { const x = c[k]; if (x !== null && typeof x === 'object') c[k] = copy(x); } }
+      else {
+        // a class's object (GameMap, Player, AIPlayer) key by key; its prototype may have accessors (AIPlayer's id): define, do not assign
+        const keys = v instanceof GameMap ? Object.keys(v).filter(k => !MAP_DERIVED.includes(k)) : Object.keys(v);
+        for (const k of keys) Object.defineProperty(c, k, { value: copy(v[k]), enumerable: true, writable: true, configurable: true });
+      }
+    }
+    return { root, items, shape, start, shapes, vals: b.vals, at, flat, release: () => { this.bufs = b; } };   // release(): after the walk, the next snapshot may reuse the arrays
+  },
+  // freeze()'s pass over W.list: the flat records' values into vals, their shapes and starts; slot[id] = index + 1
+  flatPass(items, n, top, slot, shape, start, vals) {
+    const shapes = [], readers = [], uses = [], same = (a, b) => { if (a.length !== b.length) return false; for (let j = 0; j < a.length; j++) if (a[j] !== b[j]) return false; return true; };
+    let o = 1, flat = 0;
+    vals[0] = '';   // a string first, so the array holds values of every kind from the start
+    let polluted = false; for (const k in Object.prototype) { polluted = true; break; }   // for-in below lists own keys only while Object.prototype has none
+    let s1 = -1, s2 = -1;   // the last two shapes seen: most records have one of them (trees, and trees by water), checked key by key
+    for (let i = 0; i < n; i++) {
+      const e = items[i];
+      if (e === null || typeof e !== 'object' || Object.getPrototypeOf(e) !== Object.prototype) continue;
+      const id = e.id; if (!Number.isInteger(id) || id < 1 || id > top || slot[id]) continue;
+      let s = -1;
+      if (!polluted) for (let c = 0; c < 2 && s < 0; c++) {
+        const t = c ? s2 : s1; if (t < 0) continue;
+        const ks = shapes[t]; let j = 0; for (const k in e) { if (k !== ks[j]) { j = -1; break; } j++; } if (j === ks.length) s = t;
+      }
+      if (s < 0) { const ks = Object.keys(e); s = shapes.findIndex(x => same(ks, x)); if (s < 0) { s = shapes.length; shapes.push(ks); readers.push(this.slowReader(ks)); uses.push(0); } }
+      if (s !== s1) { s2 = s1; s1 = s; }
+      const m = shapes[s].length; if (o + m > vals.length) vals.length = 2 * vals.length;
+      if (!readers[s](e, vals, o)) continue;   // it holds an object: it is copied below
+      if (++uses[s] === 32) readers[s] = this.reader(shapes[s]);   // a shape with many flat records gets the compiled reader
+      slot[id] = i + 1; shape[i] = s; start[i] = o; o += m; flat++;
+    }
+    return { shapes, flat };
+  },
+  // reader(keys)(e, v, o) writes the values of e, an object of those keys, to v from index o on, or returns false at the
+  // first value that is an object. The compiled reader reads each key by name, and is kept from one snapshot to the
+  // next: freeze() at 480 x 480 took 27 ms reading its 580,000 values through computed names (slowReader), 9 ms by
+  // name. Only a shape with 32 flat records in a snapshot is compiled; the others (units, buildings, rare resources)
+  // read through computed names.
+  readers: new Map(),
+  reader(keys) {
+    const sig = keys.join('\u0000'), had = this.readers.get(sig); if (had) return had;
+    if (this.readers.size > 4096) this.readers.clear();
+    let r;
+    try { r = new Function('e', 'v', 'o', 'let x; ' + keys.map((k, j) => `x = e[${JSON.stringify(k)}]; if (x !== null && typeof x === 'object') return false; v[o + ${j}] = x;`).join(' ') + ' return true;'); }
+    catch (err) { r = this.slowReader(keys); }   // where a content security policy forbids compiling
+    this.readers.set(sig, r); return r;
+  },
+  slowReader(keys) { return (e, v, o) => { for (let j = 0; j < keys.length; j++) { const x = e[keys[j]]; if (x !== null && typeof x === 'object') return false; v[o + j] = x; } return true; }; },
+  // the snapshot's rehearsal (autosave): freeze() on every 8th entity, thrown away
+  rehearse() {
+    if (typeof terraFlush === 'function') terraFlush();
+    const some = W.list.filter((e, i) => (i & 7) === 0);
+    this.freeze({ list: some }, some, W.nextId).release();
+  },
+  async serializeSliced() {
+    const t0 = performance.now(), { head, value } = this.parts(), snap = this.freeze(value, W.list, W.nextId), out = {};
+    const stats = this.stats = { tick: W.tick, snapMs: +(performance.now() - t0).toFixed(2), flat: snap.flat, entities: snap.items.length, slices: [], ms: 0, chars: 0 };
+    await this.sliced(this.walk(snap.root, out, this.sliceMs, snap), stats);
+    snap.release();
+    await this.sliced(this.pack(out, this.sliceMs), stats);
+    const nodes = out.nodes, chunks = [], ms = this.sliceMs;
+    // the JSON, 256 nodes at a time; a slice ends before a chunk that would take it past ms (step: the last chunk's time)
+    await this.sliced((function* () { let t0 = performance.now(), step = 0; for (let i = 0; i < nodes.length; i += 256) { if (performance.now() - t0 + step > ms) { yield; t0 = performance.now(); } const t = performance.now(); chunks.push(nodes.slice(i, i + 256).map(x => JSON.stringify(x)).join(',')); step = performance.now() - t; } })(), stats);
+    // the same text as serialize(): the head, then the graph with its nodes last
+    const pre = JSON.stringify({ ...head, graph: { root: out.root, shapes: out.shapes, nodes: [] } }), text = pre.slice(0, -3) + chunks.join(',') + ']}}';
+    this.lastHead = head; stats.ms = +(performance.now() - t0).toFixed(1); stats.chars = text.length;
+    return text;
+  },
+  // Every failure shows a message (the old autosave told only once).
+  async autosave() {
+    if (this.busy) return false;
+    this.busy = true;
+    try {
+      await new Promise(r => this.later(r, true));   // after the tick that started it: the snapshot is of a moment between two ticks, as a manual save's is
+      if (!W || W.menu || W.editor || W.over) return false;   // the match ended or was left meanwhile
+      // A rehearsal on every 8th entity, an idle period before the snapshot: the snapshot runs once a minute, and its code ran
+      // 2-3 times slower cold (26 ms against 9 at 480 x 480). It also finishes any pending terrain work (terraFlush).
+      this.rehearse(); await new Promise(r => this.later(r));
+      if (!W || W.menu || W.editor || W.over) return false;
+      const text = await this.serializeSliced(); await this.saveTo('auto', text); if (W) W.autosaveError = false; return true;
+    }
+    catch (e) { if (W) W.autosaveError = true; msg('Autosave failed: ' + (e && e.message ? e.message : e) + ' Use Export Match from the game menu to keep a copy.', '#fc8'); return false; }
+    finally { this.busy = false; }
+  },
   resume(text) {
     const data = this.restore(text);
     Editor.active = false; UI.gameRunning = true; UI.paused = false; UI.focusPaused = false;
@@ -297,27 +470,39 @@ const MatchSave = {
     if (typeof tutorialPanel === 'function') tutorialPanel();
     Sound.init(); Sound.startMusic(); msg('Saved match resumed.', '#9fd');
   },
-  openLoad() {
+  async openLoad() {
     const backToGame = UI.gameRunning && UI.paused;
-    const m = openModal('Load Match', '<p>Resume a local save or choose an exported match file.</p><div id="match-slots"></div><label>Import match <input type="file" id="match-file" accept=".json"></label><p id="match-error" role="status"></p>', [[backToGame ? 'Back to Game Menu' : 'Close', backToGame ? () => { openGameMenu(); return false; } : null]]);
+    const m = openModal('Load Match', '<p>Resume a saved match or choose an exported match file (.json.gz or .json).</p><div id="match-slots"></div><label>Import match <input type="file" id="match-file" accept=".gz,.json,application/gzip,application/json"></label><p id="match-error" role="status"></p>', [[backToGame ? 'Back to Game Menu' : 'Close', backToGame ? () => { openGameMenu(); return false; } : null]]);
     const fail = e => { m.querySelector('#match-error').textContent = e.message; };
-    for (const [key, label] of [[this.key, 'Manual save'], [this.autoKey, 'Autosave']]) {
-      let text; try { text = localStorage.getItem(key); } catch (e) { fail(e); continue; }
-      if (!text) continue;
-      const b = document.createElement('button'); b.className = 'btn';
-      let info = '';
-      try {
-        const parsed = JSON.parse(text), date = parsed.savedAt ? new Date(parsed.savedAt).toLocaleString() : '', mt = parsed.meta;
-        const summary = mt ? [mt.civ, mt.age, mt.mapLabel, typeof fmtTime === 'function' && Number.isFinite(mt.time) ? fmtTime(mt.time) : '', mt.players ? mt.players + 'P' : ''].filter(Boolean).join(' · ') : '';
-        info = [summary, date].filter(Boolean).join(' — ');
-      } catch (e) { }
-      b.textContent = label + (info ? ' · ' + info : ''); b.onclick = () => { try { this.resume(text); } catch (e) { fail(e); } }; m.querySelector('#match-slots').appendChild(b);
+    m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { this.resume(await readTextFile(f)); } catch (err) { fail(err); } };
+    let infos; try { infos = await this.slotInfos(); } catch (e) { fail(e); return; }
+    const box = m.querySelector('#match-slots');
+    for (const s of [...this.slots, 'auto']) {
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = this.slotLabel(s, infos[s]); b.disabled = !infos[s];
+      b.onclick = async () => { try { const text = await this.loadFrom(s); if (!text) throw new Error('That slot is empty.'); this.resume(text); } catch (e) { fail(e); } };
+      box.appendChild(b);
     }
-    m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { if (f.size > CODEC.cap) throw new Error('Save file is too large.'); this.resume(await f.text()); } catch (e) { fail(e); } };
   },
-  export() {
-    const blob = new Blob([this.serialize()], { type: 'application/json' }), a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'age-of-realms-match.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // the game menu's Save Match: five slots, each showing what it holds; a slot that holds a save is overwritten
+  async openSave() {
+    const m = openModal('Save Match', '<p>Choose a slot. Saving to a slot that holds a match replaces it.</p><div id="match-slots"></div><p id="match-error" role="status"></p>', [['Back to Game Menu', () => { openGameMenu(); return false; }]]);
+    const status = m.querySelector('#match-error'), box = m.querySelector('#match-slots');
+    let infos; try { infos = await this.slotInfos(); } catch (e) { status.textContent = 'Save failed: ' + e.message; return; }
+    for (const s of this.slots) {
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = this.slotLabel(s, infos[s]);
+      b.onclick = async () => {
+        for (const x of box.querySelectorAll('button')) x.disabled = true;
+        status.textContent = 'Saving…';
+        try { await this.saveTo(s, this.serialize()); msg(`Match saved to slot ${s}.`, '#9fd'); openGameMenu(); }
+        catch (e) { status.textContent = 'Save failed: ' + e.message; for (const x of box.querySelectorAll('button')) x.disabled = false; }
+      };
+      box.appendChild(b);
+    }
+  },
+  // a gzip file (CompressionStream); plain JSON where the browser has no CompressionStream
+  async export() {
+    const text = this.serialize(), gz = typeof CompressionStream === 'function', blob = gz ? await gzipText(text) : new Blob([text], { type: 'application/json' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = gz ? 'age-of-realms-match.json.gz' : 'age-of-realms-match.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
 };
 
@@ -333,11 +518,10 @@ function applyRules(rules = RULE_DEFAULTS) {
   for (const k of [...VICTORY_RULE_KEYS, 'wonderTime', 'relicTime']) VIC[k] = (rules.victory || RULE_DEFAULTS.victory)[k];
 }
 GameHooks.on('afterTick', () => {
-  if (!W || W.menu || W.editor || W.over || typeof localStorage === 'undefined') return;
+  if (!W || W.menu || W.editor || W.over || MatchSave.busy || (typeof indexedDB === 'undefined' && typeof localStorage === 'undefined')) return;
   if (W.t < (W.nextAutosave ?? MatchSave.interval)) return;
   W.nextAutosave = W.t + MatchSave.interval;
-  try { MatchSave.save(true); W.autosaveError = false; }
-  catch (e) { if (!W.autosaveError) msg('Autosave failed. Use Export Match from the game menu to keep a copy.', '#fc8'); W.autosaveError = true; }
+  MatchSave.autosave();   // a snapshot right after this tick, then the text in idle slices while the match plays on
 });
 
 if (typeof initMenus === 'function') {
@@ -348,7 +532,7 @@ if (typeof openGameMenu === 'function') {
   const previous = openGameMenu;
   openGameMenu = function () {
     previous(); const buttons = $('#modal .modal-btns');
-    for (const [label, action] of [['Save Match', () => { MatchSave.save(); msg('Match saved.', '#9fd'); }], ['Export Match', () => MatchSave.export()], ['Load Match', () => MatchSave.openLoad()], ['Controls', () => openControls()]]) {
+    for (const [label, action] of [['Save Match', () => MatchSave.openSave()], ['Export Match', () => MatchSave.export().catch(e => msg('Export failed: ' + e.message, '#fc8'))], ['Load Match', () => MatchSave.openLoad()], ['Controls', () => openControls()]]) {
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = label;
       if (W.over && ['Save Match', 'Export Match'].includes(label)) b.disabled = true;
       b.onclick = () => { try { action(); } catch (e) { const p = document.createElement('p'); p.textContent = 'Save failed: ' + e.message; $('#modal .modal-body').appendChild(p); } }; buttons.appendChild(b);

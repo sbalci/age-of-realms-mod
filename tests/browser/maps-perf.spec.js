@@ -38,7 +38,9 @@ commits the rows it was measured by, so progress against the budgets stays visib
 - **2D frame**: mean of 30 synchronous \`renderWorld\` + \`drawOverlays\` calls at zoom 1 / 0.55 (coastal, 3 players,
   seed 7). **2D fps**: live frames over 5 s at each zoom with the match running.
 - **2.5D fps**: live frames over 4 s with \`?renderer=three\`.
-- **Save**: \`MatchSave.serialize()\` characters and ms after the timed 3-player ticks.
+- **Save**: \`MatchSave.serialize()\` characters and ms after the timed 3-player ticks; from phase 4 also, after the
+  semicolon, for 5 autosaves in a live 8-player match: the median of their snapshots (the only time an autosave holds
+  the game), their longest slice, and the longest tick while they ran, in ms.
 - **Cache MB**: terrain chunk canvases (width × height × 4) after an 11 × 11 pan at zoom 0.55.
 
 | Date | Label | Commit | Renderer | n | Gen 3p / 8p ms | Tick 3p mean / p99 ms | Tick 8p mean / p99 ms | Tree search µs | 40 knights 3p / 8p ms (routes ok) | 2D frame z1 / z0.55 ms | 2D fps z1 / z0.55 | 2.5D fps | Save chars (ms) | Cache MB |
@@ -128,6 +130,29 @@ async function measureKnightRuns(page, n, np, type, warm = 0) {
   const runs = []; for (let i = 0; i < KNIGHTS; i++) runs.push(await measureKnights(page, n, np, type, warm));
   return { ms: median(runs.map(r => r.worst)), full: median(runs.map(r => r.worstFull)), ok: Math.min(...runs.map(r => r.ok)), runs };
 }
+// The autosave (session.js) in a live 8-player match, 5 times: its snapshot, its slices, and every tick while it ran
+// (worldTick timed through a wrapper the main loop calls).
+async function measureAutosave(page, n) {
+  await openGame(page); await prepareSize(page, n);
+  return page.evaluate(async cfg => {
+    if (typeof MatchSave.serializeSliced !== 'function') return { snapMs: 'n/a', maxSlice: 'n/a', maxTick: 'n/a' };   // a control run of code before phase 4
+    const g = __game; g.launchFromSetup(cfg); const W = g.W;
+    W.players[1].ai = new AIPlayer(W.players[1], 'standard'); W.spectate = true; W.nextAutosave = 1e9;
+    g.UI.paused = false; g.UI.focusPaused = false;
+    await new Promise(r => setTimeout(r, 2000));
+    const wt = worldTick, ticks = [], runs = [];
+    worldTick = function () { const t = performance.now(); const r = wt.apply(this, arguments); ticks.push(performance.now() - t); return r; };
+    for (let k = 0; k < 5; k++) {
+      W.nextAutosave = W.t;
+      await new Promise(r => { const f = () => (MatchSave.busy || W.nextAutosave === W.t ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
+      const s = MatchSave.stats; runs.push({ snapMs: s.snapMs, maxSlice: Math.max(...s.slices), slices: s.slices.length, ms: s.ms, chars: s.chars });
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    worldTick = wt; g.UI.paused = true;
+    const snaps = runs.map(x => x.snapMs).sort((a, b) => a - b);
+    return { runs, snapMs: snaps[2], maxSlice: +Math.max(...runs.map(x => x.maxSlice)).toFixed(1), maxTick: +Math.max(...ticks).toFixed(1) };
+  }, setup(n, 8, 'land', 33, 1, 'high'));
+}
 // 2D rendering (evaluation T1): steady frame cost, live fps, then a full pan and the terrain-cache size.
 async function measure2d(page, n) {
   await page.evaluate(cfg => { __game.launchFromSetup(cfg); __game.UI.paused = true; }, setup(n, 3, 'coastal', 7, 0, 'standard'));
@@ -193,6 +218,8 @@ for (const n of SIZES) {
     rec.knights3w = await measureKnightRuns(page, n, 3, 'coastal', 600);
     rec.knights8w = await measureKnightRuns(page, n, 8, 'land', 600);
     await openGame(page); await prepareSize(page, n);
+    rec.autosave = await measureAutosave(page, n);
+    await openGame(page); await prepareSize(page, n);
     rec.render2d = await measure2d(page, n);
     await openGame(page, '?renderer=three');
     await page.waitForFunction(() => window.__game?.T25D.stats.frames > 1 || !!window.__game?.T25D.error, null, { timeout: 60000 }).catch(() => {});
@@ -213,6 +240,6 @@ test.afterAll(() => {
   fs.mkdirSync(path.dirname(JSON_OUT), { recursive: true });
   fs.writeFileSync(JSON_OUT, JSON.stringify({ date, label: LABEL, commit, ticks: TICKS, results }, null, 1));
   if (!fs.existsSync(MD_OUT)) fs.writeFileSync(MD_OUT, MD_HEAD);
-  const rows = results.map(r => `| ${date} | ${LABEL} | ${commit} | ${r.renderer} | ${r.n} | ${r.gen.p3} / ${r.gen.p8} | ${r.sim3.tick.mean} / ${r.sim3.tick.p99} | ${r.sim8.tick.mean} / ${r.sim8.tick.p99} | ${r.sim3.findNearestResUs} | ${r.knights3.ms} / ${r.knights8.ms}; ${r.knights3w.ms} / ${r.knights8w.ms} (${Math.min(r.knights3.ok, r.knights3w.ok)}/40, ${Math.min(r.knights8.ok, r.knights8w.ok)}/40) | ${r.render2d.steady.z1} / ${r.render2d.steady['z0.55']} | ${r.render2d.live.z1.fps} / ${r.render2d.live['z0.55'].fps} | ${r.render25d.fps ?? 'n/a'} | ${r.sim3.save.chars.toLocaleString('en-US')} (${r.sim3.save.ms}) | ${r.render2d.pan.cacheMB} |`);
+  const rows = results.map(r => `| ${date} | ${LABEL} | ${commit} | ${r.renderer} | ${r.n} | ${r.gen.p3} / ${r.gen.p8} | ${r.sim3.tick.mean} / ${r.sim3.tick.p99} | ${r.sim8.tick.mean} / ${r.sim8.tick.p99} | ${r.sim3.findNearestResUs} | ${r.knights3.ms} / ${r.knights8.ms}; ${r.knights3w.ms} / ${r.knights8w.ms} (${Math.min(r.knights3.ok, r.knights3w.ok)}/40, ${Math.min(r.knights8.ok, r.knights8w.ok)}/40) | ${r.render2d.steady.z1} / ${r.render2d.steady['z0.55']} | ${r.render2d.live.z1.fps} / ${r.render2d.live['z0.55'].fps} | ${r.render25d.fps ?? 'n/a'} | ${r.sim3.save.chars.toLocaleString('en-US')} (${r.sim3.save.ms}; ${r.autosave.snapMs} / ${r.autosave.maxSlice} / ${r.autosave.maxTick}) | ${r.render2d.pan.cacheMB} |`);
   fs.appendFileSync(MD_OUT, rows.join('\n') + '\n');
 });

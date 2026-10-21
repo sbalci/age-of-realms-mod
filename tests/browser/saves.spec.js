@@ -24,3 +24,76 @@ test('Store keeps saves, maps and meta in IndexedDB across a reload', async ({ p
     return out;
   })).toEqual({ len: 6291456, map: { n: 16, ter: [1, 2] }, meta: true });
 });
+
+// the perf spec's cap patch: sides above 256 stay blocked by validateMapSpec until phase 8
+const CAP_PATCH = `(() => { const src = validateMapSpec.toString(), patched = src.replace('n > 256', 'n > 1024');
+  if (patched === src) throw new Error("validateMapSpec no longer contains 'n > 256'"); validateMapSpec = eval('(' + patched + ')'); })();`;
+const setup = (n, np, type) => ({ name: 'Player', color: 0, civ: 'franks', mapType: type, customMap: '', size: 'x' + n, opponents: np - 1, oppCivs: [], difficulty: 'standard', teams: 'ffa', startAge: 1, startRes: 'high', fog: 'normal', speed: '1', seed: 33, cheats: true, tips: false });
+
+test('Export Match writes a gzip file that Load Match imports back', async ({ page }) => {
+  await page.locator('#btn-tutorial').click();
+  await page.evaluate(() => { __game.W.players[1].res.gold = 2468; });
+  await page.locator('#b-menu').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export Match', exact: true }).click()]);
+  expect(download.suggestedFilename()).toBe('age-of-realms-match.json.gz');
+  const file = await download.path(), bytes = fs.readFileSync(file);
+  expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
+  expect(JSON.parse(zlib.gunzipSync(bytes).toString()).version).toBe(2);
+  await page.evaluate(() => { __game.W.players[1].res.gold = 1; });
+  await page.getByRole('button', { name: 'Load Match', exact: true }).click();
+  await page.locator('#match-file').setInputFiles({ name: 'age-of-realms-match.json.gz', mimeType: 'application/gzip', buffer: bytes });
+  await expect(page.locator('#modal')).not.toBeVisible();
+  expect(await page.evaluate(() => __game.W.players[1].res.gold)).toBe(2468);
+});
+
+test('the autosave of a live 256 x 256 match takes its snapshot in at most 8 ms, then writes that moment in slices of at most 8 ms while the match plays on', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.evaluate(n => { MAP_SIZES['x' + n] = n; }, 256);
+  const r = await page.evaluate(async cfg => {
+    const g = __game; g.launchFromSetup(cfg); const W = g.W;
+    for (const p of W.players.slice(1)) p.ai = p.ai || new AIPlayer(p, 'standard');
+    W.spectate = true; W.nextAutosave = 1e9; g.UI.paused = false; g.UI.focusPaused = false;
+    await new Promise(r => setTimeout(r, 2000));
+    const ticks = [], wt = worldTick, runs = [];
+    worldTick = function () { const t = performance.now(); const r = wt.apply(this, arguments); ticks.push(performance.now() - t); return r; };
+    // the last autosave is checked against the one-shot save of its snapshot's moment
+    const sliced = MatchSave.serializeSliced;
+    for (let k = 0; k < 5; k++) {
+      if (k === 4) MatchSave.serializeSliced = function () { globalThis.__sync = MatchSave.serialize(); MatchSave.serializeSliced = sliced; return sliced.apply(this, arguments); };
+      W.nextAutosave = W.t;
+      await new Promise(r => { const f = () => (MatchSave.busy || W.nextAutosave === W.t ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
+      const s = MatchSave.stats; runs.push({ snapMs: s.snapMs, maxSlice: Math.max(...s.slices), slices: s.slices.length, ticked: W.tick - s.tick });   // ticks played after the snapshot
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    worldTick = wt;
+    const text = await Store.get('saves', 'auto'); let parsed = '';
+    try { MatchSave.parse(text); parsed = 'ok'; } catch (e) { parsed = e.message; }
+    const same = JSON.stringify(JSON.parse(text).graph) === JSON.stringify(JSON.parse(__sync).graph);
+    return { runs, maxTick: +Math.max(...ticks).toFixed(1), parsed, same, chars: text.length };
+  }, setup(256, 3, 'coastal'));
+  const snap = r.runs.map(x => x.snapMs).sort((a, b) => a - b)[2], maxSlice = Math.max(...r.runs.map(x => x.maxSlice));
+  console.log(JSON.stringify({ snapMs: r.runs.map(x => x.snapMs), medianSnap: snap, maxSlice, slices: r.runs.map(x => x.slices), ticked: r.runs.map(x => x.ticked), maxTick: r.maxTick, chars: r.chars }));
+  expect(r.parsed).toBe('ok');
+  expect(r.same).toBe(true);
+  expect(Math.min(...r.runs.map(x => x.ticked))).toBeGreaterThan(0);   // the match played on while the text was built
+  expect(snap).toBeLessThanOrEqual(8);
+  expect(maxSlice).toBeLessThanOrEqual(8);
+  expect(r.maxTick).toBeLessThanOrEqual(16);
+});
+
+test('a 480 x 480 save with 8 players round trips through IndexedDB across a reload', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.evaluate(CAP_PATCH); await page.evaluate(n => { MAP_SIZES['x' + n] = n; }, 480);
+  const a = await page.evaluate(async cfg => {
+    const g = __game; g.launchFromSetup(cfg); g.UI.paused = true;
+    for (let i = 0; i < 200; i++) worldTick(0.05);
+    const text = MatchSave.serialize(); await MatchSave.saveTo('2', text);
+    return { chars: text.length, n: g.W.n, ents: g.W.list.length, t: g.W.t, gold: g.W.players[1].res.gold };
+  }, setup(480, 8, 'land'));
+  expect(a.n).toBe(480);
+  expect(a.chars).toBeLessThanOrEqual(6 * 1048576);
+  await reload(page);
+  await page.evaluate(CAP_PATCH);
+  const b = await page.evaluate(async () => { const text = await MatchSave.loadFrom('2'); MatchSave.resume(text); __game.UI.paused = true; const W = __game.W; return { n: W.n, ents: W.list.length, t: W.t, gold: W.players[1].res.gold, slot: MatchSave.slotLabel('2', (await MatchSave.slotInfos())['2']).startsWith('Slot 2 · Franks') }; });
+  expect(b).toEqual({ n: 480, ents: a.ents, t: a.t, gold: a.gold, slot: true });
+});

@@ -1,10 +1,12 @@
-// ===== Codecs for saves and maps: typed arrays as run-length bytes in base64 =====
+// ===== Codecs for saves and maps: typed arrays as run-length bytes in base64, and gzip files =====
 // Loaded before map.js. Plain functions with no game state, so tests and tools can use them on their own.
 // - rleEncode / rleDecode: PackBits run-length bytes. A control byte c below 128 is followed by c + 1 literal bytes;
 //   c of 128 or more repeats the next byte c - 125 times (3 to 130). Map layers, fog and occupancy are long runs.
 // - b64Encode / b64Decode: standard base64 with padding, in plain JS (the node test harness has no btoa).
 // - packArray / unpackArray: a typed array as { t, n, d }: its type name, length and base64 run-length bytes
 //   (little-endian, as every browser and node store them).
+// - gzipText / readTextFile: a text as a gzip Blob, and a File or Blob (gzip or plain text) back to a string, through
+//   the browser's CompressionStream and DecompressionStream, refusing anything that is or inflates past CODEC.cap.
 'use strict';
 const CODEC = { cap: 256 * 1024 * 1024 };   // sanity cap on any save or map text, file or inflated file: 256 MB
 const CODEC_TYPES = { Uint8Array, Int16Array, Int32Array, Uint32Array, Float32Array };   // the typed arrays a save may hold (as in v1)
@@ -75,4 +77,19 @@ function unpackArray(p, maxLen) {
   const Type = CODEC_TYPES[p.t], a = new Type(rleDecode(b64Decode(p.d), p.n * Type.BYTES_PER_ELEMENT).buffer);
   if (Type === Float32Array) for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) throw new Error('Invalid numeric layer.');
   return a;
+}
+// gzip through the browser's streams (Chromium 80+, node 18+)
+async function gzipText(text) { return new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob(); }
+async function readTextFile(file, cap = CODEC.cap) {
+  if (file.size > cap) throw new Error('File is too large.');
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return file.text();
+  const reader = file.stream().pipeThrough(new DecompressionStream('gzip')).pipeThrough(new TextDecoderStream()).getReader(), parts = [];
+  let len = 0;
+  for (; ;) {
+    const { done, value } = await reader.read(); if (done) break;
+    len += value.length; if (len > cap) { reader.cancel(); throw new Error('File is too large.'); }
+    parts.push(value);
+  }
+  return parts.join('');
 }

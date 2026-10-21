@@ -31,15 +31,21 @@ test('tutorial responds to selecting a villager', async ({ page }) => {
 test('manual save and autosave resume the match from the menu', async ({ page }) => {
   await page.locator('#btn-tutorial').click();
   await page.evaluate(() => { __game.W.nextAutosave = __game.W.t + 0.05; });
-  await page.waitForFunction(() => !!localStorage.getItem('aor_autosave_v1'));
+  await expect.poll(() => page.evaluate(() => Store.get('saves', 'auto').then(Boolean))).toBe(true);
   await page.locator('#b-menu').click();
   await page.evaluate(() => { __game.W.players[1].res.gold = 1234; });
   await page.getByRole('button', { name: 'Save Match', exact: true }).click();
+  await expect(page.locator('#match-slots button')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Slot 1 · empty', exact: true }).click();
+  await expect(page.locator('#modal').getByRole('button', { name: 'Resume', exact: true })).toBeVisible();   // saved: back in the game menu
   await page.evaluate(() => { __game.W.players[1].res.gold = 1; });
   await page.getByRole('button', { name: 'Load Match', exact: true }).click();
-  await page.getByRole('button', { name: /Manual save/ }).click();
-  expect(await page.evaluate(() => __game.W.players[1].res.gold)).toBe(1234);
+  await expect(page.locator('#match-slots button')).toHaveCount(6);
+  await expect(page.getByRole('button', { name: /^Autosave · Franks/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Slot 2 · empty', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: /^Slot 1 · Franks/ }).click();
   await expect(page.locator('#modal')).not.toBeVisible();
+  expect(await page.evaluate(() => __game.W.players[1].res.gold)).toBe(1234);
   await expect(page.locator('#tutorial-panel')).toBeVisible();
 });
 test('editor rejects malformed imports without replacing its map', async ({ page }) => {

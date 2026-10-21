@@ -70,11 +70,7 @@ test('save restores combat and victory settings and in-flight miss tracking', ()
 test('save files cannot replace engine methods', () => {
   assert.equal(run(`(() => { const old=W, s=MatchSave.snapshot(); const gi=s.graph.shapes.findIndex(sh=>sh[0]==='GameMap'); s.graph.shapes[gi].push('computeRegions'); s.graph.nodes.find(n=>n[0]===gi).push('broken'); try{MatchSave.restore(JSON.stringify(s));return false}catch(e){return W===old&&e.message==='Invalid save property.'} })()`), true);
 });
-test('autosave quota failures report once and leave the match running', () => {
-  c.localStorage = { setItem() { throw new Error('quota'); } };
-  assert.equal(run(`(() => { W.nextAutosave=W.t;worldTick(0.05);const n=W.msgs.filter(m=>m.text.startsWith('Autosave failed')).length;W.nextAutosave=W.t;worldTick(0.05);return !W.over&&W.autosaveError&&n===1&&W.msgs.filter(m=>m.text.startsWith('Autosave failed')).length===1; })()`), true);
-  delete c.localStorage;
-});
+// autosave failures (now one message for every failure) are checked in tests/autosave.test.js
 test('control remaps release old keys and preserve unit commands', () => { assert.equal(run(`(() => { CONTROL_KEYS.pause='p'; UI.cmds=[]; const a=controlKey('p')==='F3'&&controlKey('F3')===''; UI.cmds=[{key:'P'}]; const b=controlKey('p')==='p'; CONTROL_KEYS={...CONTROL_DEFAULTS}; UI.cmds=[]; return a&&b; })()`), true); });
 test('converted units clear old owner queue, stance, and defHome, and idle sappers appear in idle worker list', () => {
   assert.equal(run(`(() => { make(); const m=spawnUnit('monk',1,20.5,20.5), k=spawnUnit('knight',2,22.5,20.5); k.queue=[{t:'move',x:5,y:5}]; k.stance='stand'; k.defHome={x:22,y:20}; m.order={t:'convert',id:k.id}; m.convT=11; convertLogic(m,0.05); const s=spawnUnit('sapper',1,18.5,18.5); const idles=typeof exIdleList==='function'?exIdleList('vil'):[]; return k.owner===1&&k.queue.length===0&&k.stance===undefined&&k.defHome===null&&(typeof exIdleList!=='function'||idles.includes(s)); })()`), true);
