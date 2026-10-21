@@ -418,6 +418,9 @@ function carveMountainsAndObstacles(n, type, seed, starts, water, ter, elev, dW,
     }
   }
 }
+// The version of the generator. A save records it with the options that regenerate its map (session.js specStub), so a
+// later phase that changes what a seed makes can tell which generator a saved map came from. A save without one is 1.
+const GEN_VERSION = 1;
 function generateMapSpec(opts) {
   const n = MAP_SIZES[opts.size] || (Number.isInteger(opts.size) ? opts.size : 80);
   const seed = opts.seed >>> 0;

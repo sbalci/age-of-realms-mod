@@ -137,5 +137,43 @@ const B = JSON.parse(run(`(() => {
   return JSON.stringify({ before: before === id, afterGraph: afterGraph === id, graphOpen: open === 1, loaded: W.map.blk[i] });
 })()`));
 ok('building the pathfinding graph leaves a stale occupancy id in place (counting the tile open), and loading a save clears it', B.before && B.afterGraph && B.graphOpen && B.loaded === 0, B);
+// ---------- 8. the AI stagger only for a pre-phase-2 world: every live AI on one tick ----------
+const ST = JSON.parse(run(`(() => {
+  match(96, 5, 'land', 4, 0);
+  const ps = W.players.slice(1), acc = () => ps.map(p => +p.ai.acc.toFixed(4)), out = {};
+  // phase 2+: two live AIs on their own ticks, two defeated AIs frozen at the same acc (acc resets to exactly 0 on an update, so this happens)
+  ps[0].ai.acc = 0.3; ps[1].ai.acc = 0.65; ps[2].alive = false; ps[3].alive = false; ps[2].ai.acc = 0.25; ps[3].ai.acc = 0.25;
+  out.deadRes = MatchSave.staggerAI(W); out.deadAcc = acc();
+  // a paused AI (the tutorial pauses one) frozen at a live AI's acc
+  ps[0].ai.acc = 0.3; ps[1].ai.acc = 0.65; ps[2].alive = true; ps[3].alive = true; ps[2].ai.acc = 0.3; ps[2].ai.paused = true; ps[3].ai.acc = 0.65;
+  out.pausedRes = MatchSave.staggerAI(W); out.pausedAcc = acc(); ps[2].ai.paused = false;
+  // pre-phase-2: every live AI on the same tick
+  for (const p of ps) p.ai.acc = 0;
+  out.oldRes = MatchSave.staggerAI(W); out.oldAcc = acc();
+  return JSON.stringify(out);
+})()`));
+ok('defeated or paused AIs that hold equal acc do not make a phase 2 or 3 save look unstaggered (not re-staggered)', ST.deadRes === false && ST.deadAcc.join() === '0.3,0.65,0.25,0.25' && ST.pausedRes === false && ST.pausedAcc.join() === '0.3,0.65,0.3,0.65', ST);
+ok('a pre-phase-2 world with every live AI on one tick is staggered, once', ST.oldRes === true && new Set(ST.oldAcc).size === 4, ST);
+
+// ---------- 9. a crafted save cannot make the decoder allocate far past its declared map size; truncated files; generator version ----------
+const BG = JSON.parse(run(`(() => {
+  match(96, 5, 'land', 2, 0);
+  const old = W, d = packArray(new Uint8Array(65536)).d, out = {};
+  const bomb = JSON.stringify({ format: 'age-of-realms-match', version: 2, n: 16, graph: { shapes: [], nodes: Array.from({ length: 12 }, () => ['Uint8Array', 65536, d]), root: [0] } });
+  out.bombChars = bomb.length;
+  try { MatchSave.restore(bomb); out.bomb = 'accepted'; } catch (e) { out.bomb = e.message; }
+  const f = JSON.parse(MatchSave.serialize()); f.n = 16;   // a real save with its declared size cut to 16
+  try { MatchSave.restore(JSON.stringify(f)); out.small = 'accepted'; } catch (e) { out.small = e.message; }
+  const text = MatchSave.serialize();
+  try { MatchSave.restore(text.slice(0, text.length >> 1)); out.cut = 'accepted'; } catch (e) { out.cut = e.message; }
+  try { MatchSave.restore(''); out.empty = 'accepted'; } catch (e) { out.empty = e.message; }
+  out.kept = W === old;
+  out.regen = MatchSave.specStub(W).regen;
+  out.genOf = [MatchSave.genOf({ regen: { size: 80 } }), MatchSave.genOf({ regen: { gen: 3 } })];
+  return JSON.stringify(out);
+})()`));
+ok('a save that declares a small map but holds layers that inflate far past its size is refused before they are decoded, leaving the match untouched', BG.bomb === 'Save file expands past its size limit.' && BG.small === 'Save file expands past its size limit.' && BG.kept, BG);
+ok('a truncated or empty save file reports that it is damaged or incomplete', BG.cut === 'Save file is damaged or incomplete.' && BG.empty === 'Save file is damaged or incomplete.', BG);
+ok('the regenerated spec records its generator version, and a missing one reads as 1', BG.regen.gen === 1 && BG.genOf.join() === '1,3', BG);
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

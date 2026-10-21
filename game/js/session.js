@@ -5,14 +5,17 @@
 // once on the way in (MatchSave.staggerAI).
 // Never saved, by design: the pathfinding graph and the entity index (rebuilt on load), HPA.enabled (follows the URL),
 // and group-order state (hpa.js HPA_GROUP: a member still waiting for its join when the match is saved routes on its own
-// after loading, so a resumed match equals an uninterrupted one only from a moment when no member is waiting).
+// after loading, so a resumed match equals an uninterrupted one only from a moment when no member is waiting to join or
+// still has its own deferred search due: hpaPending() is 0).
 'use strict';
 const MAP_DERIVED = ['vh', 'landReg', 'waterReg', '_wb'];   // GameMap fields rebuilt on load (computeVH, computeRegions)
 const MatchSave = {
   version: 2, key: 'aor_match_v1', autoKey: 'aor_autosave_v1', interval: 60,
   // Limits for a save of a map of side n: graph nodes, values in one node, entities and typed-array length. They are
-  // never below format 1's fixed limits (200,000 nodes, 1,000,000 values, 100,000 entities) and grow with the map.
-  caps(n) { const a = n * n; return { nodes: Math.max(200000, 8 * a), values: Math.max(1000000, 4 * a), entities: Math.max(100000, 4 * a), layer: Math.max(65536, a) }; },
+  // never below format 1's fixed limits (200,000 nodes, 1,000,000 values, 100,000 entities) and grow with the map. bytes is
+  // the budget for all typed arrays decoded from one save: 64 n² for the map and 16 n² for each of up to 9 players (fog),
+  // against about 30 n² a real 8-player match uses; run-length data expands about 65:1, so the file's size alone says little.
+  caps(n) { const a = n * n; return { nodes: Math.max(200000, 8 * a), values: Math.max(1000000, 4 * a), entities: Math.max(100000, 4 * a), layer: Math.max(65536, a), bytes: 208 * a }; },
   // ---------- format 1 (read only) ----------
   decode(graph, caps = this.caps(256)) {
     if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length > caps.nodes) throw new Error('Invalid save graph.');
@@ -124,12 +127,16 @@ const MatchSave = {
       if (!Array.isArray(s) || s.length > caps.values || !Object.prototype.hasOwnProperty.call(prototypes, s[0])) throw new Error('Unknown save type.');
       for (let i = 1; i < s.length; i++) { const k = s[i]; if (typeof k !== 'string' || ['__proto__', 'constructor', 'prototype'].includes(k) || typeof prototypes[s[0]][k] === 'function') throw new Error('Invalid save property.'); }
     }
+    let bytes = 0;   // decoded typed-array bytes so far, checked before each allocation
     const objects = graph.nodes.map(n => {
       if (!Array.isArray(n) || !n.length || n.length > caps.values + 1) throw new Error('Invalid save node.');
       const h = n[0];
       if (typeof h === 'number') { const s = graph.shapes[h]; if (!s || n.length !== s.length) throw new Error('Invalid save node.'); return Object.create(prototypes[s[0]]); }
       if (h === 'A') return []; if (h === 'S') return new Set(); if (h === 'M') { if (n.length % 2 !== 1) throw new Error('Invalid save node.'); return new Map(); }
-      if (Object.prototype.hasOwnProperty.call(CODEC_TYPES, h)) { if (n.length !== 3) throw new Error('Invalid numeric layer.'); return unpackArray({ t: h, n: n[1], d: n[2] }, caps.layer); }
+      if (Object.prototype.hasOwnProperty.call(CODEC_TYPES, h)) {
+        if (n.length !== 3 || !Number.isInteger(n[1]) || n[1] < 0) throw new Error('Invalid numeric layer.');
+        if ((bytes += n[1] * CODEC_TYPES[h].BYTES_PER_ELEMENT) > caps.bytes) throw new Error('Save file expands past its size limit.');
+        return unpackArray({ t: h, n: n[1], d: n[2] }, caps.layer); }
       throw new Error('Unknown save type.');
     });
     const read = v => {
@@ -154,10 +161,12 @@ const MatchSave = {
     const s = w.spec, st = w.settings || {};
     if (!s) return s;
     const generated = st.mapType !== 'custom' && (MAP_TYPE_NAMES[st.mapType] || (typeof REAL_MAPS !== 'undefined' && REAL_MAPS[st.mapType])) && Number.isFinite(st.seed) && st.rules;
-    if (generated) return { regen: { size: w.n, seed: st.seed, mapType: st.mapType, numPlayers: w.players.length - 1, rivers: !!st.rules.rivers }, name: s.name, players: s.players };
+    if (generated) return { regen: { gen: GEN_VERSION, size: w.n, seed: st.seed, mapType: st.mapType, numPlayers: w.players.length - 1, rivers: !!st.rules.rivers }, name: s.name, players: s.players };
     const out = Object.assign({}, s); for (const k of SPEC_LAYERS) if (Array.isArray(s[k])) out[k] = Uint8Array.from(s[k]);
     return out;
   },
+  // the generator version a stub was made with (a missing one is 1)
+  genOf(s) { return s && s.regen ? (s.regen.gen || 1) : null; },
   // the full spec of a stub (Restart): regenerated with the river rule it was made with, or the layers as plain arrays
   specOf(s) {
     if (!s) return s;
@@ -169,10 +178,12 @@ const MatchSave = {
     return out;
   },
   // Phase 2 starts each AI player's once-a-second update on its own tick. A format 1 save from before that has every
-  // AI on the same tick (equal acc): stagger them once, on the way into format 2. Staggered saves are left alone.
+  // AI that still ticks on the same tick (one shared acc): stagger them once, on the way into format 2. Staggered saves
+  // are left alone. Only AIs that tick count: a defeated or paused AI keeps its acc, so two of them may hold equal values
+  // in a save that is already staggered.
   staggerAI(w) {
-    const ais = w.players.slice(1).map(p => p.ai).filter(Boolean);
-    if (ais.length < 2 || new Set(ais.map(a => a.acc)).size === ais.length) return false;
+    const ais = w.players.slice(1).filter(p => p.ai && p.alive && !p.ai.paused).map(p => p.ai);
+    if (ais.length < 2 || new Set(ais.map(a => a.acc)).size !== 1) return false;
     const slots = Math.max(1, w.players.length - 1);
     for (const a of ais) a.acc = ((a.p.id - 1) % slots) / slots;
     return true;
@@ -208,7 +219,7 @@ const MatchSave = {
   serialize() { return JSON.stringify(this.snapshot()); },
   parse(text) {
     if (typeof text !== 'string' || text.length > CODEC.cap) throw new Error('Save file is too large.');
-    const file = JSON.parse(text);
+    let file; try { file = JSON.parse(text); } catch (e) { throw new Error('Save file is damaged or incomplete.'); }
     if (!file || file.format !== 'age-of-realms-match' || (file.version !== 1 && file.version !== 2)) throw new Error('Unsupported match save.');
     const n0 = file.version === 2 ? file.n : this.v1Size(file.graph);
     if (!Number.isInteger(n0) || n0 < 16 || n0 > 1024) throw new Error('Invalid match map or settings.');
@@ -302,7 +313,7 @@ const MatchSave = {
       } catch (e) { }
       b.textContent = label + (info ? ' · ' + info : ''); b.onclick = () => { try { this.resume(text); } catch (e) { fail(e); } }; m.querySelector('#match-slots').appendChild(b);
     }
-    m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { if (f.size > 16e6) throw new Error('Save file is too large.'); this.resume(await f.text()); } catch (e) { fail(e); } };
+    m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { if (f.size > CODEC.cap) throw new Error('Save file is too large.'); this.resume(await f.text()); } catch (e) { fail(e); } };
   },
   export() {
     const blob = new Blob([this.serialize()], { type: 'application/json' }), a = document.createElement('a');

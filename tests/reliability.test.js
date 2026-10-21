@@ -58,7 +58,7 @@ test('save/load keeps path-budget decisions deterministic in a crowded tick',()=
   const actual=run('MatchSave.restore(routeSave);routeSignature()');assert.equal(actual,expected);
 });
 test('unsupported, corrupt and malicious saves leave the active match untouched', () => {
-  assert.equal(run(`(() => { const old=W; const good=MatchSave.snapshot(); let rejected=0; const payloads=[JSON.stringify({...good,version:9}),'{',JSON.stringify({format:'age-of-realms-match',version:1,graph:{nodes:[{type:'Object',data:[['__proto__',{ref:0}]]}],root:{ref:0}}}),JSON.stringify({format:'age-of-realms-match',version:2,n:64,graph:{shapes:[['Object','__proto__']],nodes:[[0,[0]]],root:[0]}}),JSON.stringify({format:'age-of-realms-match',version:2,n:64,graph:{shapes:[],nodes:[['Uint8Array',4,'AAAA']],root:[0]}})]; for(const text of payloads)try{MatchSave.restore(text)}catch(e){rejected++} return rejected===5&&W===old&&({}).polluted===undefined; })()`), true);
+  assert.equal(run(`(() => { const old=W; const good=MatchSave.snapshot(); let rejected=0; const payloads=[JSON.stringify({...good,version:9}),'{',JSON.stringify({format:'age-of-realms-match',version:1,graph:{nodes:[{type:'Object',data:[['__proto__',{ref:0}]]}],root:{ref:0}}}),JSON.stringify({format:'age-of-realms-match',version:2,n:64,graph:{shapes:[['Object','__proto__']],nodes:[[0,[0]]],root:[0]}}),JSON.stringify({format:'age-of-realms-match',version:2,n:64,graph:{shapes:[],nodes:[['Uint8Array',4,'AAAA']],root:[0]}})]; const msgs=[]; for(const text of payloads)try{MatchSave.restore(text)}catch(e){rejected++;msgs.push(e.message)} return rejected===5&&msgs[3]==='Invalid save property.'&&msgs[4]==='Invalid run-length data.'&&W===old&&({}).polluted===undefined; })()`), true);
 });
 test('lifecycle hooks can unsubscribe', () => { assert.equal(run(`(() => { let n=0; const stop=GameHooks.on('afterTick',()=>n++); worldTick(0.05); stop(); worldTick(0.05); return n===1; })()`), true); });
 test('farm orders survive a save and continue gathering', () => {
@@ -68,7 +68,7 @@ test('save restores combat and victory settings and in-flight miss tracking', ()
   assert.equal(run(`(() => { make();CMD.accuracy=false;VIC.wonderTime=180; const p={type:'arrow',x:10,y:10,miss:true};W.projs.push(p);const text=MatchSave.serialize();CMD.accuracy=true;VIC.wonderTime=300;MatchSave.restore(text);const ok=!CMD.accuracy&&VIC.wonderTime===180&&CMD.flying[0]===W.projs[0];applyRules(RULE_DEFAULTS);make();return ok; })()`), true);
 });
 test('save files cannot replace engine methods', () => {
-  assert.equal(run(`(() => { const old=W, s=MatchSave.snapshot(); const gi=s.graph.shapes.findIndex(sh=>sh[0]==='GameMap'); s.graph.shapes[gi].push('computeRegions'); s.graph.nodes.find(n=>n[0]===gi).push('broken'); try{MatchSave.restore(JSON.stringify(s));return false}catch(e){return W===old} })()`), true);
+  assert.equal(run(`(() => { const old=W, s=MatchSave.snapshot(); const gi=s.graph.shapes.findIndex(sh=>sh[0]==='GameMap'); s.graph.shapes[gi].push('computeRegions'); s.graph.nodes.find(n=>n[0]===gi).push('broken'); try{MatchSave.restore(JSON.stringify(s));return false}catch(e){return W===old&&e.message==='Invalid save property.'} })()`), true);
 });
 test('autosave quota failures report once and leave the match running', () => {
   c.localStorage = { setItem() { throw new Error('quota'); } };
