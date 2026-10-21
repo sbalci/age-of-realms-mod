@@ -4,25 +4,41 @@
 // events, each fired on a later turn of the event loop as a browser does. Values are kept as structured clones.
 //   const { fakeIndexedDB, fakeLocalStorage } = require('./fake-idb');
 //   c.indexedDB = fakeIndexedDB({ quota });   // c: the vm context of tests/engine-harness.js
-// Options: quota (bytes per stored value, roughly: strings count 2 per character; a bigger put fails with a
-// QuotaExceededError), failOpen (open fails, so store.js falls back to localStorage).
+// Options (also readable and changeable later as idb.opts): quota (bytes per stored value, roughly: strings count 2
+// per character; a bigger put fails with a QuotaExceededError), commitQuota (the same limit, but the request succeeds
+// and the transaction aborts at commit), failOpen (true, or a number of opens: they fail, so store.js falls back to
+// localStorage), blocked (open fires onblocked and waits), hang (open fires nothing and waits).
+// Controls: idb.release() finishes the opens waiting under blocked or hang; idb.failNext(n) fails the next n opens;
+// idb.versionChange() fires onversionchange on every open connection; idb.abnormalClose({ silent }) closes them all as
+// a browser does after an error, firing onclose unless silent (a transaction on one then throws InvalidStateError);
+// idb.conns the open connections; idb.stats { puts, gets, opens, closes }.
 'use strict';
 const later = fn => setImmediate(fn);
 const sizeOf = v => typeof v === 'string' ? v.length * 2 : JSON.stringify(v === undefined ? null : v).length * 2;
 function quotaError() { const e = new Error('The quota has been exceeded.'); e.name = 'QuotaExceededError'; return e; }
 function fakeIndexedDB(opts = {}) {
   const dbs = new Map();   // name -> { version, stores: Map(store -> Map(key -> value)) }
-  const stats = { puts: 0, gets: 0, opens: 0 };
+  const conns = new Set(), waiting = [];
+  const stats = { puts: 0, gets: 0, opens: 0, closes: 0 };
+  let failures = opts.failOpen === true ? Infinity : (opts.failOpen || 0);
   function db(rec) {
-    return {
+    const d = {
+      closed: false,
       objectStoreNames: { contains: n => rec.stores.has(n) },
       createObjectStore(n) { rec.stores.set(n, new Map()); return {}; },
-      close() { },
+      close() { if (!d.closed) { d.closed = true; conns.delete(d); stats.closes++; } },
       onversionchange: null,
+      onclose: null,
       transaction(names, mode) {
+        if (d.closed) { const e = new Error('The database connection is closing.'); e.name = 'InvalidStateError'; throw e; }
         for (const n of [].concat(names)) if (!rec.stores.has(n)) { const e = new Error('No object store ' + n); e.name = 'NotFoundError'; throw e; }
         const t = { oncomplete: null, onerror: null, onabort: null, error: null, open: 0, over: false };
-        const settle = () => { if (!t.open && !t.over) { t.over = true; later(() => t.oncomplete && t.oncomplete()); } };
+        const settle = () => {
+          if (t.open || t.over) return;
+          t.over = true;
+          if (t.aborted) later(() => { t.error = t.aborted; if (t.onabort) t.onabort(); });
+          else later(() => t.oncomplete && t.oncomplete());
+        };
         t.objectStore = n => {
           const m = rec.stores.get(n);
           const op = f => {
@@ -35,7 +51,12 @@ function fakeIndexedDB(opts = {}) {
           };
           return {
             get: k => op(() => { stats.gets++; return m.has(k) ? structuredClone(m.get(k)) : undefined; }),
-            put: (v, k) => op(() => { if (mode !== 'readwrite') throw new Error('ReadOnlyError'); if (opts.quota && sizeOf(v) > opts.quota) throw quotaError(); stats.puts++; m.set(k, structuredClone(v)); return k; }),
+            put: (v, k) => op(() => {
+              if (mode !== 'readwrite') throw new Error('ReadOnlyError');
+              if (opts.quota && sizeOf(v) > opts.quota) throw quotaError();
+              if (opts.commitQuota && sizeOf(v) > opts.commitQuota) { t.aborted = quotaError(); return k; }   // the write is dropped at commit
+              stats.puts++; m.set(k, structuredClone(v)); return k;
+            }),
             delete: k => op(() => { if (mode !== 'readwrite') throw new Error('ReadOnlyError'); m.delete(k); }),
             getAllKeys: () => op(() => [...m.keys()].sort()),
           };
@@ -44,18 +65,28 @@ function fakeIndexedDB(opts = {}) {
         return t;
       },
     };
+    return d;
   }
   return {
-    stats, dbs,
+    stats, dbs, opts, conns,
+    release() { for (const f of waiting.splice(0)) f(); },
+    failNext(n) { failures = n; },
+    versionChange() { for (const c of [...conns]) if (c.onversionchange) c.onversionchange({ target: c }); },
+    abnormalClose(o = {}) { for (const c of [...conns]) { c.closed = true; conns.delete(c); if (!o.silent && c.onclose) c.onclose({ target: c }); } },
     open(name, version) {
       const r = { result: undefined, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
-      later(() => {
-        stats.opens++;
-        if (opts.failOpen) { r.error = new Error('open failed'); if (r.onerror) r.onerror(); return; }
+      const finish = () => {
         let rec = dbs.get(name); if (!rec) dbs.set(name, rec = { version: 0, stores: new Map() });
-        r.result = db(rec);
+        r.result = db(rec); conns.add(r.result);
         if (version > rec.version) { const old = rec.version; rec.version = version; if (r.onupgradeneeded) r.onupgradeneeded({ oldVersion: old, newVersion: version }); }
         if (r.onsuccess) r.onsuccess();
+      };
+      later(() => {
+        stats.opens++;
+        if (failures > 0) { failures--; r.error = new Error('open failed'); if (r.onerror) r.onerror(); return; }
+        if (opts.hang) { waiting.push(finish); return; }
+        if (opts.blocked) { if (r.onblocked) r.onblocked(); waiting.push(finish); return; }
+        finish();
       });
       return r;
     },
