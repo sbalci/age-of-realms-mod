@@ -62,6 +62,12 @@ const SPY = `(() => { const sliced = MatchSave.serializeSliced;
   // the vm runs the game 2-12x slower than the browser; the browser's 8 ms is checked in tests/browser/saves.spec.js
   const maxAll = Math.max(...S.slices);
   ok(`no slice runs long: the longest took ${maxAll} ms in the vm (budget 8 ms a slice in the browser)`, maxAll < 80, S.slices);
+  // stats hold every task but the snapshot: the rehearsal's first, then the slices, the join and the write (IndexedDB's put)
+  const R = S.rehearsal, L = S.slices.length, num = x => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+  const statsOk = Array.isArray(R) && R.length >= 2 && JSON.stringify(S.slices.slice(0, R.length)) === JSON.stringify(R) && S.rehearseMs === Math.max(...R)
+    && S.slices[L - 2] === S.joinMs && num(S.joinMs) && num(S.putMs) && num(S.slices[L - 1]) && S.tailMs === Math.max(S.joinMs, S.slices[L - 1])
+    && S.hold === Math.max(...S.slices) && [S.walkMs, S.packMs, S.jsonMs].every(num) && A.run(`Store.timing.saves.at > 0`);
+  ok(`stats time the rehearsal (${R.length} tasks, longest ${S.rehearseMs} ms) and the tail (join ${S.joinMs} ms, write ${S.slices[L - 1]} ms, put ${S.putMs} ms) among the slices: hold ${S.hold} ms`, statsOk, { rehearsal: R, joinMs: S.joinMs, putMs: S.putMs, tailMs: S.tailMs, hold: S.hold, walkMs: S.walkMs, packMs: S.packMs, jsonMs: S.jsonMs });
   A.run('delete W.probe; delete W.changed');
   // the shared reference survives the snapshot copy and the save: a loaded mid-path unit's mvAt is its path[pi]
   const B = page(fakeIndexedDB()); B.run(scene(96, 2, 0)); B.c.__auto = auto;
@@ -101,6 +107,45 @@ const SPY = `(() => { const sliced = MatchSave.serializeSliced;
   })()`));
   ok(`a gzip export (${Z.gz.toLocaleString('en-US')} bytes for ${Z.chars.toLocaleString('en-US')} characters) imports back to the same text; a plain .json still imports`, Z.magic && Z.same && Z.plain && Z.gz * 3 < Z.chars, Z);
   ok('a small gzip file that inflates past the sanity cap is refused while it is read', Z.bomb === 'File is too large.', Z.bomb);
+
+  // ---------- 5. one autosave at a time, and only of the match it started in ----------
+  let unhandled = 0; const onUnhandled = () => { unhandled++; }; process.on('unhandledRejection', onUnhandled);
+  const until = (run, expr) => new Promise(resolve => { const t = () => (run(expr) ? resolve() : setTimeout(t, 0)); t(); });
+  // a second autosave while one runs is refused at once, and the hook postpones its own: nothing interleaves
+  const idbB = fakeIndexedDB(), C = page(idbB);
+  C.run(scene(128, 2, 0));
+  C.run('W.nextAutosave = W.t; worldTick(0.05); globalThis.__first = MatchSave.stats;');
+  const second = await C.run('MatchSave.busy ? MatchSave.autosave().then(v => JSON.stringify({ v, busy: MatchSave.busy, stats: MatchSave.stats === __first })) : "not busy"');
+  C.run('W.nextAutosave = W.t - 1; globalThis.__due = W.nextAutosave; worldTick(0.05);');   // due again while busy: the hook waits
+  const held = C.run('JSON.stringify({ busy: MatchSave.busy, kept: W.nextAutosave === __due })');
+  await settled(C.run);
+  const puts1 = idbB.stats.puts;
+  C.run('worldTick(0.05)');   // the postponed autosave starts on the next tick
+  const restarted = C.run('MatchSave.busy');
+  await settled(C.run);
+  ok(`a second autosave while one runs resolves false at once (${second}); the hook keeps its due autosave (${held}) and runs it after: ${puts1} then ${idbB.stats.puts} puts`, JSON.parse(second).v === false && JSON.parse(second).busy === true && JSON.parse(held).busy && JSON.parse(held).kept && puts1 === 2 && restarted === true && idbB.stats.puts === 4, { second, held, puts1, puts: idbB.stats.puts });
+  // the match is replaced mid-slice (a load): the autosave stops, writes nothing and tells nothing, on either match
+  const idbD = fakeIndexedDB(), D = page(idbD);
+  D.run(scene(128, 2, 0)); D.c.__other = D.run('MatchSave.serialize()');
+  D.run('MatchSave.sliceMs = 0.2; globalThis.__w0 = W; globalThis.__r = "pending"; MatchSave.autosave().then(v => { __r = v; }, e => { __r = "rejected " + e.message; });');
+  await until(D.run, 'MatchSave.stats !== null && MatchSave.stats.slices.length >= MatchSave.stats.rehearsal.length + 2 || !MatchSave.busy');   // two of the walk's slices have run
+  D.run('globalThis.__mid = MatchSave.stats.slices.length - MatchSave.stats.rehearsal.length; MatchSave.restore(__other);');
+  await settled(D.run);
+  const rep = JSON.parse(await D.run(`Store.get('saves', 'auto').then(t => JSON.stringify({ r: __r, written: t !== undefined, msgs: [...__w0.msgs, ...W.msgs].filter(m => m.text.startsWith('Autosave')).length, err: W.autosaveError === undefined && __w0.autosaveError === undefined, busy: MatchSave.busy, mid: __mid, slices: MatchSave.stats.slices.length }))`));
+  ok(`a match replaced during the slices (after ${rep.mid} of them) stops the autosave: nothing written, no message, no error flag on either match, not busy`, rep.mid >= 2 && rep.r === false && !rep.written && rep.msgs === 0 && rep.err && rep.busy === false, rep);
+  // W gone (null) mid-slice: the same, and the hook's promise never rejects unhandled
+  D.run('W.nextAutosave = W.t; worldTick(0.05);');
+  await until(D.run, 'MatchSave.stats !== null && MatchSave.stats.tick === W.tick && MatchSave.stats.slices.length >= MatchSave.stats.rehearsal.length + 2 || !MatchSave.busy');
+  D.run('globalThis.__keep = W; W = null;');
+  await settled(D.run);
+  await new Promise(r => setTimeout(r, 50));   // let any unhandled rejection surface
+  const gone = JSON.parse(await D.run(`Store.get('saves', 'auto').then(t => JSON.stringify({ written: t !== undefined, busy: MatchSave.busy }))`));
+  D.run('W = __keep; MatchSave.sliceMs = 6;');
+  // and the autosave after an aborted one runs as usual
+  D.run('W.nextAutosave = W.t; worldTick(0.05);'); await settled(D.run);
+  const after = await D.run(`Store.get('saves', 'auto').then(t => typeof t === 'string' && t.length > 1000)`);
+  ok(`W set to null mid-slice: nothing written, not busy, ${unhandled} unhandled rejections; the next autosave writes as usual`, !gone.written && !gone.busy && unhandled === 0 && after === true, { gone, unhandled, after });
+  process.off('unhandledRejection', onUnhandled);
   console.log(`${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('FAIL ' + (e.stack || e)); process.exit(1); });

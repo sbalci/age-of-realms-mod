@@ -11,6 +11,9 @@
 //   AOR_PERF_TICKS  timed simulation ticks per match, default 3600 (3 game minutes, as in the evaluation)
 //   AOR_PERF_KNIGHTS  fresh pages per size, player count and moment for the 40-knight order, default 5 (the row shows
 //                   the median)
+//   AOR_PERF_AUTOSAVE_BATCHES  fresh pages per size for the autosave measurement, default 1
+//   AOR_PERF_AUTOSAVE_ONLY  1: measure the autosave alone (each size's batches); the numbers go to
+//                   test-results/maps-perf-autosave.json and no table row is written
 // The 'gpu' project (the default of npm run test:perf) is Chromium's new headless mode on the real GPU, as in the
 // evaluation; the 'swiftshader' project is the software-rendering low-end check.
 const { test, expect } = require('@playwright/test');
@@ -19,6 +22,8 @@ const SIZES = (process.env.AOR_PERF_SIZES || '120,200,256').split(',').map(Numbe
 const LABEL = process.env.AOR_PERF_LABEL || 'run';
 const TICKS = +(process.env.AOR_PERF_TICKS || 3600);
 const KNIGHTS = +(process.env.AOR_PERF_KNIGHTS || 5);
+const AUTOSAVE_BATCHES = Math.max(1, +(process.env.AOR_PERF_AUTOSAVE_BATCHES || 1));
+const AUTOSAVE_ONLY = process.env.AOR_PERF_AUTOSAVE_ONLY === '1';
 const ROOT = path.join(__dirname, '..', '..');
 const JSON_OUT = path.join(ROOT, 'test-results', 'maps-perf.json');
 const MD_OUT = path.join(ROOT, 'docs', 'maps-perf-baseline.md');
@@ -39,8 +44,10 @@ commits the rows it was measured by, so progress against the budgets stays visib
   seed 7). **2D fps**: live frames over 5 s at each zoom with the match running.
 - **2.5D fps**: live frames over 4 s with \`?renderer=three\`.
 - **Save**: \`MatchSave.serialize()\` characters and ms after the timed 3-player ticks; from phase 4 also, after the
-  semicolon, for 5 autosaves in a live 8-player match: the median of their snapshots (the only time an autosave holds
-  the game), their longest slice, and the longest tick while they ran, in ms.
+  semicolon, for 5 autosaves in a live 8-player match and one more after loading the last: the median of their
+  snapshots (the only time an autosave holds the game), in brackets the first snapshot after the start and the one
+  after the load, then the longest other task they ran (a slice, a rehearsal task, the text's join or its write), and
+  the longest tick while they ran, in ms.
 - **Cache MB**: terrain chunk canvases (width × height × 4) after an 11 × 11 pan at zoom 0.55.
 
 | Date | Label | Commit | Renderer | n | Gen 3p / 8p ms | Tick 3p mean / p99 ms | Tick 8p mean / p99 ms | Tree search µs | 40 knights 3p / 8p ms (routes ok) | 2D frame z1 / z0.55 ms | 2D fps z1 / z0.55 | 2.5D fps | Save chars (ms) | Cache MB |
@@ -130,28 +137,44 @@ async function measureKnightRuns(page, n, np, type, warm = 0) {
   const runs = []; for (let i = 0; i < KNIGHTS; i++) runs.push(await measureKnights(page, n, np, type, warm));
   return { ms: median(runs.map(r => r.worst)), full: median(runs.map(r => r.worstFull)), ok: Math.min(...runs.map(r => r.ok)), runs };
 }
-// The autosave (session.js) in a live 8-player match, 5 times: its snapshot, its slices, and every tick while it ran
-// (worldTick timed through a wrapper the main loop calls).
-async function measureAutosave(page, n) {
+// The autosave (session.js) in a live 8-player match, 5 times, then once more after loading the last of them: its
+// snapshot, the longest other task it ran (hold: a slice, a rehearsal task, the join or the write), and every tick while
+// it ran (worldTick timed through a wrapper the main loop calls). Each batch is a fresh page; AOR_PERF_AUTOSAVE_BATCHES
+// batches (default 1). The summary: the median of the batches' median snapshots, the slowest first snapshot after the
+// start and after the load, and the longest hold and tick of all.
+async function measureAutosaveBatch(page, n) {
   await openGame(page); await prepareSize(page, n);
   return page.evaluate(async cfg => {
-    if (typeof MatchSave.serializeSliced !== 'function') return { snapMs: 'n/a', maxSlice: 'n/a', maxTick: 'n/a' };   // a control run of code before phase 4
-    const g = __game; g.launchFromSetup(cfg); const W = g.W;
+    if (typeof MatchSave.serializeSliced !== 'function') return null;   // a control run of code before phase 4
+    const g = __game; g.launchFromSetup(cfg); let W = g.W;
     W.players[1].ai = new AIPlayer(W.players[1], 'standard'); W.spectate = true; W.nextAutosave = 1e9;
     g.UI.paused = false; g.UI.focusPaused = false;
     await new Promise(r => setTimeout(r, 2000));
     const wt = worldTick, ticks = [], runs = [];
     worldTick = function () { const t = performance.now(); const r = wt.apply(this, arguments); ticks.push(performance.now() - t); return r; };
-    for (let k = 0; k < 5; k++) {
+    const once = async () => {
       W.nextAutosave = W.t;
       await new Promise(r => { const f = () => (MatchSave.busy || W.nextAutosave === W.t ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
-      const s = MatchSave.stats; runs.push({ snapMs: s.snapMs, maxSlice: Math.max(...s.slices), slices: s.slices.length, ms: s.ms, chars: s.chars });
+      const s = MatchSave.stats;
+      runs.push({ snapMs: s.snapMs, hold: Math.max(...s.slices), rehearseMs: s.rehearseMs, walkMs: s.walkMs, packMs: s.packMs, jsonMs: s.jsonMs, joinMs: s.joinMs, putMs: s.putMs, tailMs: s.tailMs, slices: s.slices.length, ms: s.ms, chars: s.chars });
       await new Promise(r => setTimeout(r, 1000));
-    }
+    };
+    for (let k = 0; k < 5; k++) await once();
+    MatchSave.resume(await Store.get('saves', 'auto')); W = g.W; W.nextAutosave = 1e9; g.UI.focusPaused = false;
+    await new Promise(r => setTimeout(r, 2000));
+    await once();
     worldTick = wt; g.UI.paused = true;
-    const snaps = runs.map(x => x.snapMs).sort((a, b) => a - b);
-    return { runs, snapMs: snaps[2], maxSlice: +Math.max(...runs.map(x => x.maxSlice)).toFixed(1), maxTick: +Math.max(...ticks).toFixed(1) };
+    const started = runs.slice(0, 5), snaps = started.map(x => x.snapMs).sort((a, b) => a - b);
+    return { runs, snapMs: snaps[2], first: started[0].snapMs, afterLoad: runs[5].snapMs, hold: +Math.max(...runs.map(x => x.hold)).toFixed(1), maxTick: +Math.max(...ticks).toFixed(1) };
   }, setup(n, 8, 'land', 33, 1, 'high'));
+}
+async function measureAutosave(page, n) {
+  const batches = [];
+  for (let b = 0; b < AUTOSAVE_BATCHES; b++) { const r = await measureAutosaveBatch(page, n); if (!r) return { snapMs: 'n/a', first: 'n/a', afterLoad: 'n/a', hold: 'n/a', maxTick: 'n/a' }; batches.push(r); }
+  return {
+    batches, snapMs: median(batches.map(x => x.snapMs)), first: Math.max(...batches.map(x => x.first)), afterLoad: Math.max(...batches.map(x => x.afterLoad)),
+    hold: Math.max(...batches.map(x => x.hold)), maxTick: Math.max(...batches.map(x => x.maxTick)),
+  };
 }
 // 2D rendering (evaluation T1): steady frame cost, live fps, then a full pan and the terrain-cache size.
 async function measure2d(page, n) {
@@ -208,6 +231,11 @@ for (const n of SIZES) {
     test.setTimeout(20 * 60 * 1000);
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     const rec = { n, renderer: test.info().project.name };
+    if (AUTOSAVE_ONLY) {
+      rec.autosave = await measureAutosave(page, n);
+      expect(errors).toEqual([]);
+      results.push(rec); return;
+    }
     await openGame(page); await prepareSize(page, n);
     rec.gen = await measureGen(page, n);
     rec.sim3 = await measureSim(page, n, 3, 'coastal');
@@ -238,8 +266,9 @@ test.afterAll(() => {
   let commit = 'unknown'; try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim(); } catch (e) { }
   const date = new Date().toISOString().slice(0, 10);
   fs.mkdirSync(path.dirname(JSON_OUT), { recursive: true });
+  if (AUTOSAVE_ONLY) { fs.writeFileSync(JSON_OUT.replace('.json', '-autosave.json'), JSON.stringify({ date, label: LABEL, commit, batches: AUTOSAVE_BATCHES, results }, null, 1)); return; }
   fs.writeFileSync(JSON_OUT, JSON.stringify({ date, label: LABEL, commit, ticks: TICKS, results }, null, 1));
   if (!fs.existsSync(MD_OUT)) fs.writeFileSync(MD_OUT, MD_HEAD);
-  const rows = results.map(r => `| ${date} | ${LABEL} | ${commit} | ${r.renderer} | ${r.n} | ${r.gen.p3} / ${r.gen.p8} | ${r.sim3.tick.mean} / ${r.sim3.tick.p99} | ${r.sim8.tick.mean} / ${r.sim8.tick.p99} | ${r.sim3.findNearestResUs} | ${r.knights3.ms} / ${r.knights8.ms}; ${r.knights3w.ms} / ${r.knights8w.ms} (${Math.min(r.knights3.ok, r.knights3w.ok)}/40, ${Math.min(r.knights8.ok, r.knights8w.ok)}/40) | ${r.render2d.steady.z1} / ${r.render2d.steady['z0.55']} | ${r.render2d.live.z1.fps} / ${r.render2d.live['z0.55'].fps} | ${r.render25d.fps ?? 'n/a'} | ${r.sim3.save.chars.toLocaleString('en-US')} (${r.sim3.save.ms}; ${r.autosave.snapMs} / ${r.autosave.maxSlice} / ${r.autosave.maxTick}) | ${r.render2d.pan.cacheMB} |`);
+  const rows = results.map(r => `| ${date} | ${LABEL} | ${commit} | ${r.renderer} | ${r.n} | ${r.gen.p3} / ${r.gen.p8} | ${r.sim3.tick.mean} / ${r.sim3.tick.p99} | ${r.sim8.tick.mean} / ${r.sim8.tick.p99} | ${r.sim3.findNearestResUs} | ${r.knights3.ms} / ${r.knights8.ms}; ${r.knights3w.ms} / ${r.knights8w.ms} (${Math.min(r.knights3.ok, r.knights3w.ok)}/40, ${Math.min(r.knights8.ok, r.knights8w.ok)}/40) | ${r.render2d.steady.z1} / ${r.render2d.steady['z0.55']} | ${r.render2d.live.z1.fps} / ${r.render2d.live['z0.55'].fps} | ${r.render25d.fps ?? 'n/a'} | ${r.sim3.save.chars.toLocaleString('en-US')} (${r.sim3.save.ms}; ${r.autosave.snapMs} (${r.autosave.first}, ${r.autosave.afterLoad}) / ${r.autosave.hold} / ${r.autosave.maxTick}) | ${r.render2d.pan.cacheMB} |`);
   fs.appendFileSync(MD_OUT, rows.join('\n') + '\n');
 });

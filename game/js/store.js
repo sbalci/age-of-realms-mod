@@ -14,6 +14,10 @@ const STORE_OPEN_TIMEOUT_MS = 5000;
 const Store = {
   name: 'aor', version: 1, stores: ['saves', 'maps', 'meta'],
   mode: null, reason: '', db: null, opening: null, openTimeout: STORE_OPEN_TIMEOUT_MS,
+  // timing[store]: the store's last put, { key, ms, at }: how long the put call itself took (IndexedDB's copy of the
+  // value, or localStorage's write) and performance.now() as it returned. The autosave reports it.
+  timing: {},
+  clock() { return typeof performance !== 'undefined' ? performance.now() : Date.now(); },
   // opens the database once (concurrent callers share the pending open); resolves with the mode
   open() {
     if (!this.opening) {
@@ -89,11 +93,11 @@ const Store = {
   },
   async put(store, key, value) {
     this.check(store, key); const mode = await this.open();
-    if (mode === 'idb') { await this.tx(store, 'readwrite', s => s.put(value, key)); return; }
+    if (mode === 'idb') { await this.tx(store, 'readwrite', s => { const q = this.clock(), r = s.put(value, key), at = this.clock(); this.timing[store] = { key, ms: at - q, at }; return r; }); return; }
     if (mode === 'local') {
       const k = 'aor:' + store + ':' + key, json = JSON.stringify(value);
       if (json === undefined) throw new Error('Cannot store ' + k + ': the value cannot be written as JSON.');
-      localStorage.setItem(k, json); return;
+      const q = this.clock(); localStorage.setItem(k, json); const at = this.clock(); this.timing[store] = { key, ms: at - q, at }; return;
     }
     throw new Error('Storage is unavailable in this browser.');
   },

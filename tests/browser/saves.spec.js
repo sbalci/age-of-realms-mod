@@ -50,34 +50,45 @@ test('the autosave of a live 256 x 256 match takes its snapshot in at most 8 ms,
   test.setTimeout(180000);
   await page.evaluate(n => { MAP_SIZES['x' + n] = n; }, 256);
   const r = await page.evaluate(async cfg => {
-    const g = __game; g.launchFromSetup(cfg); const W = g.W;
+    const g = __game; g.launchFromSetup(cfg); let W = g.W;
     for (const p of W.players.slice(1)) p.ai = p.ai || new AIPlayer(p, 'standard');
     W.spectate = true; W.nextAutosave = 1e9; g.UI.paused = false; g.UI.focusPaused = false;
     await new Promise(r => setTimeout(r, 2000));
     const ticks = [], wt = worldTick, runs = [];
     worldTick = function () { const t = performance.now(); const r = wt.apply(this, arguments); ticks.push(performance.now() - t); return r; };
-    // the last autosave is checked against the one-shot save of its snapshot's moment
+    // one autosave; hold: the longest task it ran but the snapshot (a slice, a rehearsal task, the join or the write)
+    const once = async () => {
+      W.nextAutosave = W.t;
+      await new Promise(r => { const f = () => (MatchSave.busy || W.nextAutosave === W.t ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
+      const s = MatchSave.stats; runs.push({ snapMs: s.snapMs, hold: Math.max(...s.slices), slices: s.slices.length, rehearseMs: s.rehearseMs, tailMs: s.tailMs, putMs: s.putMs, ticked: W.tick - s.tick });   // ticks played after the snapshot
+      await new Promise(r => setTimeout(r, 1000));
+    };
+    // the last autosave of the started match is checked against the one-shot save of its snapshot's moment
     const sliced = MatchSave.serializeSliced;
     for (let k = 0; k < 5; k++) {
       if (k === 4) MatchSave.serializeSliced = function () { globalThis.__sync = MatchSave.serialize(); MatchSave.serializeSliced = sliced; return sliced.apply(this, arguments); };
-      W.nextAutosave = W.t;
-      await new Promise(r => { const f = () => (MatchSave.busy || W.nextAutosave === W.t ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
-      const s = MatchSave.stats; runs.push({ snapMs: s.snapMs, maxSlice: Math.max(...s.slices), slices: s.slices.length, ticked: W.tick - s.tick });   // ticks played after the snapshot
-      await new Promise(r => setTimeout(r, 1000));
+      await once();
     }
-    worldTick = wt;
     const text = await Store.get('saves', 'auto'); let parsed = '';
     try { MatchSave.parse(text); parsed = 'ok'; } catch (e) { parsed = e.message; }
     const same = JSON.stringify(JSON.parse(text).graph) === JSON.stringify(JSON.parse(__sync).graph);
+    // then a load: the first autosave of the loaded match (new layers, so no spare copies yet) is held to 8 ms as well
+    MatchSave.resume(text); W = g.W; W.nextAutosave = 1e9; g.UI.focusPaused = false;
+    await new Promise(r => setTimeout(r, 2000));
+    await once();
+    worldTick = wt;
     return { runs, maxTick: +Math.max(...ticks).toFixed(1), parsed, same, chars: text.length };
   }, setup(256, 3, 'coastal'));
-  const snap = r.runs.map(x => x.snapMs).sort((a, b) => a - b)[2], maxSlice = Math.max(...r.runs.map(x => x.maxSlice));
-  console.log(JSON.stringify({ snapMs: r.runs.map(x => x.snapMs), medianSnap: snap, maxSlice, slices: r.runs.map(x => x.slices), ticked: r.runs.map(x => x.ticked), maxTick: r.maxTick, chars: r.chars }));
+  const started = r.runs.slice(0, 5), loaded = r.runs[5];
+  const snap = started.map(x => x.snapMs).sort((a, b) => a - b)[2], hold = Math.max(...r.runs.map(x => x.hold));
+  console.log(JSON.stringify({ snapMs: started.map(x => x.snapMs), medianSnap: snap, firstSnap: started[0].snapMs, afterLoad: loaded.snapMs, hold, holds: r.runs.map(x => x.hold), rehearse: r.runs.map(x => x.rehearseMs), tail: r.runs.map(x => x.tailMs), put: r.runs.map(x => x.putMs), slices: r.runs.map(x => x.slices), ticked: r.runs.map(x => x.ticked), maxTick: r.maxTick, chars: r.chars }));
   expect(r.parsed).toBe('ok');
   expect(r.same).toBe(true);
   expect(Math.min(...r.runs.map(x => x.ticked))).toBeGreaterThan(0);   // the match played on while the text was built
   expect(snap).toBeLessThanOrEqual(8);
-  expect(maxSlice).toBeLessThanOrEqual(8);
+  expect(started[0].snapMs).toBeLessThanOrEqual(8);   // the first snapshot after the start
+  expect(loaded.snapMs).toBeLessThanOrEqual(8);       // and after a load
+  expect(hold).toBeLessThanOrEqual(8);                // every slice, rehearsal task, join and write
   expect(r.maxTick).toBeLessThanOrEqual(16);
 });
 

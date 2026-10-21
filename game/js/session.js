@@ -112,23 +112,83 @@ const MatchSave = {
     out.nodes = nodes; out.shapes = shapes;
   },
   // Typed-array copies -> base64 run-length text. A layer is run-length coded in chunks of 192 KB (runs split at a chunk
-  // edge decode back to back) and turned into base64 in pieces of a multiple of 3 bytes, so it may span slices; the
-  // one-shot save codes it the same way.
+  // edge decode back to back, so this size is part of the format) and turned into base64 in pieces of 48 KB (a multiple
+  // of 3 bytes: the pieces join into the base64 of the whole), so it may span slices; the one-shot save codes it the
+  // same way.
   *pack(out, slice = 0) {
-    const CH = 196608;
-    // step is the last chunk's time: a slice ends before a chunk that would take it past slice ms, not after
-    let t0 = performance.now(), step = 0;
-    const due = () => slice && performance.now() - t0 + step > slice, timed = f => { const t = performance.now(), r = f(); step = performance.now() - t; return r; };
+    const CH = 196608, B64 = 49152, P = this.pacer(slice);
     for (const node of out.nodes) {
       if (typeof node[0] !== 'string' || !ArrayBuffer.isView(node[2])) continue;
       const a = node[2], bytes = new Uint8Array(a.buffer, a.byteOffset, a.byteLength), runs = [];
       let len = 0;
-      for (let i = 0; i < bytes.length || !runs.length; i += CH) { if (due()) { yield; t0 = performance.now(); } const r = timed(() => rleEncode(bytes.subarray(i, i + CH))); runs.push(r); len += r.length; }
+      for (let i = 0; i < bytes.length || !runs.length; i += CH) {
+        const part = bytes.subarray(i, i + CH);
+        if (P.due('rle', part.length)) { yield; P.next(); }
+        const r = P.time('rle', part.length, () => rleEncode(part)); runs.push(r); len += r.length;
+      }
       const all = runs.length === 1 ? runs[0] : new Uint8Array(len), text = [];
       if (runs.length > 1) { let o = 0; for (const r of runs) { all.set(r, o); o += r.length; } }
-      for (let i = 0; i < all.length || !text.length; i += CH) { if (due()) { yield; t0 = performance.now(); } text.push(timed(() => b64Encode(all.subarray(i, i + CH)))); }
+      for (let i = 0; i < all.length || !text.length; i += B64) {
+        const part = all.subarray(i, i + B64);
+        if (P.due('b64', part.length)) { yield; P.next(); }
+        text.push(P.time('b64', part.length, () => b64Encode(part)));
+      }
       node[2] = text.join('');
     }
+  },
+  // The pace of the sliced steps that cost unlike amounts (pack's run-length and base64 chunks, the JSON's values and
+  // long strings). P = pacer(slice): before a step of a kind and size (units: bytes, values or characters), P.due()
+  // says whether it would take the slice past slice ms, predicted from the steps of the same kind so far (ms per unit, a
+  // maximum that decays by a fifth a step, so one slow step is not held against the rest for long), or, for a kind not
+  // seen yet, as long as the longest recent step of any kind (the same decaying maximum). A slice always runs at least
+  // one step, so a step's own size is what bounds it: each kind of step is cut small enough. P.time() runs and times a
+  // step, P.next() starts the next slice, P.ran counts the steps of this slice. With slice 0 nothing is ever due (the
+  // one-shot save).
+  pacer(slice) {
+    const rate = Object.create(null);
+    let t0 = performance.now(), ran = 0, big = 0;
+    return {
+      get ran() { return ran; },
+      due(kind, units) { return !!slice && ran > 0 && performance.now() - t0 + (kind in rate ? rate[kind] * Math.max(1, units) : big) > slice; },
+      next() { t0 = performance.now(); ran = 0; },
+      time(kind, units, f) {
+        const t = performance.now(), r = f(), ms = performance.now() - t, per = ms / Math.max(1, units);
+        rate[kind] = kind in rate ? Math.max(per, rate[kind] * 0.8) : per; big = Math.max(ms, big * 0.8); ran++;
+        return r;
+      },
+    };
+  },
+  // The JSON of out's graph, as the parts of serialize()'s text in order: the head and the graph up to its nodes, the
+  // nodes, then the end, so the text is parts.join('') (one join: the text comes out flat, and IndexedDB copies it as it
+  // is). In steps by cost: up to 256 small nodes or 4096 values a step; a longer node (W.list) in pieces of 4096 values,
+  // cut between two values; a packed layer's text alone.
+  *json(out, head, parts, slice = 0) {
+    const STEP = 4096, nodes = out.nodes, P = this.pacer(slice), long = m => typeof m[2] === 'string' && m[2].length > STEP;
+    parts.push(JSON.stringify({ ...head, graph: { root: out.root, shapes: out.shapes, nodes: [] } }).slice(0, -3));
+    for (let i = 0; i < nodes.length;) {
+      if (i) parts.push(',');
+      const node = nodes[i];
+      if (long(node)) {
+        if (P.due('chars', node[2].length)) { yield; P.next(); }
+        parts.push(P.time('chars', node[2].length, () => JSON.stringify(node))); i++;
+      } else if (node.length > STEP) {
+        parts.push('[');
+        for (let a = 0; a < node.length; a += STEP) {
+          const k = Math.min(STEP, node.length - a);
+          if (P.due('values', k)) { yield; P.next(); }
+          if (a) parts.push(',');
+          parts.push(P.time('values', k, () => JSON.stringify(node.slice(a, a + k)).slice(1, -1)));
+        }
+        parts.push(']'); i++;
+      } else {
+        let j = i + 1, units = node.length;
+        while (j < nodes.length && j - i < 256) { const m = nodes[j]; if (long(m) || units + m.length > STEP) break; units += m.length; j++; }
+        if (P.due('values', units)) { yield; P.next(); }
+        const a = i; parts.push(P.time('values', units, () => JSON.stringify(nodes.slice(a, j)).slice(1, -1)));
+        i = j;
+      }
+    }
+    parts.push(']}}');
   },
   decode2(graph, caps) {
     if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.shapes) || graph.nodes.length > caps.nodes || graph.shapes.length > caps.nodes) throw new Error('Invalid save graph.');
@@ -309,19 +369,34 @@ const MatchSave = {
   // that copy in slices of at most sliceMs, one per idle period (requestIdleCallback, else a timeout), while the match
   // plays on: the walk, the packing of the layers and the JSON. Nothing holds the simulation, and the text is
   // serialize()'s at the moment of the snapshot, whatever the simulation and the player's input do meanwhile.
-  // Slices aim at sliceMs: the walk (every 128 nodes, or 4096 items of a list), the packing and the JSON each end a
-  // slice before a step as long as their last one would take it past sliceMs, so no slice passes 8 ms.
+  // Slices aim at sliceMs: the walk (every 128 nodes, or 4096 items of a list) ends a slice before a stretch as long as
+  // its last one would take it past sliceMs, and the packing and the JSON before a step that would (pacer()), so no
+  // slice passes 8 ms. Everything else the autosave does runs in tasks of its own too: the rehearsal before the
+  // snapshot (rehearse(), in timeouts), and the tail, in idle periods: the text's one join, then the write (whose
+  // synchronous part is IndexedDB's copy of the text).
+  // stats (the last autosave's): tick and snapMs (the snapshot's), flat and entities (W.list's flat records and length),
+  // slices (the time of every other task it ran, in order: the rehearsal's, the walk's, pack's and the JSON's slices,
+  // the join, the write), rehearsal (the rehearsal's tasks), rehearseMs, walkMs, packMs and jsonMs (the longest task of
+  // each), joinMs, putMs (IndexedDB's put alone), tailMs (the longer of the join's and the write's tasks), hold (the
+  // longest of slices), ms (the snapshot to the text) and chars.
   sliceMs: 6, busy: false, stats: null,
   later(fn, soon) { if (!soon && typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 100 }); else if (typeof setTimeout === 'function') setTimeout(fn, 0); else Promise.resolve().then(fn); },
-  sliced(gen, stats) {
+  idle(soon) { return new Promise(r => this.later(r, soon)); },
+  // the autosave stops, writing nothing and telling nothing, once the match it saves is no longer the one running
+  aborted() { const e = new Error('The match was left during the autosave.'); e.aborted = true; return e; },
+  // runs gen one step an idle period (soon: a timeout), each step's time into times; before each step, live() says the
+  // match is still the one being saved (else it stops: gen.return() runs gen's finally blocks, and the promise rejects
+  // with aborted())
+  sliced(gen, times, live = () => true, soon = false) {
     return new Promise((resolve, reject) => {
       const step = () => {
+        if (!live()) { try { gen.return(); } catch (e) { /* stopping anyway */ } reject(this.aborted()); return; }
         const t0 = performance.now();
         let r; try { r = gen.next(); } catch (e) { reject(e); return; }
-        stats.slices.push(+(performance.now() - t0).toFixed(2));
-        if (r.done) resolve(); else this.later(step);
+        times.push(+(performance.now() - t0).toFixed(2));
+        if (r.done) resolve(); else this.later(step, soon);
       };
-      this.later(step);
+      this.later(step, soon);
     });
   },
   // freeze(value) copies, at once, all that the save of value holds, so that walk(), pack() and the JSON can run later
@@ -333,12 +408,23 @@ const MatchSave = {
   // 11 ms at 480 x 480 with 8 players (48,800 entities: the copies outlive the young generation). Instead their values
   // go into one array, their keys into one list per shape, and the snapshot keeps the entity itself only as the
   // identity that walk() numbers (at(): its index in items, or -1).
+  // dry (the rehearsal's): typed arrays are not copied; the copy is the spare as it is (one is made where none fits).
   spares: new WeakMap(),   // a typed array of the match -> the copy the last snapshot made of it
   bufs: null,              // the last snapshot's arrays for its flat records, once its walk is done (release())
-  freeze(value, list, nextId) {   // list: W.list, nextId: W.nextId (or a sample of the list, rehearse())
-    const n = list.length, top = Math.max(1, nextId | 0), grow = k => Math.ceil(k * 1.25) + 64;
-    let b = this.bufs; this.bufs = null;   // taken: a snapshot made before this one is released gets arrays of its own
-    if (!b || b.slot.length <= top || b.shape.length < n || b.vals.length < n * 13) b = { slot: new Int32Array(grow(top)), shape: new Int32Array(grow(n)), start: new Int32Array(grow(n)), vals: new Array(grow(n * 13)) };
+  // the copy of typed array v in spares, or a new one where none fits; fill: with v's values now
+  spare(v, fill) {
+    const c = this.spares.get(v);
+    if (c && c.constructor === v.constructor && c.length === v.length) { if (fill) c.set(v); return c; }
+    const d = v.slice(); this.spares.set(v, d); return d;
+  },
+  // b, or new arrays where b is too small for n entities and ids up to top
+  bufsFor(b, n, top) {
+    const grow = k => Math.ceil(k * 1.25) + 64;
+    return b && b.slot.length > top && b.shape.length >= n && b.vals.length >= n * 13 ? b : { slot: new Int32Array(grow(top)), shape: new Int32Array(grow(n)), start: new Int32Array(grow(n)), vals: new Array(grow(n * 13)) };
+  },
+  freeze(value, list, nextId, dry = false) {   // list: W.list, nextId: W.nextId (or a sample of the list, rehearse())
+    const n = list.length, top = Math.max(1, nextId | 0);
+    const b = this.bufsFor(this.bufs, n, top); this.bufs = null;   // taken: a snapshot made before this one is released gets arrays of its own
     const items = list.slice(), slot = b.slot, shape = b.shape, start = b.start;
     slot.fill(0, 0, top + 1); shape.fill(-1, 0, n);
     const { shapes, flat } = this.flatPass(items, n, top, slot, shape, start, b.vals);
@@ -350,8 +436,7 @@ const MatchSave = {
       let c = seen.get(v); if (c !== undefined) return c;
       if (at(v) >= 0) return v;
       if (ArrayBuffer.isView(v)) {
-        if (typeof v.slice !== 'function') c = v;
-        else { c = this.spares.get(v); if (c && c.constructor === v.constructor && c.length === v.length) c.set(v); else { c = v.slice(); this.spares.set(v, c); } }
+        c = typeof v.slice !== 'function' ? v : this.spare(v, !dry);
         seen.set(v, c); return c;
       }
       // plain objects and arrays are copied whole (spread, slice: one step, not one store per key), their object values below
@@ -415,40 +500,104 @@ const MatchSave = {
     this.readers.set(sig, r); return r;
   },
   slowReader(keys) { return (e, v, o) => { for (let j = 0; j < keys.length; j++) { const x = e[keys[j]]; if (x !== null && typeof x === 'object') return false; v[o + j] = x; } return true; }; },
-  // the snapshot's rehearsal (autosave): freeze() on every 8th entity, thrown away
-  rehearse() {
-    if (typeof terraFlush === 'function') terraFlush();
-    const some = W.list.filter((e, i) => (i & 7) === 0);
-    this.freeze({ list: some }, some, W.nextId).release();
+  // The typed arrays the snapshot copies: W.map's (but its derived layers) and every player's (fog).
+  layers(w = W) {
+    const out = [], m = w.map;
+    for (const k of Object.keys(m)) if (!MAP_DERIVED.includes(k) && ArrayBuffer.isView(m[k])) out.push(m[k]);
+    for (const p of w.players) if (p) for (const k of Object.keys(p)) if (ArrayBuffer.isView(p[k])) out.push(p[k]);
+    return out;
   },
-  async serializeSliced() {
-    const t0 = performance.now(), { head, value } = this.parts(), snap = this.freeze(value, W.list, W.nextId), out = {};
-    const stats = this.stats = { tick: W.tick, snapMs: +(performance.now() - t0).toFixed(2), flat: snap.flat, entities: snap.items.length, slices: [], ms: 0, chars: 0 };
-    await this.sliced(this.walk(snap.root, out, this.sliceMs, snap), stats);
-    snap.release();
-    await this.sliced(this.pack(out, this.sliceMs), stats);
-    const nodes = out.nodes, chunks = [], ms = this.sliceMs;
-    // the JSON, 256 nodes at a time; a slice ends before a chunk that would take it past ms (step: the last chunk's time)
-    await this.sliced((function* () { let t0 = performance.now(), step = 0; for (let i = 0; i < nodes.length; i += 256) { if (performance.now() - t0 + step > ms) { yield; t0 = performance.now(); } const t = performance.now(); chunks.push(nodes.slice(i, i + 256).map(x => JSON.stringify(x)).join(',')); step = performance.now() - t; } })(), stats);
-    // the same text as serialize(): the head, then the graph with its nodes last
-    const pre = JSON.stringify({ ...head, graph: { root: out.root, shapes: out.shapes, nodes: [] } }), text = pre.slice(0, -3) + chunks.join(',') + ']}}';
-    this.lastHead = head; stats.ms = +(performance.now() - t0).toFixed(1); stats.chars = text.length;
+  // The snapshot's rehearsal (autosave), a generator in slices of its own (sliced(), timeouts) before the snapshot. The
+  // snapshot runs once a minute: cold, its code ran 2-3 times slower (26 ms against 9 at 480 x 480), and the first one
+  // after a start or a load also made its arrays. The rehearsal does that work instead, and runs the code once:
+  // - pending terrain work (terraFlush), and freeze()'s arrays for the flat records, sized for the whole of W.list;
+  // - a spare copy (spares) of each typed array the snapshot copies, where none fits yet, as many a slice as fit;
+  // - freeze(), dry, on W.map, the players (and their AIs) and every 8th entity (at most about 2048 of them): the GameMap,
+  //   Player, AIPlayer and entity copies, and the flat records' compiled readers;
+  // - walk, pack and the JSON on a small sample of that: 256 flat records, 32 other entities and 32 KB of three layers;
+  // - the flat records' pass (most of the snapshot's time) over the whole of W.list, 4096 entities a step, and parts().
+  // Everything it makes is thrown away but the spares and the arrays. Its steps share slices where they fit (pacer());
+  // the dry freeze, its longest step that cannot be cut, starts a slice of its own.
+  *rehearse(slice = this.sliceMs) {
+    const P = this.pacer(slice), step = function* (kind, units, f) { if (P.due(kind, units)) { yield; P.next(); } return P.time(kind, units, f); };
+    yield* step('flush', 1, () => { if (typeof terraFlush === 'function') terraFlush(); });
+    yield* step('bufs', 1, () => { this.bufs = this.bufsFor(this.bufs, W.list.length, Math.max(1, W.nextId | 0)); });
+    for (const a of this.layers()) {
+      const c = this.spares.get(a); if (c && c.constructor === a.constructor && c.length === a.length) continue;
+      yield* step('spare', a.byteLength, () => this.spare(a, false));
+    }
+    if (P.ran) { yield; P.next(); }
+    const k = Math.max(8, Math.ceil(W.list.length / 2048)), some = W.list.filter((e, i) => i % k === 0), out = {};
+    const snap = P.time('dry', some.length, () => this.freeze({ map: W.map, players: W.players, list: some }, some, W.nextId, true));
+    try {
+      const flat = [], other = [], p = W.players[W.humanId] || W.players[1];
+      for (let i = 0; i < snap.items.length && (flat.length < 256 || other.length < 32); i++) { const l = snap.shape[i] >= 0 ? flat : other; if (l.length < (l === flat ? 256 : 32)) l.push(snap.items[i]); }
+      const layers = [W.map.ter.slice(0, 32768), W.map.blk.slice(0, 8192)]; if (p && p.explored) layers.push(p.explored.slice(0, 32768));
+      yield* step('walk', 1, () => { for (const _ of this.walk({ flat, other, layers }, out, 0, snap)); });
+    } finally { snap.release(); }
+    yield* step('pack', 1, () => { for (const _ of this.pack(out, 0)); });
+    yield* step('json', 1, () => { for (const _ of this.json(out, {}, [], 0)); });
+    const b = this.bufs, top = Math.max(1, W.nextId | 0);
+    if (b && b.slot.length > top) for (let a = 0; a < W.list.length; a += 4096) {
+      const part = W.list.slice(a, a + 4096);
+      yield* step('flat', part.length, () => { b.slot.fill(0, 0, top + 1); b.shape.fill(-1, 0, part.length); this.flatPass(part, part.length, top, b.slot, b.shape, b.start, b.vals); });
+    }
+    yield* step('parts', 1, () => { if (!W.over && !W.editor) this.parts(); });   // (a match that ended meanwhile is not saved: autosave() stops after this)
+  },
+  // The autosave's text: the snapshot (freeze) at once, as the first, synchronous step, then the walk, the packing and
+  // the JSON in idle slices, then the join in an idle period of its own. live: see sliced(); rehearsal: the rehearsal's
+  // task times, which start stats.slices.
+  async serializeSliced({ live = () => true, rehearsal = [] } = {}) {
+    const t0 = performance.now(), { head, value } = this.parts(), snap = this.freeze(value, W.list, W.nextId), out = {}, parts = [];
+    const stats = this.stats = { tick: W.tick, snapMs: +(performance.now() - t0).toFixed(2), flat: snap.flat, entities: snap.items.length, slices: rehearsal.slice(), rehearsal, rehearseMs: rehearsal.length ? Math.max(...rehearsal) : 0, walkMs: 0, packMs: 0, jsonMs: 0, joinMs: 0, putMs: 0, tailMs: 0, hold: 0, ms: 0, chars: 0 };
+    const longest = from => Math.max(0, ...stats.slices.slice(from));   // the longest slice of a stage
+    let k = stats.slices.length;
+    try { await this.sliced(this.walk(snap.root, out, this.sliceMs, snap), stats.slices, live); } finally { snap.release(); }
+    stats.walkMs = longest(k); k = stats.slices.length;
+    await this.sliced(this.pack(out, this.sliceMs), stats.slices, live);
+    stats.packMs = longest(k); k = stats.slices.length;
+    await this.sliced(this.json(out, head, parts, this.sliceMs), stats.slices, live);
+    stats.jsonMs = longest(k);
+    await this.idle();
+    if (!live()) throw this.aborted();
+    const t1 = performance.now(), text = parts.join('');   // the same text as serialize()
+    stats.joinMs = +(performance.now() - t1).toFixed(2); stats.slices.push(stats.joinMs);
+    this.lastHead = head; stats.ms = +(performance.now() - t0).toFixed(1); stats.chars = text.length; stats.hold = Math.max(...stats.slices);
     return text;
   },
-  // Every failure shows a message (the old autosave told only once).
+  // Nothing holds the simulation; every failure shows a message (the old autosave told only once). The autosave saves
+  // the match running when it starts (w0): once that is no longer the match running (a load, a new match, the menu),
+  // it stops at its next idle period, writing nothing and telling nothing.
   async autosave() {
     if (this.busy) return false;
     this.busy = true;
+    const w0 = W, live = () => !!W && W === w0 && !W.menu;
     try {
-      await new Promise(r => this.later(r, true));   // after the tick that started it: the snapshot is of a moment between two ticks, as a manual save's is
-      if (!W || W.menu || W.editor || W.over) return false;   // the match ended or was left meanwhile
-      // A rehearsal on every 8th entity, an idle period before the snapshot: the snapshot runs once a minute, and its code ran
-      // 2-3 times slower cold (26 ms against 9 at 480 x 480). It also finishes any pending terrain work (terraFlush).
-      this.rehearse(); await new Promise(r => this.later(r));
-      if (!W || W.menu || W.editor || W.over) return false;
-      const text = await this.serializeSliced(); await this.saveTo('auto', text); if (W) W.autosaveError = false; return true;
+      await this.idle(true);   // after the tick that started it: the snapshot is of a moment between two ticks, as a manual save's is
+      if (!live() || W.editor || W.over) return false;   // the match ended or was left meanwhile
+      // the rehearsal's tasks are timeouts, as the first one is: they keep the snapshot close to the tick that started it
+      // (a busy page has few idle periods, and each would wait for its own)
+      const rehearsal = [];
+      await this.sliced(this.rehearse(), rehearsal, live, true);
+      await this.idle();   // the snapshot in an idle period of its own
+      if (!live() || W.editor || W.over) return false;
+      const text = await this.serializeSliced({ live, rehearsal }), stats = this.stats, head = this.lastHead;
+      await Store.open();  // the database opened first, so the write's task runs through to IndexedDB's put
+      await this.idle();   // the write in an idle period of its own
+      if (!live()) return false;
+      const t = performance.now();
+      await this.saveTo('auto', text, head);
+      // the write's task: from its start to the end of IndexedDB's put of the text (store.js times it), a microtask later
+      const put = Store.timing && Store.timing.saves, ok = put && put.key === 'auto' && put.at >= t, task = ok ? +(put.at - t).toFixed(2) : 0;
+      stats.putMs = ok ? +put.ms.toFixed(2) : 0; stats.slices.push(task); stats.tailMs = Math.max(stats.joinMs, task); stats.hold = Math.max(...stats.slices);
+      if (live()) W.autosaveError = false;
+      return true;
     }
-    catch (e) { if (W) W.autosaveError = true; msg('Autosave failed: ' + (e && e.message ? e.message : e) + ' Use Export Match from the game menu to keep a copy.', '#fc8'); return false; }
+    catch (e) {
+      if (e && e.aborted) return false;
+      if (live()) { W.autosaveError = true; msg('Autosave failed: ' + (e && e.message ? e.message : e) + ' Use Export Match from the game menu to keep a copy.', '#fc8'); }
+      return false;
+    }
     finally { this.busy = false; }
   },
   resume(text) {
@@ -521,7 +670,7 @@ GameHooks.on('afterTick', () => {
   if (!W || W.menu || W.editor || W.over || MatchSave.busy || (typeof indexedDB === 'undefined' && typeof localStorage === 'undefined')) return;
   if (W.t < (W.nextAutosave ?? MatchSave.interval)) return;
   W.nextAutosave = W.t + MatchSave.interval;
-  MatchSave.autosave();   // a snapshot right after this tick, then the text in idle slices while the match plays on
+  MatchSave.autosave().catch(() => { /* autosave() handles its own failures; nothing may reject unhandled */ });   // a snapshot right after this tick, then the text in idle slices while the match plays on
 });
 
 if (typeof initMenus === 'function') {
