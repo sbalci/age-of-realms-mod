@@ -1,7 +1,7 @@
 // Save compatibility: every committed fixture in tests/fixtures/saves must load in the current build, keep playing
 // without errors and save again. Make new fixtures with tests/make-save-fixture.js; never regenerate old ones.
 // node tests/save-compat.test.js
-const fs = require('fs'), path = require('path'), zlib = require('zlib');
+const fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
 const dir = path.join(__dirname, 'fixtures/saves');
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x !== undefined ? '  ' + JSON.stringify(x) : '')); };
@@ -30,9 +30,11 @@ for (const f of files) {
   const C = JSON.parse(run(`(() => { try { W.spectate = false; const s = MatchSave.serialize(); MatchSave.parse(s); return JSON.stringify({ ok: true, kb: Math.round(s.length / 1024) }); } catch (e) { return JSON.stringify({ err: String(e).slice(0, 300) }); } })()`));
   ok(`${name}: saves again and the new save validates`, C.ok, C);
   // loading is deterministic: two loads played for 30 s give the same world
-  const D = run(`(() => { const sig = () => { MatchSave.restore(__save); for (const p of W.players.slice(1)) if (!p.ai) p.ai = new AIPlayer(p, 'standard'); for (let i = 0; i < 600; i++) worldTick(0.05); return signature(); };
-    return sig() === sig(); })()`);
-  ok(`${name}: deterministic after loading`, D === true);
+  const D = JSON.parse(run(`(() => { const sig = () => { MatchSave.restore(__save); for (const p of W.players.slice(1)) if (!p.ai) p.ai = new AIPlayer(p, 'standard'); for (let i = 0; i < 600; i++) worldTick(0.05); return signature(); };
+    const a = sig(); return JSON.stringify({ same: a === sig(), sig: a }); })()`));
+  ok(`${name}: deterministic after loading`, D.same === true);
+  // a fixture made since phase 4 records how the build that made it played on after loading it
+  if (fx.replay) { const got = crypto.createHash('sha1').update(D.sig).digest('hex'); ok(`${name}: loads and plays on exactly as the build that made it (${fx.commit})`, got === fx.replay, { expected: fx.replay, got }); }
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;
