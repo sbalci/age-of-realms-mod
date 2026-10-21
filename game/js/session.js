@@ -626,6 +626,7 @@ const MatchSave = {
     m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { this.resume(await readTextFile(f)); } catch (err) { fail(err); } };
     let infos; try { infos = await this.slotInfos(); } catch (e) { fail(e); return; }
     const box = m.querySelector('#match-slots');
+    if (!box) return;   // the modal was closed or replaced while the slots loaded (an imported file resumed the match)
     for (const s of [...this.slots, 'auto']) {
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = this.slotLabel(s, infos[s]); b.disabled = !infos[s];
       b.onclick = async () => { try { const text = await this.loadFrom(s); if (!text) throw new Error('That slot is empty.'); this.resume(text); } catch (e) { fail(e); } };
@@ -675,7 +676,12 @@ GameHooks.on('afterTick', () => {
 
 if (typeof initMenus === 'function') {
   const previous = initMenus;
-  initMenus = function () { previous(); $('#btn-load').onclick = () => MatchSave.openLoad(); $('#btn-tutorial').onclick = startTutorial; $('#btn-controls').onclick = openControls; };
+  initMenus = function () {
+    previous(); $('#btn-load').onclick = () => MatchSave.openLoad(); $('#btn-tutorial').onclick = startTutorial; $('#btn-controls').onclick = openControls;
+    // the editor's maps come from IndexedDB: the setup screen waits for them, so its custom-map list is complete
+    Editor.ready = Editor.loadAll().then(n => { if (Editor.active && Editor.ui) Editor.refreshList(); return n; }, () => 0);
+    const setup = $('#btn-sp').onclick; $('#btn-sp').onclick = e => Editor.ready.then(() => setup(e));
+  };
 }
 if (typeof openGameMenu === 'function') {
   const previous = openGameMenu;

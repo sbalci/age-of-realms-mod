@@ -108,3 +108,26 @@ test('a 480 x 480 save with 8 players round trips through IndexedDB across a rel
   const b = await page.evaluate(async () => { const text = await MatchSave.loadFrom('2'); MatchSave.resume(text); __game.UI.paused = true; const W = __game.W; return { n: W.n, ents: W.list.length, t: W.t, gold: W.players[1].res.gold, slot: MatchSave.slotLabel('2', (await MatchSave.slotInfos())['2']).startsWith('Slot 2 · Franks') }; });
   expect(b).toEqual({ n: 480, ents: a.ents, t: a.t, gold: a.gold, slot: true });
 });
+
+test('the editor keeps its maps in IndexedDB across a reload, makes custom sizes and imports a 9 MB map', async ({ page }) => {
+  await page.locator('#btn-editor').click();
+  await page.locator('#ed-gsize').selectOption('custom');
+  await page.locator('#ed-gn').fill('144');
+  await page.locator('#ed-blank').click();
+  expect(await page.evaluate(() => __game.W.n)).toBe(144);
+  await page.locator('#ed-name').fill('Kept Map');
+  await page.locator('#ed-save').click();
+  await expect(page.locator('#ed-status')).toContainText('Saved "Kept Map"');
+  await reload(page);
+  await page.evaluate(() => Editor.ready);
+  await page.locator('#btn-editor').click();
+  await expect(page.locator('#ed-list option', { hasText: 'Kept Map' })).toHaveCount(1);
+  await page.locator('#ed-list').selectOption('Kept Map');
+  await page.locator('#ed-load').click();
+  await expect(page.locator('#ed-status')).toContainText('Loaded "Kept Map"');
+  expect(await page.evaluate(() => __game.W.n)).toBe(144);
+  // a map file past the old 8 MB import limit
+  const spec = await page.evaluate(() => Editor.toSpec()), text = JSON.stringify(spec), big = text + ' '.repeat(9 * 1024 * 1024 - text.length);
+  await page.locator('#ed-import').setInputFiles({ name: 'big.aoemap.json', mimeType: 'application/json', buffer: Buffer.from(big) });
+  await expect(page.locator('#ed-status')).toContainText('Imported big.aoemap.json');
+});

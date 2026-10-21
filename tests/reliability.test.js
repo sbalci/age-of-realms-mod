@@ -8,12 +8,9 @@ test('invalid maps are rejected without replacing the world', () => {
 test('old maps remain compatible; engineering layers round-trip', () => {
   assert.equal(run(`(() => { const spec=JSON.parse(JSON.stringify(W.spec)); spec.bridge=Array(W.n*W.n).fill(0); spec.tun=spec.bridge.slice(); spec.trench=spec.bridge.slice(); spec.bridge[5]=1; spec.tun[6]=1; spec.trench[7]=1; createWorld(spec,W.settings); Editor.players=spec.players; const out=Editor.toSpec(); return out.version===1&&out.bridge[5]===1&&out.tun[6]===1&&out.trench[7]===1&&validateMapSpec(out).length===0; })()`), true);
 });
-test('map storage preserves special names and handles quota errors', () => {
-  c.localStorage = { value: '{}', getItem() { return this.value; }, setItem(k, v) { this.value = v; } };
-  assert.equal(run(`Editor.store('__proto__', Editor.toSpec()); Editor.savedList().includes('__proto__') && !!Editor.load('__proto__')`), true);
-  c.localStorage.setItem = () => { throw new Error('quota'); };
-  assert.throws(() => run(`Editor.store('other',Editor.toSpec())`), /quota/);
-  delete c.localStorage;
+// (a failing store and the IndexedDB round trip are checked in tests/editor.test.js, which can wait for promises)
+test('map storage preserves special names', () => {
+  assert.equal(run(`(() => { const p = Editor.store('__proto__', Editor.toSpec()); p.catch(() => {}); return Editor.maps.has('__proto__') && !!Editor.load('__proto__') && ({}).polluted === undefined; })()`), true);
 });
 test('same seed and orders reproduce a simulation despite cosmetic RNG', () => {
   const first = run(`make(32); for(let i=0;i<2;i++)W.players[i+1].ai=new AIPlayer(W.players[i+1],'standard'); for(let i=0;i<200;i++)worldTick(0.05); signature()`);

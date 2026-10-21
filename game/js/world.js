@@ -98,8 +98,9 @@ function createWorld(spec, settings) {
   for (let i = 1; i <= np; i++) {
     const p = W.players[i];
     p.res = Object.assign({ coal: 0 }, sr);
-    if (p.civ === 'chinese') { p.res.food = Math.max(0, p.res.food - 150); for (let k = 0; k < 3; k++) spawnUnit('villager', i, p.startX + 3, p.startY - 1 + k); }
-    if (p.civ === 'spanish') spawnUnit('villager', i, p.startX - 3, p.startY);
+    // the civ's extra start villagers belong to a match: an editor world (reloaded on every undo) would gain them each time
+    if (p.civ === 'chinese') { p.res.food = Math.max(0, p.res.food - 150); if (!settings.editor) for (let k = 0; k < 3; k++) spawnUnit('villager', i, p.startX + 3, p.startY - 1 + k); }
+    if (p.civ === 'spanish' && !settings.editor) spawnUnit('villager', i, p.startX - 3, p.startY);
     const age = settings.startAge | 0;
     for (let a = 1; a <= Math.min(age, AGES.length - 1); a++) { p.techs.add(AGE_TECHS[a]); p.age = a; }
     if (settings.difficulty === 'hardest' && !p.human) { for (const r of RES) p.res[r] += 200; }
