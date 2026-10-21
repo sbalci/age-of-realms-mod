@@ -1,10 +1,12 @@
 // Golden simulation signatures: fixed-seed AI-vs-AI matches must replay to exactly the same state.
 // The entity index (game/js/index.js) may make queries faster but must not change any outcome, so these hashes were
 // first recorded on the code before the index existed and held unchanged through the index tasks; commit f012cc0
-// re-recorded them for the deliberate AI stagger, and phase 3 for hierarchical routes and group orders.
-// Every scenario plays twice: with the hierarchy on (the game's default; key = the scenario) and with it switched off
-// (key + '@hpa-off': the routes before phase 3). AOR_HPA=on or AOR_HPA=off plays only that mode. A change that is
-// meant to alter the simulation re-records them deliberately, and its commit says why:
+// re-recorded them for the deliberate AI stagger, phase 3 for hierarchical routes and group orders, and phase 4 for
+// the movement fix (MOVE.mark: units no longer walk on the spot for good).
+// Every scenario plays twice: with the game's defaults (key = the scenario) and with the hierarchy and phase 4's
+// movement mark switched off (key + '@hpa-off': the routes and movement before phase 3, hashes f620967b and f3599320).
+// AOR_HPA=on or AOR_HPA=off plays only that mode. A change that is meant to alter the simulation re-records them
+// deliberately, and its commit says why:
 //   AOR_RECORD=1 node tests/sim-signature.test.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const harness = require('./engine-harness');
@@ -18,7 +20,7 @@ const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL 
 const MODES = process.env.AOR_HPA === 'off' ? ['off'] : process.env.AOR_HPA === 'on' ? ['on'] : ['on', 'off'];
 function play(s, mode) {
   const { run, warnings } = harness();
-  if (mode === 'off') run('HPA.enabled = false');
+  if (mode === 'off') run('HPA.enabled = false; MOVE.mark = false');
   run(`(() => {
     const spec = generateMapSpec({ size: '${s.size}', seed: ${s.seed}, mapType: '${s.mapType}', numPlayers: ${s.players} });
     const civs = Object.keys(CIVS);

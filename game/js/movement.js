@@ -8,7 +8,9 @@
 // Now: blocked steps slide along the free axis, then fall back to the tile centre; cliff edges are respected; repeated
 // failure repaths, then lifts the unit to the nearest free tile; oncoming units sidestep instead of shoving.
 'use strict';
-const MOVE = { enabled: true, repathAfter: 0.5, rescueAfter: 3, sidestep: true };
+// mark: after a tick without progress, progress must beat the unit's best distance to its waypoint (see followPath);
+// false gives the movement before phase 4 (tests/sim-signature.test.js replays the old matches with it off)
+const MOVE = { enabled: true, repathAfter: 0.5, rescueAfter: 3, sidestep: true, mark: true };
 if (typeof location !== 'undefined' && location.search && new URLSearchParams(location.search).get('move') === 'off') MOVE.enabled = false;
 
 // can u stand at (x, y) coming from (fx, fy)? tile passable for it and no cliff between the two tiles
@@ -72,9 +74,13 @@ if (typeof followPath === 'function') {
       const nx = u.x + mx, ny = u.y + my;
       if (!startOk || mvCanEnter(u, u.x, u.y, nx, ny)) { u.x = nx; u.y = ny; moved = true; break; }
     }
-    // progress is measured toward the waypoint, so sliding back and forth on the spot still counts as stuck
-    const nd = Math.hypot(p.x - u.x, p.y - u.y);
-    if (moved && nd < dist - step * 0.25) { u.stuck = Math.max(0, (u.stuck || 0) - dt); u.mvRescues = 0; return false; }
+    // Progress is measured toward the waypoint, so sliding back and forth on the spot still counts as stuck. After a tick
+    // without progress the unit must also get nearer the waypoint than it was before that tick (u.mvBest, kept for this
+    // waypoint, u.mvAt): otherwise a drift to the tile centre and the step back cancel out every two ticks, the stuck
+    // time never reaches MOVE.repathAfter, and the unit walks on the spot for good.
+    const nd = Math.hypot(p.x - u.x, p.y - u.y), best = MOVE.mark && u.mvAt === p ? u.mvBest : Infinity;
+    if (moved && nd < Math.min(dist, best) - step * 0.25) { u.stuck = Math.max(0, (u.stuck || 0) - dt); u.mvRescues = 0; if (u.mvAt) u.mvAt = null; return false; }
+    if (MOVE.mark && (u.mvAt !== p || dist < u.mvBest)) { u.mvBest = Math.min(dist, best); u.mvAt = p; }
     u.stuck = (u.stuck || 0) + dt;
     if (u.stuck > MOVE.repathAfter) {
       u.stuck = 0; u.mvFails = (u.mvFails || 0) + 1;
