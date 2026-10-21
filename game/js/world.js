@@ -255,7 +255,7 @@ function setOrder(u, o) {
   u.work = null;
   u.order = o; u.path = null; u.convT = 0; u.phase = 0;
   if (!o) { u.anim = 'idle'; return; }
-  if (o.t === 'move') moveToPoint(u, o.x, o.y);
+  if (o.t === 'move' && !o.join) moveToPoint(u, o.x, o.y);   // a group member's path waits for its first tick (hpa.js hpaJoinDue)
 }
 function orderMove(units, x, y) {
   // formation: spread in a grid around the target
@@ -874,13 +874,16 @@ function updateUnit(u, dt) {
   u.idleT = 0;
   switch (o.t) {
     case 'move': {
+      if (o.join) { if (!hpaJoinDue(u, o)) { u.anim = 'idle'; break; } if (!u.path) moveToPoint(u, o.x, o.y); }
+      hpaOwnDue(u);   // a blocked click's member: its own path, once its search has run (hpa.js)
       if (followPath(u, dt)) setOrder(u, o.then || null);
       break;
     }
     case 'attackmove': {
       u.scanT = (u.scanT || 0) - dt;
       if (u.scanT <= 0) { u.scanT = 0.5; const t = findTargetFor(u, d.los + 1); if (t) { u.order = { t: 'attack', id: t.id, then: { t: 'attackmove', x: o.x, y: o.y } }; u.path = null; break; } }
-      if (!u.path) moveToPoint(u, o.x, o.y);
+      if (!u.path) { if (!hpaJoinDue(u, o)) { u.anim = 'idle'; break; } moveToPoint(u, o.x, o.y); }
+      hpaOwnDue(u);
       if (followPath(u, dt)) setOrder(u, null);
       break;
     }
