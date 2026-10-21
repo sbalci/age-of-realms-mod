@@ -1,37 +1,25 @@
 // Versioned match persistence. References preserve shared jobs, entity links and AI/player cycles.
+// Format 2 (phase 4) writes every object once as a compact node: typed arrays (map layers, fog, occupancy) as base64
+// run-length bytes (codec.js), objects as a shape (their prototype and keys, listed once) plus their values, and the
+// generated map's spec as the options that regenerate it. Format 1 saves and exports still load, and are staggered
+// once on the way in (MatchSave.staggerAI).
+// Never saved, by design: the pathfinding graph and the entity index (rebuilt on load), HPA.enabled (follows the URL),
+// and group-order state (hpa.js HPA_GROUP: a member still waiting for its join when the match is saved routes on its own
+// after loading, so a resumed match equals an uninterrupted one only from a moment when no member is waiting).
 'use strict';
+const MAP_DERIVED = ['vh', 'landReg', 'waterReg', '_wb'];   // GameMap fields rebuilt on load (computeVH, computeRegions)
 const MatchSave = {
-  version: 1, key: 'aor_match_v1', autoKey: 'aor_autosave_v1', interval: 60,
-  encode(value) {
-    const nodes = [], seen = new Map();
-    const visit = v => {
-      if (v === undefined) return { undef: true };
-      if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
-      if (typeof v === 'number') { if (!Number.isFinite(v)) throw new Error('Cannot save non-finite state.'); return v; }
-      if (typeof v !== 'object') throw new Error('Cannot save a pending function.');
-      if (seen.has(v)) return { ref: seen.get(v) };
-      const id = nodes.length; seen.set(v, id); nodes.push(null);
-      let type = 'Object', data;
-      if (ArrayBuffer.isView(v)) { type = v.constructor.name; data = Array.from(v); }
-      else if (v instanceof Map) { type = 'Map'; data = Array.from(v, ([k, x]) => [visit(k), visit(x)]); }
-      else if (v instanceof Set) { type = 'Set'; data = Array.from(v, visit); }
-      else if (Array.isArray(v)) { type = 'Array'; data = Array.from(v, visit); }
-      else {
-        if (v instanceof GameMap) type = 'GameMap';
-        else if (v instanceof Player) type = 'Player';
-        else if (typeof AIPlayer !== 'undefined' && v instanceof AIPlayer) type = 'AIPlayer';
-        data = Object.entries(v).filter(([k]) => type !== 'GameMap' || !['vh', 'landReg', 'waterReg', '_wb'].includes(k)).map(([k, x]) => [k, visit(x)]);
-      }
-      nodes[id] = { type, data }; return { ref: id };
-    };
-    const root = visit(value); return { root, nodes };
-  },
-  decode(graph) {
-    if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length > 200000) throw new Error('Invalid save graph.');
+  version: 2, key: 'aor_match_v1', autoKey: 'aor_autosave_v1', interval: 60,
+  // Limits for a save of a map of side n: graph nodes, values in one node, entities and typed-array length. They are
+  // never below format 1's fixed limits (200,000 nodes, 1,000,000 values, 100,000 entities) and grow with the map.
+  caps(n) { const a = n * n; return { nodes: Math.max(200000, 8 * a), values: Math.max(1000000, 4 * a), entities: Math.max(100000, 4 * a), layer: Math.max(65536, a) }; },
+  // ---------- format 1 (read only) ----------
+  decode(graph, caps = this.caps(256)) {
+    if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length > caps.nodes) throw new Error('Invalid save graph.');
     const types = { Uint8Array, Int16Array, Int32Array, Uint32Array, Float32Array };
     const prototypes = { Object: Object.prototype, GameMap: GameMap.prototype, Player: Player.prototype, AIPlayer: AIPlayer.prototype };
     const objects = graph.nodes.map(n => {
-      if (!n || !Array.isArray(n.data) || n.data.length > 1000000) throw new Error('Invalid save node.');
+      if (!n || !Array.isArray(n.data) || n.data.length > caps.values) throw new Error('Invalid save node.');
       if (Object.prototype.hasOwnProperty.call(types, n.type)) {
         if (n.data.some(x => typeof x !== 'number' || !Number.isFinite(x))) throw new Error('Invalid numeric layer.');
         return new types[n.type](n.data);
@@ -64,30 +52,169 @@ const MatchSave = {
     });
     return read(graph.root);
   },
-  snapshot() {
-    if (!W || W.menu || W.editor || W.over) throw new Error('Start an active match before saving.');
-    if (typeof terraFlush === 'function') terraFlush();
+  // the map side a format 1 graph holds (root -> world -> n), for its limits; 256 when it cannot be read
+  v1Size(graph) {
+    try { const root = graph.nodes[graph.root.ref], w = graph.nodes[root.data.find(p => p[0] === 'world')[1].ref]; return w.data.find(p => p[0] === 'n')[1]; } catch (e) { return 256; }
+  },
+  // ---------- format 2 ----------
+  // The graph is { root, shapes, nodes }. Every object is a node, so shared objects and cycles survive:
+  //   a typed array -> [type name, length, base64 run-length bytes]
+  //   an Array -> ['A', v...], a Set -> ['S', v...], a Map -> ['M', key, value, key, value...]
+  //   any other object -> [shape, v...], where shapes[shape] = [prototype name, key...] ('Object', 'GameMap', 'Player', 'AIPlayer')
+  // and a value is a number, string, boolean or null as itself, [i] for node i, or [] for undefined.
+  // walk(value, out, slice) visits the objects breadth first and fills out.root, out.shapes and out.nodes; a typed array's
+  // node holds a copy of it, which pack() turns into text. Both are generators: given slice (ms) they yield when a slice
+  // is used up (the sliced autosave); with slice 0 they run to the end in one go.
+  *walk(value, out, slice = 0) {
+    const nodes = [], seen = new Map(), shapes = [], shapeOf = new Map(), queue = [];
+    const val = v => {
+      if (v === undefined) return [];
+      if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
+      if (typeof v === 'number') { if (!Number.isFinite(v)) throw new Error('Cannot save non-finite state.'); return v; }
+      if (typeof v !== 'object') throw new Error('Cannot save a pending function.');
+      let id = seen.get(v); if (id === undefined) { id = nodes.length; seen.set(v, id); nodes.push(null); queue.push(v); }
+      return [id];
+    };
+    out.root = val(value);
+    let t0 = performance.now();
+    for (let q = 0; q < queue.length; q++) {
+      const v = queue[q]; let node;
+      if (ArrayBuffer.isView(v)) {
+        if (!Object.prototype.hasOwnProperty.call(CODEC_TYPES, v.constructor.name)) throw new Error('Cannot save a ' + v.constructor.name + '.');
+        node = [v.constructor.name, v.length, v.slice()];
+      } else if (v instanceof Map) { node = ['M']; for (const [k, x] of v) node.push(val(k), val(x)); }
+      else if (v instanceof Set) { node = ['S']; for (const x of v) node.push(val(x)); }
+      else if (Array.isArray(v)) {   // W.list holds every entity: a long array may span slices
+        node = ['A'];
+        for (let i = 0; i < v.length; i++) { node.push(val(v[i])); if (slice && (i & 4095) === 4095 && performance.now() - t0 > slice) { yield; t0 = performance.now(); } }
+      }
+      else {
+        const type = v instanceof GameMap ? 'GameMap' : v instanceof Player ? 'Player' : typeof AIPlayer !== 'undefined' && v instanceof AIPlayer ? 'AIPlayer' : 'Object';
+        const keys = type === 'GameMap' ? Object.keys(v).filter(k => !MAP_DERIVED.includes(k)) : Object.keys(v), sk = type + '\u0000' + keys.join('\u0000');
+        let s = shapeOf.get(sk); if (s === undefined) { s = shapes.length; shapeOf.set(sk, s); shapes.push([type, ...keys]); }
+        node = [s]; for (const k of keys) node.push(val(v[k]));
+      }
+      nodes[q] = node;
+      if (slice && (q & 127) === 127 && performance.now() - t0 > slice) { yield; t0 = performance.now(); }
+    }
+    out.nodes = nodes; out.shapes = shapes;
+  },
+  // Typed-array copies -> base64 run-length text. A layer is run-length coded in chunks of 192 KB (runs split at a chunk
+  // edge decode back to back) and turned into base64 in pieces of a multiple of 3 bytes, so it may span slices; the
+  // one-shot save codes it the same way.
+  *pack(out, slice = 0) {
+    const CH = 196608;
+    let t0 = performance.now();
+    const due = () => slice && performance.now() - t0 > slice;
+    for (const node of out.nodes) {
+      if (typeof node[0] !== 'string' || !ArrayBuffer.isView(node[2])) continue;
+      const a = node[2], bytes = new Uint8Array(a.buffer, a.byteOffset, a.byteLength), runs = [];
+      let len = 0;
+      for (let i = 0; i < bytes.length || !runs.length; i += CH) { const r = rleEncode(bytes.subarray(i, i + CH)); runs.push(r); len += r.length; if (due()) { yield; t0 = performance.now(); } }
+      const all = runs.length === 1 ? runs[0] : new Uint8Array(len), text = [];
+      if (runs.length > 1) { let o = 0; for (const r of runs) { all.set(r, o); o += r.length; } }
+      for (let i = 0; i < all.length || !text.length; i += CH) { text.push(b64Encode(all.subarray(i, i + CH))); if (due()) { yield; t0 = performance.now(); } }
+      node[2] = text.join('');
+    }
+  },
+  decode2(graph, caps) {
+    if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.shapes) || graph.nodes.length > caps.nodes || graph.shapes.length > caps.nodes) throw new Error('Invalid save graph.');
+    const prototypes = { Object: Object.prototype, GameMap: GameMap.prototype, Player: Player.prototype, AIPlayer: AIPlayer.prototype };
+    for (const s of graph.shapes) {
+      if (!Array.isArray(s) || s.length > caps.values || !Object.prototype.hasOwnProperty.call(prototypes, s[0])) throw new Error('Unknown save type.');
+      for (let i = 1; i < s.length; i++) { const k = s[i]; if (typeof k !== 'string' || ['__proto__', 'constructor', 'prototype'].includes(k) || typeof prototypes[s[0]][k] === 'function') throw new Error('Invalid save property.'); }
+    }
+    const objects = graph.nodes.map(n => {
+      if (!Array.isArray(n) || !n.length || n.length > caps.values + 1) throw new Error('Invalid save node.');
+      const h = n[0];
+      if (typeof h === 'number') { const s = graph.shapes[h]; if (!s || n.length !== s.length) throw new Error('Invalid save node.'); return Object.create(prototypes[s[0]]); }
+      if (h === 'A') return []; if (h === 'S') return new Set(); if (h === 'M') { if (n.length % 2 !== 1) throw new Error('Invalid save node.'); return new Map(); }
+      if (Object.prototype.hasOwnProperty.call(CODEC_TYPES, h)) { if (n.length !== 3) throw new Error('Invalid numeric layer.'); return unpackArray({ t: h, n: n[1], d: n[2] }, caps.layer); }
+      throw new Error('Unknown save type.');
+    });
+    const read = v => {
+      if (v === null || typeof v !== 'object') return v;
+      if (!Array.isArray(v) || v.length > 1) throw new Error('Invalid save reference.');
+      if (!v.length) return undefined;
+      if (!Number.isInteger(v[0]) || v[0] < 0 || v[0] >= objects.length) throw new Error('Invalid save reference.');
+      return objects[v[0]];
+    };
+    graph.nodes.forEach((n, i) => {
+      const o = objects[i], h = n[0];
+      if (typeof h === 'number') { const keys = graph.shapes[h]; for (let k = 1; k < n.length; k++) Object.defineProperty(o, keys[k], { value: read(n[k]), enumerable: true, writable: true, configurable: true }); }
+      else if (h === 'A') { for (let k = 1; k < n.length; k++) o.push(read(n[k])); }
+      else if (h === 'S') { for (let k = 1; k < n.length; k++) o.add(read(n[k])); }
+      else if (h === 'M') { for (let k = 1; k < n.length; k += 2) o.set(read(n[k]), read(n[k + 1])); }
+    });
+    return read(graph.root);
+  },
+  // A generated map is saved as the options that regenerate its spec (only Restart reads it), with its name and player
+  // starts; an editor map keeps its layers (as typed arrays, packed like the live ones) and objects.
+  specStub(w) {
+    const s = w.spec, st = w.settings || {};
+    if (!s) return s;
+    const generated = st.mapType !== 'custom' && (MAP_TYPE_NAMES[st.mapType] || (typeof REAL_MAPS !== 'undefined' && REAL_MAPS[st.mapType])) && Number.isFinite(st.seed) && st.rules;
+    if (generated) return { regen: { size: w.n, seed: st.seed, mapType: st.mapType, numPlayers: w.players.length - 1, rivers: !!st.rules.rivers }, name: s.name, players: s.players };
+    const out = Object.assign({}, s); for (const k of SPEC_LAYERS) if (Array.isArray(s[k])) out[k] = Uint8Array.from(s[k]);
+    return out;
+  },
+  // the full spec of a stub (Restart): regenerated with the river rule it was made with, or the layers as plain arrays
+  specOf(s) {
+    if (!s) return s;
+    if (s.regen) {
+      const r = WMOD.rivers; WMOD.rivers = s.regen.rivers;
+      try { return generateMapSpec({ size: s.regen.size, seed: s.regen.seed, mapType: s.regen.mapType, numPlayers: s.regen.numPlayers }); } finally { WMOD.rivers = r; }
+    }
+    const out = Object.assign({}, s); for (const k of SPEC_LAYERS) if (ArrayBuffer.isView(s[k])) out[k] = Array.from(s[k]);
+    return out;
+  },
+  // Phase 2 starts each AI player's once-a-second update on its own tick. A format 1 save from before that has every
+  // AI on the same tick (equal acc): stagger them once, on the way into format 2. Staggered saves are left alone.
+  staggerAI(w) {
+    const ais = w.players.slice(1).map(p => p.ai).filter(Boolean);
+    if (ais.length < 2 || new Set(ais.map(a => a.acc)).size === ais.length) return false;
+    const slots = Math.max(1, w.players.length - 1);
+    for (const a of ais) a.acc = ((a.p.id - 1) % slots) / slots;
+    return true;
+  },
+  // The save's root value and its file head (walk and pack turn the value into the graph): of the running match, or,
+  // given from (what parse() returned for an older save), of that save, without loading it.
+  parts(w = W, from = null) {
+    if (!from) {
+      if (!W || W.menu || W.editor || W.over) throw new Error('Start an active match before saving.');
+      if (typeof terraFlush === 'function') terraFlush();
+    }
     const omit = new Set(['rng', 'instantFor', 'grid', 'ents', 'fx', 'decals', 'missFx', 'msgs']);
-    const world = Object.fromEntries(Object.entries(W).filter(([k]) => !omit.has(k)));
-    const view = typeof R !== 'undefined' ? { ...R.cam } : null;
-    const ui = typeof UI !== 'undefined' ? { groups: Object.fromEntries(Object.entries(UI.groups || {}).map(([k, es]) => [k, es.map(e => e.id)])), selection: (UI.selection || []).map(e => e.id), fromEditor: !!UI.fromEditor, fromEditorName: UI.fromEditorName } : {};
-    const p = W.players[W.humanId];
+    const world = Object.fromEntries(Object.entries(w).filter(([k]) => !omit.has(k)));
+    world.spec = this.specStub(w);
+    const view = from ? from.view : typeof R !== 'undefined' ? { ...R.cam } : null;
+    const ui = from ? from.ui : typeof UI !== 'undefined' ? { groups: Object.fromEntries(Object.entries(UI.groups || {}).map(([k, es]) => [k, es.map(e => e.id)])), selection: (UI.selection || []).map(e => e.id), fromEditor: !!UI.fromEditor, fromEditorName: UI.fromEditorName } : {};
+    const p = w.players[w.humanId];
     const meta = {
       civ: p && typeof CIVS === 'object' && CIVS[p.civ] ? CIVS[p.civ].name : (p ? p.civ : ''),
       age: p && typeof AGES !== 'undefined' ? AGES[p.age] : '',
-      mapLabel: (W.spec && W.spec.name) || (W.settings && W.settings.mapType) || 'Map',
-      time: W.t | 0,
-      players: W.players.length - 1,
+      mapLabel: (w.spec && w.spec.name) || (w.settings && w.settings.mapType) || 'Map',
+      time: w.t | 0,
+      players: w.players.length - 1,
     };
-    return { format: 'age-of-realms-match', version: this.version, savedAt: new Date().toISOString(), meta, graph: this.encode({ world, rngState: W.rng.state(), rules: currentRules(), view, ui }) };
+    return { head: { format: 'age-of-realms-match', version: this.version, savedAt: new Date().toISOString(), n: w.n, meta }, value: { world, rngState: from ? from.rngState : w.rng.state(), rules: from ? from.rules : currentRules(), view, ui } };
+  },
+  snapshot() {
+    const { head, value } = this.parts(), out = {};
+    for (const _ of this.walk(value, out)); for (const _ of this.pack(out));
+    this.lastHead = head;
+    return { ...head, graph: { root: out.root, shapes: out.shapes, nodes: out.nodes } };
   },
   serialize() { return JSON.stringify(this.snapshot()); },
   parse(text) {
-    if (typeof text !== 'string' || text.length > 16e6) throw new Error('Save file is too large.');
+    if (typeof text !== 'string' || text.length > CODEC.cap) throw new Error('Save file is too large.');
     const file = JSON.parse(text);
-    if (file.format !== 'age-of-realms-match' || file.version !== this.version) throw new Error('Unsupported match save.');
-    const data = this.decode(file.graph), w = data && data.world;
-    if (!w || !(w.map instanceof GameMap) || !Array.isArray(w.players) || w.players.length < 3 || w.players.length > 9 || !Array.isArray(w.list) || w.list.length > 100000 || !Number.isFinite(w.t) || w.t < 0 || !Number.isInteger(w.tick) || w.tick < 0 || !Number.isInteger(data.rngState) || w.menu || w.editor || w.over) throw new Error('Invalid match state.');
+    if (!file || file.format !== 'age-of-realms-match' || (file.version !== 1 && file.version !== 2)) throw new Error('Unsupported match save.');
+    const n0 = file.version === 2 ? file.n : this.v1Size(file.graph);
+    if (!Number.isInteger(n0) || n0 < 16 || n0 > 1024) throw new Error('Invalid match map or settings.');
+    const caps = this.caps(n0);
+    const data = file.version === 2 ? this.decode2(file.graph, caps) : this.decode(file.graph, caps), w = data && data.world;
+    if (!w || !(w.map instanceof GameMap) || w.n !== n0 || !Array.isArray(w.players) || w.players.length < 3 || w.players.length > 9 || !Array.isArray(w.list) || w.list.length > caps.entities || !Number.isFinite(w.t) || w.t < 0 || !Number.isInteger(w.tick) || w.tick < 0 || !Number.isInteger(data.rngState) || w.menu || w.editor || w.over) throw new Error('Invalid match state.');
     const spec = { n: w.n, ...mapLayers(w.map), players: w.players.slice(1).map(p => ({ civ: p.civ })), objects: [] };
     const errors = validateMapSpec(spec); if (errors.length || w.map.n !== w.n || !w.settings || !Number.isInteger(w.humanId) || !w.players[w.humanId]) throw new Error('Invalid match map or settings.');
     if (!w.settings.players || w.settings.players.length !== w.players.length - 1 || !w.map.blk || w.map.blk.length !== w.n * w.n) throw new Error('Invalid match players or occupancy.');
@@ -118,6 +245,10 @@ const MatchSave = {
     if (!Array.isArray(w.projs) || w.projs.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) throw new Error('Invalid projectiles.');
     if (!data.rules || ['aging', 'veterans', 'thirst', 'terra', 'rivers', 'fishregen'].some(k => typeof data.rules[k] !== 'boolean') || !Number.isFinite(data.rules.lifeScale) || data.rules.lifeScale <= 0 || data.rules.lifeScale > 100) throw new Error('Invalid saved rules.');
     if (typeof data.rules.movement !== 'boolean' || !data.rules.commands || !data.rules.victory || COMMAND_RULE_KEYS.some(k => typeof data.rules.commands[k] !== 'boolean') || VICTORY_RULE_KEYS.some(k => typeof data.rules.victory[k] !== 'boolean') || ['wonderTime', 'relicTime'].some(k => !Number.isFinite(data.rules.victory[k]) || data.rules.victory[k] <= 0)) throw new Error('Invalid saved combat or victory rules.');
+    // An occupancy id whose entity is gone (older builds could leave one): clear it before anything reads the layer, so
+    // code that reads blk directly (freeTileNear, terra.js) and the pathfinding graph built at load agree.
+    const blk = w.map.blk; for (let i = 0; i < blk.length; i++) if (blk[i] && !ids.has(blk[i])) blk[i] = 0;
+    if (file.version === 1) this.staggerAI(w);
     w.rng = mulberry32(1); w.rng.restore(data.rngState);
     w.instantFor = p => !!(w.instant && p && p.id === w.humanId);
     w.ents = new Map(w.list.map(e => [e.id, e])); w.grid = new Map(); w.fx = []; w.decals = []; w.missFx = []; w.msgs = [];

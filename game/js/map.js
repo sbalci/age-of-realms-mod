@@ -50,9 +50,10 @@ function validateMapSpec(spec) {
   return errors;
 }
 
+const SPEC_LAYERS = ['ter', 'elev', 'bridge', 'tun', 'trench', 'excavated'];   // the per-tile layers a map spec may hold
 function mapLayers(map) {
   const out = {};
-  for (const k of ['ter', 'elev', 'bridge', 'tun', 'trench', 'excavated']) if (map[k]) out[k] = Array.from(map[k]);
+  for (const k of SPEC_LAYERS) if (map[k]) out[k] = Array.from(map[k]);
   return out;
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }

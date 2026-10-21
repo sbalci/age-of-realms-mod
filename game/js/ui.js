@@ -395,7 +395,7 @@ function openGameMenu() {
   btns.push(['Quit to Main Menu', () => { UI.gameRunning = false; showScreen('menu'); }]);
   openModal('Game Menu', `<p>Game time ${fmtTime(W.t)}. Seed ${W.settings.seed}.</p>`, btns);
 }
-function restartGame() { const s = UI.lastSettings, spec = JSON.parse(JSON.stringify(UI.lastSpec)); closeModal(); startGame(spec, s, UI.fromEditor); }
+function restartGame() { const s = UI.lastSettings, spec = JSON.parse(JSON.stringify(MatchSave.specOf(UI.lastSpec))); closeModal(); startGame(spec, s, UI.fromEditor); }   // a resumed save may hold only the options that regenerate its map (session.js specStub)
 function fmtTime(t) { t = t | 0; const h = (t / 3600) | 0, m = ((t / 60) | 0) % 60, s = t % 60; return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
 function stanceLabel(s) { return { ally: 'Ally', neutral: 'Neutral (peace)', enemy: 'Enemy' }[s] || s; }
 function updateTopbar() {

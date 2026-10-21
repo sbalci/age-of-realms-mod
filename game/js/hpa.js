@@ -49,14 +49,18 @@ function hpaClassOf(u) {
 }
 // The passability a class's graph is built on: the game's own passLand / passNaval (with terra.js's bridges), with
 // built gates open and, for 'mounted', trench tiles closed.
+// Building the graph never writes the map: passLand and passNaval clear an occupancy id whose entity is gone when
+// they meet one, and a graph built at load (hpaWarm) visits every tile, so a resumed match would lose such ids that an
+// uninterrupted one keeps. The id is put back; the graph counts the tile as open, as passLand does.
 function hpaPassFn(cls) {
-  const map = W.map;
-  if (cls === 'naval') return passNaval();
-  const base = passLand(0), tr = cls === 'mounted' ? map.trench : null;
+  const map = W.map, blk = map.blk;
+  const keep = f => i => { const b = blk[i], r = f(i); if (blk[i] !== b) blk[i] = b; return r; };
+  if (cls === 'naval') return keep(passNaval());
+  const base = keep(passLand(0)), tr = cls === 'mounted' ? map.trench : null;
   return i => {
     if (tr && tr[i]) return false;
     if (base(i)) return true;
-    const b = map.blk[i], e = b ? W.ents.get(b) : null;
+    const b = blk[i], e = b ? W.ents.get(b) : null;
     return !!(e && e.type === 'gate' && e.built);
   };
 }
@@ -477,6 +481,10 @@ function hpaJoinDue(u, o) {
 }
 // Will u's next path request take its group's route?
 function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && !r.g.solo && u.order === r.o); }
+// The units whose route still depends on group state: waiting to join their group's route (hpaShares), or a blocked-click
+// member whose own search is still due (hpaOwnPending). Group state is not saved: a save made while this is above 0
+// resumes with those members routing on their own (session.js).
+function hpaPending() { let c = 0; for (const u of idxAll('unit')) if (hpaShares(u) || hpaOwnPending(u)) c++; return c; }
 // Is a own search still due for u (a blocked click's member that has joined the shared route)? The resume gate counts it
 // besides hpaShares: it is deferred work that a save does not hold, so a match saved now would not replay as the
 // uninterrupted one. False once the search has run, the member got another path (pathTo) or another order.
