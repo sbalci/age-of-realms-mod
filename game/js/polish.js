@@ -25,6 +25,7 @@ if (typeof pathTo === 'function') {
       return u.pathOk;
     }
     PATHB.used++;
+    if (typeof hpaOwnReset === 'function') hpaOwnReset(u);   // before hpaShared marks a fresh join
     const ok = _pt(u, rect, r);
     u._pathMapVersion = W.map.version;
     return ok;

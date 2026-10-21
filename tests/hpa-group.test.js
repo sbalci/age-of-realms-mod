@@ -247,5 +247,97 @@ const AM = JSON.parse(run(`(() => {
 })()`));
 ok(`20 units attack-moving onto unreachable land run 1 pocket search (${AM.pocket}), not 20; all of them walk (the charge to the path budget is checked by the forest order above)`, !AM.none && AM.groups === 1 && AM.pocket === 1 && AM.gotPath === 20, AM);
 
+// ---------- 9. joins under budget load; deferred work dropped when a member dies, is reordered, or the leader dies ----------
+// Part 1 again with the tick's path budget already spent by other units at every tick start: a group's joins have their own
+// quota (ceil(members / 2) a tick), so the shared budget cannot starve them.
+const PR = JSON.parse(run(`(() => {
+  HPA.enabled = true; world(200, 33, 'land', 3);
+  const tcs = W.list.filter(e => e.type === 'tc'), a = tcs.find(t => t.owner === 1);
+  let far = null, fd = -1; for (const t of tcs) { const d = Math.hypot(t.x - a.x, t.y - a.y); if (d > fd) { fd = d; far = t; } }
+  const out = {};
+  for (const pressure of [false, true]) {
+    const us = knights(a), set = new Set(us), pbt = pathBudgetTick, pt0 = pathTo, jd0 = hpaJoinDue;
+    if (pressure) pathBudgetTick = function () { const t = PATHB.tick, w = PATHB.world; pbt(); if (PATHB.tick !== t || PATHB.world !== w) PATHB.used = PATHB.perTick; };
+    let work = 0, depth = 0;
+    const timed = f => function (u) { if (!set.has(u) || depth) return f.apply(this, arguments); depth++; const t = performance.now(); try { return f.apply(this, arguments); } finally { work += performance.now() - t; depth--; } };
+    pathTo = timed(pt0); hpaJoinDue = timed(jd0);
+    const p0 = us.map(u => [u.x, u.y]), got = us.map(() => -1), moved = us.map(() => -1), ms = [];
+    orderMove(us, far.x + 2, far.y + 6);
+    try { for (let k = 1; k <= 80 && (got.some(f => f < 0) || moved.some(f => f < 0)); k++) { work = 0; worldTick(0.05); ms.push(+work.toFixed(1)); us.forEach((u, i) => { if (got[i] < 0 && u.path) got[i] = k; if (moved[i] < 0 && (u.x !== p0[i][0] || u.y !== p0[i][1])) moved[i] = k; }); } }
+    finally { pathBudgetTick = pbt; pathTo = pt0; hpaJoinDue = jd0; }
+    out[pressure ? 'pressed' : 'free'] = { lastPath: Math.max(...got), lastMove: Math.max(...moved), ms: ms.slice(0, 4) };
+    for (const u of us) removeEnt(u);
+  }
+  return JSON.stringify(out);
+})()`));
+ok(`40 knights ordered while other units have spent the path budget every tick still have all their paths by tick 3 and all move by tick 3 (last path tick ${PR.pressed.lastPath}, last move ${PR.pressed.lastMove}; free budget ${PR.free.lastPath}/${PR.free.lastMove}; order work per tick ${PR.pressed.ms.join(' / ')} ms)`,
+  PR.pressed.lastPath <= 3 && PR.pressed.lastMove <= 3 && PR.free.lastPath <= 3 && PR.free.lastMove <= 3, PR);
+
+// A blocked click (a mine): members join the shared route, then each one's own search is still due (hpaOwnPending).
+run(`
+function mineGroup(np) {
+  HPA.enabled = true; world(160, 7, 'land', np || 2);
+  const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1);
+  const us = []; for (let k = 0; k < 20; k++) { const p = nearestLandTile((a.x + 5 + (k % 5)) | 0, (a.y + 6 + ((k / 5) | 0)) | 0, true); us.push(spawnUnit('spearman', 1, p.x + 0.5, p.y + 0.5)); }
+  const r = W.list.find(e => e.kind === 'res' && (e.type === 'gold' || e.type === 'stone') && (d => d > 30 && d < 70)(Math.hypot(e.x - a.x, e.y - a.y)));
+  return { a, us, r };
+}
+`);
+const D = JSON.parse(run(`(() => {
+  const { a, us, r } = mineGroup(), out = {};
+  orderMove(us, r.x + 0.5, r.y + 0.5);
+  const dead = us[3], moved = us[4], other = { x: a.x + 8, y: a.y + 12 };
+  removeEnt(dead);                                  // dies before its join
+  orderMove([moved], other.x, other.y);             // gets a new order before its join (a lone unit: its own order)
+  settle(us);
+  out.pending0 = us.filter(u => !u.dead && hpaOwnPending(u)).length;
+  out.deadPath = !!dead.path; out.movedFresh = !!moved.path && !hpaOwnPending(moved) && !hpaShares(moved);
+  const e = moved.path && moved.path[moved.path.length - 1]; out.movedEnd = e ? Math.hypot(e.x - other.x, e.y - other.y) : 99;
+  // one more member is reordered and one killed after its join, before its own search
+  const late = us[7], gone = us[9]; removeEnt(gone); orderMove([late], a.x + 10, a.y + 3);
+  out.latePending = hpaOwnPending(late);
+  const stats0 = HPA.stats.own;
+  for (let k = 0; k < 120 && us.some(u => !u.dead && hpaOwnPending(u)); k++) worldTick(0.05);
+  out.left = us.filter(u => !u.dead && hpaOwnPending(u)).length; out.own = HPA.stats.own - stats0;
+  const le = late.path && late.path[late.path.length - 1]; out.lateEnd = le ? Math.hypot(le.x - (a.x + 10), le.y - (a.y + 3)) : 99;
+  return JSON.stringify(out);
+})()`));
+ok(`members that die or get a new order before their join or their own search drop the deferred work: no stale path (own searches still due after the join ${D.pending0}, none left ${D.left}; the dead has no path ${!D.deadPath}; reordered members end at their new point ${D.movedEnd.toFixed(1)} / ${D.lateEnd.toFixed(1)} tiles away)`,
+  D.pending0 > 0 && !D.deadPath && D.movedFresh && D.movedEnd < 3 && !D.latePending && D.left === 0 && D.lateEnd < 3, D);
+const LD = JSON.parse(run(`(() => {
+  HPA.enabled = true; world(200, 33, 'land', 3);
+  const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), far = W.list.filter(e => e.type === 'tc').reduce((b, t) => Math.hypot(t.x - a.x, t.y - a.y) > Math.hypot(b.x - a.x, b.y - a.y) ? t : b);
+  const res = die => {
+    HPA.enabled = true; world(200, 33, 'land', 3);
+    const a = W.list.filter(e => e.type === 'tc').find(t => t.owner === 1), far = W.list.filter(e => e.type === 'tc').reduce((b, t) => Math.hypot(t.x - a.x, t.y - a.y) > Math.hypot(b.x - a.x, b.y - a.y) ? t : b);
+    const us = knights(a); orderMove(us, far.x + 2, far.y + 6);
+    const L = HPA_GROUP.get(us[0]).g.leader; if (die) removeEnt(L);   // the leader dies before the route tick
+    const rest = us.filter(u => u !== L), ticks = settle(us);
+    return { ticks, withPath: rest.filter(u => u.path && u.path.length).length, pathOk: rest.filter(u => u.pathOk).length, of: rest.length };
+  };
+  return JSON.stringify({ dies: res(true), lives: res(false) });
+})()`));
+ok(`the leader dying before the route tick: another member runs the route, all ${LD.dies.of} others join by tick ${LD.dies.ticks}, with as many routes reaching their goal as when it lives (${LD.dies.pathOk} against ${LD.lives.pathOk})`, LD.dies.ticks <= 3 && LD.dies.withPath === LD.dies.of && LD.dies.pathOk >= LD.lives.pathOk, LD);
+// An own search never turns a unit round onto a longer way: a taken path whose first leg points back has to be no longer than what was left.
+const RV = JSON.parse(run(`(() => {
+  let bad = 0, taken = 0, checked = 0;
+  for (let d = 0; d < 6; d++) {
+    const { us, r } = mineGroup(); for (let q = 0; q < d; q++) worldTick(0.05);
+    orderMove(us, r.x + 0.5, r.y + 0.5);
+    const len = (u, p, i) => { let l = 0, x = u.x, y = u.y; for (; i < p.length; i++) { l += Math.hypot(p[i].x - x, p[i].y - y); x = p[i].x; y = p[i].y; } return l; };
+    const lead = (u, p, i) => { for (; i < p.length; i++) { const dx = p[i].x - u.x, dy = p[i].y - u.y; if (dx * dx + dy * dy > 0.04) return [dx, dy]; } return null; };
+    for (let k = 0; k < 160; k++) {
+      const before = us.map(u => u.path ? { p: u.path, rest: len(u, u.path, u.pi), c: lead(u, u.path, u.pi) } : null), n0 = HPA.stats.ownTaken;
+      worldTick(0.05);
+      if (HPA.stats.ownTaken === n0) continue;
+      us.forEach((u, i) => { const b = before[i]; if (!b || u.path === b.p || !u.path) return; taken++;
+        const n = lead(u, u.path, 0), dot = b.c && n ? b.c[0] * n[0] + b.c[1] * n[1] : 1;
+        checked++; if (dot <= 0 && len(u, u.path, 0) > b.rest + 1) bad++; });   // 1 tile: the unit also walked in that tick
+    }
+  }
+  return JSON.stringify({ taken, checked, bad });
+})()`));
+ok(`own searches are taken (${RV.taken} switches over 6 order times) but never turn a unit round onto a longer way (${RV.bad} did)`, RV.taken > 0 && RV.bad === 0, RV);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

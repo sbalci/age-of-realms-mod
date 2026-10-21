@@ -33,7 +33,7 @@ const HPA = {
   joinShare: 10,          // ...or a neighbour's search to the same waypoint, when its first point is in sight within this many tiles
   joinNodes: 600,         // a group member's own search onto the shared route
   ownUnit: 400,           // a blocked click's member is charged 1 more to PATHB for every this many tiles its own search expands
-  ownSlack: 2,             // ...and takes that search's path only when it is at most this many tiles longer than what is left of its own
+  ownSlack: 2,             // ...and takes that search's path when it is at most this many tiles longer than what is left of its own, if it does not turn the unit round
   groupR: 12,             // units farther than this from their group's leader route on their own
   upkeepEvery: 20,        // hpaUpkeep rebuilds dirty clusters every this many ticks...
   upkeepRows: 48,         // ...and refills at most this many intra-edge rows a tick
@@ -435,6 +435,8 @@ function hpaGroupOrder(units, slotOf, x, y, t) {
     const g = { cls, leader: L, owner: L.owner, x: Math.max(0.3, Math.min(W.n - 0.3, x)), y: Math.max(0.3, Math.min(W.n - 0.3, y)), route: null, breach: null, solo };
     for (const u of grp) if (u.owner === g.owner && Math.hypot(u.x - L.x, u.y - L.y) <= HPA.groupR) groupOf.set(u, g);
   }
+  const sizes = new Map(); for (const g of groupOf.values()) sizes.set(g, (sizes.get(g) || 0) + 1);
+  for (const [g, n] of sizes) g.size = n;   // members, for the join quota (hpaJoinDue)
   for (const u of units) {
     const o = orderFor(u), g = groupOf.get(u);
     if (g) HPA_GROUP.set(u, { g, o, used: false }); else HPA_GROUP.delete(u);
@@ -455,24 +457,32 @@ function hpaRoute(g, u) {
   g.route = { pts: res.pts, ok: res.ok, sx: L.x | 0, sy: L.y | 0, blocked: tg.x !== (g.x | 0) || tg.y !== (g.y | 0), size: PF.expanded - e0 };
 }
 // Called on a unit's tick before its first path request for a 'move' (o.join) or 'attackmove' order: may it make the
-// request now? A member still waiting for its group's route waits for the path budget. The first member to tick runs
-// the group's route search and fills the rest of that tick's budget; after that, members join while the tick's
-// budget lasts, and at least one member of each group joins every tick. Anything else (no group, a group without a
+// request now? The first member to tick runs the group's route search alone in that tick (charged to PATHB, filling the
+// rest of its budget). After that each group joins at most ceil(members / 2) members a tick, whatever other units have
+// spent of the tick's budget: so every member has its path by the third tick, and a tick's join work stays bounded. The
+// joins are still charged to PATHB (polish.js), but the shared budget never defers them. Anything else (no group, a group without a
 // shared route, an order loaded from a save) makes its request at once. Clears o.join when the answer is yes.
 function hpaJoinDue(u, o) {
   const rec = HPA_GROUP.get(u);
   if (rec && !rec.used && !rec.g.solo && u.order === rec.o && typeof PATHB === 'object' && W) {
     const g = rec.g;
     pathBudgetTick();
-    if (!g.route) { hpaRoute(g, u); PATHB.used = Math.max(PATHB.used, PATHB.perTick); g.joinTick = W.tick; HPA.stats.waits++; return false; }
-    if (PATHB.used >= PATHB.perTick && g.joinTick === W.tick) { HPA.stats.waits++; return false; }
-    g.joinTick = W.tick;
+    if (!g.route) { hpaRoute(g, u); PATHB.used = Math.max(PATHB.used, PATHB.perTick); g.joinTick = W.tick; g.joinN = Infinity; HPA.stats.waits++; return false; }
+    if (g.joinTick === W.tick && g.joinN >= Math.ceil((g.size || 2) / 2)) { HPA.stats.waits++; return false; }
+    if (g.joinTick !== W.tick) { g.joinTick = W.tick; g.joinN = 0; }
+    g.joinN++;
   }
   if (o.join) delete o.join;
   return true;
 }
 // Will u's next path request take its group's route?
 function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && !r.g.solo && u.order === r.o); }
+// Is a own search still due for u (a blocked click's member that has joined the shared route)? The resume gate counts it
+// besides hpaShares: it is deferred work that a save does not hold, so a match saved now would not replay as the
+// uninterrupted one. False once the search has run, the member got another path (pathTo) or another order.
+function hpaOwnPending(u) { const r = HPA_GROUP.get(u); return !!(r && r.own && u.order === r.o); }
+// A path request of u's own (polish.js pathTo) replaces any path the pending own search would have compared with.
+function hpaOwnReset(u) { const r = HPA_GROUP.get(u); if (r) r.own = false; }
 // The group of u's current order, if it has one.
 function hpaGroupOf(u) { const r = HPA_GROUP.get(u); return r && u.order === r.o ? r.g : null; }
 // pathTo's first call for a member: its route from the group's, or null to search on its own.
@@ -494,8 +504,9 @@ function hpaShared(u, rect, r) {
 // search, from where it then stands to its slot, runs later on its own tick, once no member of its group has joined for a
 // tick: at least one per group a tick, more while the tick's budget can take searches the size of the group's route. Each is charged
 // to PATHB 1 more for every HPA.ownUnit tiles it expands (tiles, not time: the simulation stays deterministic). The member
-// takes the new path only when it is not longer than what is left of the shared one, plus HPA.ownSlack tiles, so a unit
-// turns round only onto a way that is no longer from where it stands. Called on every tick of a 'move' or 'attackmove'.
+// takes the new path only when it is not longer than what is left of the shared one, plus HPA.ownSlack tiles when its
+// first leg heads the same way as its current leg (a positive dot product), and not at all longer when it would turn the
+// unit round: a unit never turns round onto a longer way. hpaOwnPending tells whether the search is still due. Called on every tick of a 'move' or 'attackmove'.
 function hpaOwnDue(u) {
   const rec = HPA_GROUP.get(u);
   if (!rec || !rec.own || u.order !== rec.o || !u.path || !u.goalRect || typeof PATHB !== 'object') return;
@@ -512,7 +523,9 @@ function hpaOwnDue(u) {
   const len = (pts, i) => { let l = 0, x = u.x, y = u.y; for (; i < pts.length; i++) { l += Math.hypot(pts[i].x - x, pts[i].y - y); x = pts[i].x; y = pts[i].y; } return l; };
   const end = u.path[u.path.length - 1], pts = res.pts.slice();
   pts[pts.length - 1] = { x: end.x, y: end.y };   // the exact slot point the shared path ended at (moveToPoint)
-  if (len(pts, 0) > len(u.path, u.pi) + HPA.ownSlack) return;
+  const lead = (p, i) => { for (; i < p.length; i++) { const dx = p[i].x - u.x, dy = p[i].y - u.y; if (dx * dx + dy * dy > 0.04) return [dx, dy]; } return null; };
+  const c = lead(u.path, u.pi), n = lead(pts, 0), same = !c || !n || c[0] * n[0] + c[1] * n[1] > 0;
+  if (len(pts, 0) > len(u.path, u.pi) + (same ? HPA.ownSlack : 0)) return;
   u.path = pts; u.pi = 0; HPA.stats.ownTaken++;
 }
 // The tile itself if passable, else the nearest passable tile in growing rings (up to 8 tiles out), else the tile.
