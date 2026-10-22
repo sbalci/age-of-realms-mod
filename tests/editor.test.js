@@ -43,13 +43,14 @@ const U = JSON.parse(run(`(() => {
   at('drag an entity', () => { const e = W.list.find(q => q.type === 'knight'); Editor.snapshot(); Editor.moving = { ent: e }; const p = nearestLandTile((e.x | 0) + 5, (e.y | 0) + 3, true); Editor.moveEnt(e, { x: p.x + 0.5, y: p.y + 0.5 }); Editor.moving = null; Editor.commit(); });
   at('delete an entity', () => { const e = W.list.find(q => q.type === 'barracks'); Editor.snapshot(); removeEnt(e); Editor.commit(); });
   at('move a start', () => { Editor.owner = 1; Editor.tool = 'start'; Editor.snapshot(); Editor.apply({ x: 33.5, y: 44.5 }); Editor.commit(); });
+  at('change a colour (reloads the world)', () => { Editor.snapshot(); Editor.players[1].color = 6; Editor.reloadKeep(); });
   at('add a player (reloads the world)', () => { Editor.snapshot(); Editor.players.push({ start: null, civ: 'turks', color: 5, team: 0 }); Editor.loadSpec(Editor.toSpec()); Editor.commit(); });
   const undone = [], redone = [], full = Editor.undo.filter(e => e.full).length;
   for (let k = specs.length - 2; k >= 0; k--) { Editor.doUndo(); undone.push(canon(Editor.toSpec()) === specs[k] ? 1 : 0); }
   for (let k = 1; k < specs.length; k++) { Editor.doRedo(); redone.push(canon(Editor.toSpec()) === specs[k] ? 1 : 0); }
   return JSON.stringify({ kinds: kinds.length, noops, entries, full, undone: undone.join(''), redone: redone.join('') });
 })()`));
-ok(`${U.kinds} kinds of change (painting, water, a bridge, height, a tunnel, a trench, trees, erasing, a building, a unit, a drag, a delete, a start, a new player) each make one undo entry, and undo and redo restore exactly the map before and after each`, U.noops === 0 && U.entries === U.kinds && U.full === 1 && U.undone === '1'.repeat(U.kinds) && U.redone === '1'.repeat(U.kinds), U);
+ok(`${U.kinds} kinds of change (painting, water, a bridge, height, a tunnel, a trench, trees, erasing, a building, a unit, a drag, a delete, a start, a colour, a new player) each make one undo entry, and undo and redo restore exactly the map before and after each`, U.noops === 0 && U.entries === U.kinds && U.full === 2 && U.undone === '1'.repeat(U.kinds) && U.redone === '1'.repeat(U.kinds), U);
 
 // ---------- 2. 60 strokes at 480 x 480 keep a few megabytes ----------
 // (the perf spec's cap patch: sides above 256 stay blocked by validateMapSpec until phase 8)
@@ -85,7 +86,22 @@ const Z = JSON.parse(run(`(() => {
 ok(`a custom size makes a blank map of that side (144), up to what validateMapSpec allows: ${Z.plain} today, 480 with the cap raised (${M.max})`, Z.plain === 256 && M.max === 480 && Z.n144 === 144, { Z, max: M.max });
 
 (async () => {
-  // ---------- 4. maps in IndexedDB, mirrored in memory ----------
+  // ---------- 3b. open() starts a new history ----------
+const O = JSON.parse(run(`(() => {
+  Editor.newBlank(80); Editor.name = 'A'; Editor.ui = true; showScreen = () => {}; resize = () => {};
+  stroke('terrain', 10, 10, 30, 10, 4, { terrain: T.DIRT }); stroke('terrain', 10, 20, 30, 20, 4, { terrain: T.SAND });
+  const had = Editor.undo.length;
+  Editor.newBlank(100); Editor.name = 'B'; const b = Editor.toSpec(); Editor.maps.set('B', Editor.pack(b));
+  Editor.newBlank(80); stroke('terrain', 10, 10, 30, 10, 4, { terrain: T.DIRT });
+  const before = canon(Editor.toSpec()); let threw = '';
+  Editor.open('B'); const loaded = canon(Editor.toSpec());
+  Editor.doUndo(); Editor.doRedo();
+  try { Editor.doUndo(); } catch (e) { threw = e.message; }
+  return JSON.stringify({ had, undo: Editor.undo.length, redo: Editor.redo.length, n: W.n, same: canon(Editor.toSpec()) === loaded, threw });
+})()`));
+ok('open() clears undo and redo: undoing after opening another map does nothing and leaves that map as loaded', O.had === 2 && O.undo === 0 && O.redo === 0 && O.n === 100 && O.same && !O.threw, O);
+
+// ---------- 4. maps in IndexedDB, mirrored in memory ----------
   const S = JSON.parse(await run(`(async () => {
     Editor.newGenerated('land', 'medium', 5, 2); Editor.name = 'Stored';
     const spec = Editor.toSpec(), json = JSON.stringify(spec).length;

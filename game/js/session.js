@@ -622,11 +622,11 @@ const MatchSave = {
   async openLoad() {
     const backToGame = UI.gameRunning && UI.paused;
     const m = openModal('Load Match', '<p>Resume a saved match or choose an exported match file (.json.gz or .json).</p><div id="match-slots"></div><label>Import match <input type="file" id="match-file" accept=".gz,.json,application/gzip,application/json"></label><p id="match-error" role="status"></p>', [[backToGame ? 'Back to Game Menu' : 'Close', backToGame ? () => { openGameMenu(); return false; } : null]]);
-    const fail = e => { m.querySelector('#match-error').textContent = e.message; };
+    const box = m.querySelector('#match-slots'), err = m.querySelector('#match-error');   // this modal's own nodes: #modal is reused by the next one
+    const fail = e => { if (err.isConnected) err.textContent = e.message; };
     m.querySelector('#match-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { this.resume(await readTextFile(f)); } catch (err) { fail(err); } };
     let infos; try { infos = await this.slotInfos(); } catch (e) { fail(e); return; }
-    const box = m.querySelector('#match-slots');
-    if (!box) return;   // the modal was closed or replaced while the slots loaded (an imported file resumed the match)
+    if (!box.isConnected) return;   // the modal was closed or replaced while the slots loaded (an imported file resumed the match)
     for (const s of [...this.slots, 'auto']) {
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = this.slotLabel(s, infos[s]); b.disabled = !infos[s];
       b.onclick = async () => { try { const text = await this.loadFrom(s); if (!text) throw new Error('That slot is empty.'); this.resume(text); } catch (e) { fail(e); } };
