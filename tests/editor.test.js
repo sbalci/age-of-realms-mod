@@ -91,7 +91,6 @@ const O = JSON.parse(run(`(() => {
   Editor.newBlank(80); Editor.name = 'A'; Editor.ui = true; showScreen = () => {}; resize = () => {};
   stroke('terrain', 10, 10, 30, 10, 4, { terrain: T.DIRT }); stroke('terrain', 10, 20, 30, 20, 4, { terrain: T.SAND });
   const had = Editor.undo.length;
-  const other = Editor.toSpec(); other.n = 0;   // placeholder, replaced below
   Editor.newBlank(100); Editor.name = 'B'; const b = Editor.toSpec(); Editor.maps.set('B', Editor.pack(b));
   Editor.newBlank(80); stroke('terrain', 10, 10, 30, 10, 4, { terrain: T.DIRT });
   const before = canon(Editor.toSpec()); let threw = '';
