@@ -31,6 +31,12 @@ commits the rows it was measured by, so progress against the budgets stays visib
 | 2026-10-19 | phase 3 hierarchy + group routes | d653d18 | gpu | 256 | 170 / 192 | 0.85 / 2.7 | 1.4 / 4.1 | 5 | 13 / 14 (40/40, 40/40) | 4.94 / 4.86 | 60 / 60 | 57.3 | 5,292,814 (71) | 1038 |
 | 2026-10-19 | phase 3 final (median of 5) | 29fcfd4 | gpu | 200 | 116 / 113 | 0.58 / 2 | 0.92 / 2.4 | 6 | 20 / 10 (40/40, 40/40) | 3.39 / 3.22 | 56.7 / 56.6 | 56.6 | 3,174,823 (36) | 982 |
 | 2026-10-19 | phase 3 final (median of 5) | 29fcfd4 | gpu | 256 | 178 / 189 | 0.75 / 2.1 | 1.23 / 3.2 | 7 | 17 / 11 (40/40, 40/40) | 4.45 / 4.13 | 56.8 / 56.7 | 54.3 | 5,292,826 (60) | 1038 |
+| 2026-10-21 | phase 3 control (91c0970) | 91c0970 | gpu | 200 | 94 / 157 | 0.59 / 1.7 | 1 / 2.6 | 6 | 11.7 / 9.7; 15.5 / 7.8 (40/40, 40/40) | 2.26 / 2.27 | 56.2 / 56.6 | 50.5 | 3,170,536 (38) | 982 |
+| 2026-10-21 | phase 3 control (91c0970) | 91c0970 | gpu | 256 | 185 / 184 | 0.77 / 2.1 | 1.28 / 3.3 | 7 | 11.7 / 11.3; 21.4 / 23.6 (40/40, 40/40) | 2.98 / 2.87 | 56.6 / 56.9 | 45 | 5,296,355 (60) | 1038 |
+| 2026-10-21 | phase 4 C1 lazy joins | fffde23 (C1) | gpu | 200 | 126 / 107 | 0.59 / 2 | 1.02 / 3 | 7 | 5.7 / 5.7; 4.8 / 2.3 (40/40, 40/40) | 3.46 / 3.17 | 56.9 / 56.7 | 56.7 | 3,170,550 (42) | 982 |
+| 2026-10-21 | phase 4 C1 lazy joins | fffde23 (C1) | gpu | 256 | 173 / 179 | 0.71 / 2.2 | 1.25 / 3.5 | 6 | 8.4 / 8.5; 8.5 / 8.1 (40/40, 40/40) | 3.95 / 4.37 | 56.6 / 56.7 | 55.4 | 5,296,353 (63) | 1038 |
+| 2026-10-21 | phase 4 C1 join quota | fffde23 + quota fix | gpu | 200 | 96 / 107 | 0.58 / 1.9 | 0.98 / 2.8 | 5 | 5.6 / 5.7; 4.8 / 2.2 (40/40, 40/40) | 3.56 / 3.1 | 56.8 / 56.8 | 56.6 | 3,170,538 (37) | 982 |
+| 2026-10-21 | phase 4 C1 join quota | fffde23 + quota fix | gpu | 256 | 180 / 183 | 0.72 / 2.3 | 1.26 / 3.3 | 7 | 8.5 / 8.4; 9 / 7.9 (40/40, 40/40) | 4.21 / 4.24 | 56.7 / 56.8 | 55.2 | 5,296,348 (61) | 1038 |
 
 ### Reading these rows
 
@@ -46,6 +52,7 @@ commits the rows it was measured by, so progress against the budgets stays visib
 - From phase 3 on, compare against a control run of the previous phase's commit made in the same session.
 - Phase 3, 200 × 200: the earlier "phase 3 hierarchy + group routes" row shows a 3-player 40-knight order of 16 ms, exactly the ≤ 16 ms budget (a single, rounded run; planning measured 12 ms). That single run is superseded by the median rows below.
 - The "phase 3 final (median of 5)" rows measure commit 29fcfd4 (bounded group join and leave rule), as medians of 5 runs at each size (min–max in brackets). They supersede the earlier phase 3 rows for the group-order column (40 knights), which were measured before the join and leave rule was bounded to points near the slot. The 3-player 40-knight medians are 20 ms (18–21) at 200 × 200 and 17 ms (16–20) at 256 × 256, against the ≤ 16 ms budget: the budget is missed at both sizes (256 × 256 only touches it at its best run). The 8-player medians are 10 ms (10–10) and 11 ms (11–14). The other columns are unchanged within run-to-run variation.
+- From phase 4 on, the 40-knight column is the worst frame of the order's own work: the click, then each following tick's path work of the knights until every knight has a path (members join their group's route on their own ticks since phase 4 C1). The cell is `start; after 30 s`: the order is given at the start of the match and again after 600 ticks of AI play, each the median of 5 fresh pages (`AOR_PERF_KNIGHTS`), with the fewest routes that reached their goal in those pages. `test-results/maps-perf.json` also keeps each page's whole-tick times (`full`), which include the AI players' own start-of-match work. The "phase 3 control (91c0970)" rows run this measurement on the phase 3 code, whose click does all the work.
 
 ## Phase 2: vm tick, W.list scans against the index (node tests/perf-vm.js)
 

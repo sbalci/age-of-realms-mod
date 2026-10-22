@@ -10,10 +10,36 @@ const ED_OBJECTS = [
 const ED_UNITS = ['villager', 'sapper', 'scout', 'militia', 'spearman', 'halberdier', 'archer', 'skirmisher', 'knight', 'paladin', 'cavarcher', 'hcavarcher', 'monk', 'ram', 'cappedram', 'mangonel', 'onager', 'trebuchet', 'fishingship', 'transport', 'galley', 'fireship', 'demoship', 'tradecart'];
 const Editor = {
   active: false, tool: 'terrain', terrain: T.GRASS, obj: null, owner: 1, brush: 2, undo: [], redo: [], players: [], name: 'My Map', sel: null, painting: false,
-  savedMaps() { const m = JSON.parse(localStorage.getItem('aoe_maps') || '{}'); if (!m || typeof m !== 'object' || Array.isArray(m)) throw new Error('Map storage is invalid. Export your maps before resetting storage.'); return m; },
-  savedList() { try { return Object.keys(this.savedMaps()); } catch (e) { return []; } },
-  load(name) { try { const m = this.savedMaps(); if (!Object.prototype.hasOwnProperty.call(m, name) || validateMapSpec(m[name]).length) return null; return JSON.parse(JSON.stringify(m[name])); } catch (e) { return null; } },
-  store(name, spec) { const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n')); const m = this.savedMaps(); Object.defineProperty(m, name, { value: spec, enumerable: true, configurable: true, writable: true }); localStorage.setItem('aoe_maps', JSON.stringify(m)); },
+  base: null, undoLimit: 32 * 1024 * 1024,   // the change being made (see snapshot), and the memory (bytes) the undo and redo stacks may use
+  // ---------- saved maps: IndexedDB store 'maps' (store.js), mirrored in memory so the setup screen can list and load them at once ----------
+  // A stored map is { format: 'aor-map', version: 2, spec } with its layers packed like a save's (codec.js).
+  maps: new Map(), ready: null,
+  pack(spec) { const s = Object.assign({}, spec); for (const k of SPEC_LAYERS) if (spec[k]) s[k] = packArray(Uint8Array.from(spec[k])); return { format: 'aor-map', version: 2, spec: s }; },
+  unpack(rec) {
+    if (!rec || rec.format !== 'aor-map' || rec.version !== 2 || !rec.spec || !Number.isInteger(rec.spec.n)) return rec;   // anything else is a plain spec (older storage)
+    const s = Object.assign({}, rec.spec), n = s.n;
+    for (const k of SPEC_LAYERS) if (s[k]) s[k] = Array.from(unpackArray(s[k], n * n));
+    return s;
+  },
+  // fills the mirror from storage; resolves with the number of maps (0 without storage)
+  async loadAll() {
+    const names = await Store.keys('maps'), maps = new Map();
+    for (const name of names) { const rec = await Store.get('maps', name); if (rec) maps.set(name, rec); }
+    this.maps = maps; return maps.size;
+  },
+  savedList() { return [...this.maps.keys()].sort(); },
+  load(name) { try { if (!this.maps.has(name)) return null; const spec = this.unpack(this.maps.get(name)); if (validateMapSpec(spec).length) return null; return JSON.parse(JSON.stringify(spec)); } catch (e) { return null; } },
+  // keeps the map in the mirror at once and resolves when storage has it; if storage fails, the mirror goes back
+  async store(name, spec) {
+    const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n'));
+    const rec = this.pack(spec), had = this.maps.get(name);
+    this.maps.set(name, rec);
+    try { await Store.put('maps', name, rec); } catch (e) { if (had) this.maps.set(name, had); else this.maps.delete(name); throw e; }
+  },
+  async remove(name) { this.maps.delete(name); await Store.del('maps', name); },
+  // the side of a new custom map: the editor offers up to 480, as far as validateMapSpec allows (256 until phase 8)
+  maxSize() { return (validateMapSpec({ n: 480 })[0] || '').startsWith('Map size') ? 256 : 480; },
+  customSize() { const v = Math.round(+$('#ed-gn').value), max = this.maxSize(); if (!(v >= 16 && v <= max)) throw new Error(`Map size must be from 16 to ${max}.`); return v; },
   open(name) {
     UI.gameRunning = false; this.active = true;
     showScreen('editor'); resize();
@@ -25,16 +51,17 @@ const Editor = {
     this.refreshUI();
   },
   close() { this.active = false; showScreen('menu'); },
+  // size: a MAP_SIZES name, or a side in tiles (a custom size)
   newGenerated(type, size, seed, np) {
     const spec = generateMapSpec({ size, seed, mapType: type, numPlayers: np });
     const civKeys = Object.keys(CIVS);
     spec.players = spec.players.map((p, i) => ({ start: p.start, civ: civKeys[i % civKeys.length], color: i, team: 0 }));
-    this.loadSpec(spec); this.undo = []; this.redo = [];
+    this.loadSpec(spec); this.clearUndo();
   },
   newBlank(size) {
-    const n = MAP_SIZES[size] || 80; const spec = blankMapSpec(n);
+    const n = Number.isInteger(size) ? size : MAP_SIZES[size] || 80; const spec = blankMapSpec(n);
     spec.players = [{ start: null, civ: 'franks', color: 0, team: 0 }, { start: null, civ: 'teutons', color: 1, team: 0 }];
-    this.loadSpec(spec); this.undo = []; this.redo = [];
+    this.loadSpec(spec); this.clearUndo();
   },
   loadSpec(spec) {
     const errors = validateMapSpec(spec); if (errors.length) throw new Error(errors.join('\n'));
@@ -49,19 +76,102 @@ const Editor = {
     centerCamOn(W.n / 2, W.n / 2); R.cam.zoom = 0.8;
     this.sel = null;
   },
-  toSpec() {
-    const map = W.map, objects = [];
-    for (const e of W.list) {
-      if (e.kind === 'res') { if (e.type === 'carcass') continue; objects.push({ k: e.type, x: e.x, y: e.y, v: e.v || 0, ...(e.depth ? { depth: e.depth } : {}) }); }
-      else if (e.kind === 'relic') objects.push({ k: 'relic', x: e.x, y: e.y });
-      else if (e.kind === 'unit') objects.push({ k: 'unit', t: e.type, x: Math.floor(e.x), y: Math.floor(e.y), o: e.owner });
-      else if (e.kind === 'bld') objects.push({ k: 'bld', t: e.type, x: e.x, y: e.y, o: e.owner });
-    }
-    return { version: 1, name: this.name, n: W.n, ...mapLayers(map), objects, players: this.players.map(p => ({ start: p.start, civ: p.civ, color: p.color, team: p.team })) };
+  // the spec object of one entity (null for a carcass), as toSpec writes it
+  objOf(e) {
+    if (e.kind === 'res') return e.type === 'carcass' ? null : { k: e.type, x: e.x, y: e.y, v: e.v || 0, ...(e.depth ? { depth: e.depth } : {}) };
+    if (e.kind === 'relic') return { k: 'relic', x: e.x, y: e.y };
+    if (e.kind === 'unit') return { k: 'unit', t: e.type, x: Math.floor(e.x), y: Math.floor(e.y), o: e.owner };
+    if (e.kind === 'bld') return { k: 'bld', t: e.type, x: e.x, y: e.y, o: e.owner };
+    return null;
   },
-  snapshot() { this.undo.push(JSON.stringify(this.toSpec())); if (this.undo.length > 60) this.undo.shift(); this.redo = []; },
-  doUndo() { if (!this.undo.length) return; this.redo.push(JSON.stringify(this.toSpec())); const s = JSON.parse(this.undo.pop()); const cam = Object.assign({}, R.cam); this.loadSpec(s); Object.assign(R.cam, cam); this.refreshUI(); },
-  doRedo() { if (!this.redo.length) return; this.undo.push(JSON.stringify(this.toSpec())); const s = JSON.parse(this.redo.pop()); const cam = Object.assign({}, R.cam); this.loadSpec(s); Object.assign(R.cam, cam); this.refreshUI(); },
+  toSpec() {
+    const objects = [];
+    for (const e of W.list) { const o = this.objOf(e); if (o) objects.push(o); }
+    return { version: 1, name: this.name, n: W.n, ...mapLayers(W.map), objects, players: this.players.map(p => ({ start: p.start, civ: p.civ, color: p.color, team: p.team })) };
+  },
+  // ---------- undo and redo: the tiles and objects a change touched, not whole maps ----------
+  // snapshot() marks the start of a change (a stroke, a drag, a delete, a new player...): it keeps copies of the layers,
+  // the entity list and the players, which cost no JSON. commit() (at the end of the stroke, or before the next change,
+  // undo or redo) compares them with the map as it is now and pushes one entry:
+  //   { layers: [{ k, idx, before, after, made, gone }], before: [objects], after: [objects], players: [before, after], bytes }
+  // idx lists the tiles of layer k that changed; made / gone: the change created or deleted the layer. A change that
+  // replaced the whole world (a new player or colour reloads it) pushes { full: packed spec of before, bytes } instead.
+  // Undo and redo apply an entry to the current spec and load it, as the editor always has. The stacks keep at most 60
+  // entries and undoLimit bytes; the oldest go first.
+  snapshot() {
+    this.commit();
+    const map = W.map, layers = {};
+    for (const k of SPEC_LAYERS) if (map[k]) layers[k] = map[k].slice();
+    this.base = { world: W, list: W.list.slice(), nextId: W.nextId, layers, players: JSON.stringify(this.players), name: this.name, moved: new Map() };
+    this.redo = [];
+  },
+  clearUndo() { this.undo = []; this.redo = []; this.base = null; },
+  stackBytes(stack) { let b = 0; for (const e of stack) b += e.bytes; return b; },
+  push(stack, entry) {
+    stack.push(entry);
+    while (stack.length > 60 || (stack.length > 1 && this.stackBytes(this.undo) + this.stackBytes(this.redo) > this.undoLimit)) stack.shift();
+  },
+  // the spec of the change's starting point, from the copies snapshot() kept (only for a change that replaced the world)
+  baseSpec(b) {
+    const objects = [];
+    for (const e of b.list) { const o = b.moved.get(e) || this.objOf(e); if (o) objects.push(o); }
+    const layers = {}; for (const k of SPEC_LAYERS) if (b.layers[k]) layers[k] = Array.from(b.layers[k]);
+    return { version: 1, name: b.name, n: b.world.n, ...layers, objects, players: JSON.parse(b.players) };
+  },
+  commit() {
+    const b = this.base; this.base = null;
+    if (!b || !W) return;
+    if (W !== b.world) { const full = this.pack(this.baseSpec(b)); this.push(this.undo, { full, bytes: JSON.stringify(full).length * 2 }); return; }
+    const map = W.map, layers = [];
+    for (const k of SPEC_LAYERS) {
+      const was = b.layers[k], now = map[k];
+      if (!was && !now) continue;
+      const n2 = map.n * map.n, idx = [], before = [], after = [];
+      for (let i = 0; i < n2; i++) { const p = was ? was[i] : 0, q = now ? now[i] : 0; if (p !== q) { idx.push(i); before.push(p); after.push(q); } }
+      if (idx.length || !was !== !now) layers.push({ k, idx: Int32Array.from(idx), before: Uint8Array.from(before), after: Uint8Array.from(after), made: !was, gone: !now });
+    }
+    const before = [], after = [];
+    for (const e of b.list) {
+      if (e.dead) { const o = b.moved.get(e) || this.objOf(e); if (o) before.push(o); }
+      else if (b.moved.has(e)) { const o0 = b.moved.get(e), o1 = this.objOf(e); if (JSON.stringify(o0) !== JSON.stringify(o1)) { before.push(o0); after.push(o1); } }
+    }
+    for (const e of W.list) if (e.id >= b.nextId) { const o = this.objOf(e); if (o) after.push(o); }
+    const p0 = b.players, p1 = JSON.stringify(this.players), players = p0 === p1 ? null : [p0, p1];
+    if (!layers.length && !before.length && !after.length && !players && b.name === this.name) return;
+    let bytes = JSON.stringify(before).length * 2 + JSON.stringify(after).length * 2 + (players ? (p0.length + p1.length) * 2 : 0);
+    for (const l of layers) bytes += l.idx.byteLength + l.before.byteLength + l.after.byteLength;
+    this.push(this.undo, { layers, before, after, players, names: [b.name, this.name], bytes });
+  },
+  // spec with entry e undone (dir 'undo') or redone ('redo')
+  applyEntry(spec, e, dir) {
+    const undo = dir === 'undo', out = Object.assign({}, spec), n2 = spec.n * spec.n;
+    for (const l of e.layers) {
+      if (undo ? l.made : l.gone) { delete out[l.k]; continue; }
+      const a = out[l.k] ? out[l.k].slice() : new Array(n2).fill(0), vals = undo ? l.before : l.after;
+      for (let i = 0; i < l.idx.length; i++) a[l.idx[i]] = vals[i];
+      out[l.k] = a;
+    }
+    const drop = undo ? e.after : e.before, add = undo ? e.before : e.after, count = new Map();
+    for (const o of drop) { const k = JSON.stringify(o); count.set(k, (count.get(k) || 0) + 1); }
+    out.objects = spec.objects.filter(o => { const k = JSON.stringify(o), c = count.get(k); if (c) { count.set(k, c - 1); return false; } return true; }).concat(add.map(o => Object.assign({}, o)));
+    if (e.players) out.players = JSON.parse(e.players[undo ? 0 : 1]);
+    out.name = e.names[undo ? 0 : 1];
+    return out;
+  },
+  // loads s keeping the camera; the players list comes from s, as loadSpec reads it
+  reloadFrom(s) { const cam = Object.assign({}, R.cam); this.loadSpec(s); this.name = s.name || this.name; Object.assign(R.cam, cam); this.refreshUI(); },
+  doUndo() {
+    this.commit(); const e = this.undo.pop(); if (!e) return;
+    const cur = this.toSpec();
+    if (e.full) { const now = this.pack(cur); this.push(this.redo, { full: now, bytes: JSON.stringify(now).length * 2 }); this.reloadFrom(this.unpack(e.full)); return; }
+    this.push(this.redo, e); this.reloadFrom(this.applyEntry(cur, e, 'undo'));
+  },
+  doRedo() {
+    this.commit(); const e = this.redo.pop(); if (!e) return;
+    const cur = this.toSpec();
+    if (e.full) { const now = this.pack(cur); this.push(this.undo, { full: now, bytes: JSON.stringify(now).length * 2 }); this.reloadFrom(this.unpack(e.full)); return; }
+    this.push(this.undo, e); this.reloadFrom(this.applyEntry(cur, e, 'redo'));
+  },
   validate(spec) {
     const structural = validateMapSpec(spec); if (structural.length) return structural;
     const errs = [], n = spec.n;
@@ -92,7 +202,8 @@ const Editor = {
       <h2>Map Editor</h2>
       <div class="ed-sec"><b>File</b><div class="row">
         <select id="ed-gtype"><option value="land">Highlands</option><option value="alpine">Alpine Mountains</option><option value="rivers">Great Rivers</option><option value="coastal" selected>Coastal</option><option value="islands">Islands</option><option value="anatolia">Anatolia</option><option value="mediterranean">Mediterranean</option><option value="world">World</option></select>
-        <select id="ed-gsize">${Object.keys(MAP_SIZES).map(k => `<option ${k === 'small' ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+        <select id="ed-gsize">${Object.keys(MAP_SIZES).map(k => `<option ${k === 'small' ? 'selected' : ''}>${k}</option>`).join('')}<option value="custom">custom</option></select>
+        <input id="ed-gn" type="number" min="16" max="${this.maxSize()}" value="200" title="Custom size: the map side in tiles (16 to ${this.maxSize()})" style="width:4.5em"></div>
         <div class="row"><button class="btn small" id="ed-gen">New generated</button><button class="btn small" id="ed-blank">New blank</button></div>
         <div class="row"><input id="ed-name" value="My Map" maxlength="30"><button class="btn small" id="ed-save">Save</button></div>
         <div class="row"><select id="ed-list"></select><button class="btn small" id="ed-load">Load</button><button class="btn small" id="ed-del" title="Delete saved map">${typeof GLYPH === 'function' ? GLYPH('trash') : 'Delete'}</button></div>
@@ -131,13 +242,14 @@ const Editor = {
     for (const b of document.querySelectorAll('#ed-side .tool')) b.onclick = () => { this.tool = b.dataset.tool; this.refreshUI(); };
     $('#ed-brush').oninput = e => { this.brush = +e.target.value; $('#ed-bv').textContent = this.brush; };
     $('#ed-undo').onclick = () => this.doUndo(); $('#ed-redo').onclick = () => this.doRedo();
-    $('#ed-gen').onclick = () => { this.snapshot(); this.newGenerated($('#ed-gtype').value, $('#ed-gsize').value, (Math.random() * 1e6) | 0, Math.max(2, this.players.length || 3)); this.refreshUI(); };
-    $('#ed-blank').onclick = () => { this.snapshot(); this.newBlank($('#ed-gsize').value); this.refreshUI(); };
-    $('#ed-save').onclick = () => { try { const name = $('#ed-name').value.trim() || 'My Map'; this.store(name, { ...this.toSpec(), name }); this.name = name; this.status(`Saved "${name}".`); this.refreshUI(); } catch (e) { this.status('Save failed: ' + e.message); } };
-    $('#ed-load').onclick = () => { const n = $('#ed-list').value; if (!n) return; const s = this.load(n); if (!s) { this.status('Map could not be loaded: invalid data or storage is unavailable.'); return; } this.loadSpec(s); this.name = n; this.undo = []; this.redo = []; this.refreshUI(); this.status(`Loaded "${n}".`); };
-    $('#ed-del').onclick = () => { const n = $('#ed-list').value; if (!n || !confirm(`Delete saved map "${n}"?`)) return; try { const m = this.savedMaps(); delete m[n]; localStorage.setItem('aoe_maps', JSON.stringify(m)); this.refreshUI(); } catch (e) { this.status('Delete failed: ' + e.message); } };
+    const size = () => $('#ed-gsize').value === 'custom' ? this.customSize() : $('#ed-gsize').value;
+    $('#ed-gen').onclick = () => { try { const s = size(); this.snapshot(); this.newGenerated($('#ed-gtype').value, s, (Math.random() * 1e6) | 0, Math.max(2, this.players.length || 3)); this.refreshUI(); } catch (e) { this.status(e.message); } };
+    $('#ed-blank').onclick = () => { try { const s = size(); this.snapshot(); this.newBlank(s); this.refreshUI(); } catch (e) { this.status(e.message); } };
+    $('#ed-save').onclick = async () => { const name = $('#ed-name').value.trim() || 'My Map'; try { await this.store(name, { ...this.toSpec(), name }); this.name = name; this.status(`Saved "${name}".`); this.refreshUI(); } catch (e) { this.status('Save failed: ' + e.message); } };
+    $('#ed-load').onclick = () => { const n = $('#ed-list').value; if (!n) return; const s = this.load(n); if (!s) { this.status('Map could not be loaded: invalid data or storage is unavailable.'); return; } this.loadSpec(s); this.name = n; this.clearUndo(); this.refreshUI(); this.status(`Loaded "${n}".`); };
+    $('#ed-del').onclick = async () => { const n = $('#ed-list').value; if (!n || !confirm(`Delete saved map "${n}"?`)) return; try { await this.remove(n); this.refreshUI(); } catch (e) { this.status('Delete failed: ' + e.message); } };
     $('#ed-export').onclick = () => { const s = this.toSpec(); const blob = new Blob([JSON.stringify(s)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (this.name || 'map').replace(/[^\w-]+/g, '_') + '.aoemap.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); this.status('Exported ' + a.download); };
-    $('#ed-import').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { if (f.size > 8e6) throw new Error('Map file is too large (maximum 8 MB).'); const s = JSON.parse(await f.text()); const errors = validateMapSpec(s); if (errors.length) throw new Error(errors.join('\n')); this.snapshot(); this.loadSpec(s); this.name = s.name || f.name.slice(0, 120); this.undo = this.undo.slice(-60); this.redo = []; this.refreshUI(); this.status('Imported ' + f.name); } catch (err) { this.status('Import failed: ' + err.message); } };
+    $('#ed-import').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const s = await this.readMapFile(f); this.snapshot(); this.loadSpec(s); this.name = s.name || f.name.slice(0, 120); this.redo = []; this.refreshUI(); this.status('Imported ' + f.name); } catch (err) { this.status('Import failed: ' + err.message); } };
     $('#ed-validate').onclick = () => { const errs = this.validate(this.toSpec()); this.status(errs.length ? errs.join('\n') : '✔ Map is valid and playable.'); };
     $('#ed-play').onclick = () => this.play();
     $('#ed-exit').onclick = () => this.close();
@@ -157,10 +269,14 @@ const Editor = {
     window.addEventListener('keyup', e => UI.keys.delete(e.key));
   },
   reloadKeep() { const cam = Object.assign({}, R.cam); this.loadSpec(this.toSpec()); Object.assign(R.cam, cam); this.refreshUI(); },
+  // an imported map file (plain or gzip JSON, up to the sanity cap CODEC.cap), checked like any map
+  async readMapFile(file) { const s = JSON.parse(await readTextFile(file)); const errors = validateMapSpec(s); if (errors.length) throw new Error(errors.join('\n')); return s; },
   status(h) { $('#ed-status').textContent = h; },
+  // the saved-map list alone: boot refreshes it when the mirror has loaded, without touching what the player typed
+  refreshList() { $('#ed-list').replaceChildren(...this.savedList().map(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; o.selected = n === this.name; return o; })); },
   refreshUI() {
     $('#ed-name').value = this.name;
-    $('#ed-list').replaceChildren(...this.savedList().map(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; o.selected = n === this.name; return o; }));
+    this.refreshList();
     for (const b of document.querySelectorAll('#ed-side .tool')) b.classList.toggle('on', b.dataset.tool === this.tool);
     for (const b of document.querySelectorAll('#ed-ter .sw-btn')) b.classList.toggle('on', this.tool === 'terrain' && +b.dataset.ter === this.terrain);
     for (const b of document.querySelectorAll('.pal-btn')) b.classList.remove('on');
@@ -207,9 +323,10 @@ const Editor = {
     if (this.moving) { this.moveEnt(this.moving.ent, t); return; }
     if (this.painting && (this.tool === 'terrain' || this.tool === 'erase' || this.tool === 'flatten' || this.tool === 'bridge' || this.tool === 'tunnel' || this.tool === 'trench' || (this.tool === 'object' && this.obj && this.obj.k !== 'bld' && this.obj.k !== 'unit'))) this.apply(t);
   },
-  mouseUp(e) { if (!this.active) return; this.painting = false; this.pan = null; this.moving = null; },
+  mouseUp(e) { if (!this.active) return; if (this.painting || this.moving) this.commit(); this.painting = false; this.pan = null; this.moving = null; },
   moveEnt(e, t) {
-    const x = Math.floor(t.x), y = Math.floor(t.y);
+    const x = Math.floor(t.x), y = Math.floor(t.y), b = this.base;
+    if (b && b.world === W && e.id < b.nextId && !b.moved.has(e)) b.moved.set(e, this.objOf(e));   // where it was when the change began (undo)
     if (e.kind === 'unit') { const naval = !!UNITS[e.type].naval; if (W.map.isWater(x, y) === naval && !W.map.blk[W.map.idx(x, y)]) { e.x = x + 0.5; e.y = y + 0.5; idxMoved(e); } return; }
     if (e.kind === 'bld') {
       const s = bsize(e); const nx = x - Math.floor(s / 2), ny = y - Math.floor(s / 2);
@@ -324,12 +441,12 @@ const Editor = {
     invalidateTiles(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
     hpaDirty(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
   },
-  play() {
+  async play() {
     this.name = $('#ed-name').value.trim() || this.name || 'My Map';
     const spec = this.toSpec();
     const errs = this.validate(spec);
     if (errs.length) { this.status('Cannot launch:\n' + errs.join('\n')); Sound.play('error'); return; }
-    try { this.store(this.name, spec); } catch (e) { this.status('Save failed: ' + e.message); return; }
+    try { await this.store(this.name, spec); } catch (e) { this.status('Save failed: ' + e.message); return; }
     UI.fromEditorName = this.name;
     this.active = false;
     const cfg = Object.assign(loadSetup(), { mapType: 'custom', customMap: this.name, civ: this.players[0].civ, color: this.players[0].color % 8, opponents: this.players.length - 1, teams: 'ffa' });

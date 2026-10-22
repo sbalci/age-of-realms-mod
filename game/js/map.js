@@ -50,9 +50,10 @@ function validateMapSpec(spec) {
   return errors;
 }
 
+const SPEC_LAYERS = ['ter', 'elev', 'bridge', 'tun', 'trench', 'excavated'];   // the per-tile layers a map spec may hold
 function mapLayers(map) {
   const out = {};
-  for (const k of ['ter', 'elev', 'bridge', 'tun', 'trench', 'excavated']) if (map[k]) out[k] = Array.from(map[k]);
+  for (const k of SPEC_LAYERS) if (map[k]) out[k] = Array.from(map[k]);
   return out;
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -142,7 +143,7 @@ class GameMap {
 // ---------- Pathfinding (A*, 8-directional) ----------
 // The open list is a binary heap in typed arrays: keys in a Float64Array and tile indices in an Int32Array, sifted with
 // exactly the comparisons of the old array-of-pairs heap (<= up, strict < down), so equal keys pop in the same order.
-const PF = { g: null, par: null, stamp: null, closed: null, cur: 1, n: 0, hf: new Float64Array(4096), hi: new Int32Array(4096) };
+const PF = { g: null, par: null, stamp: null, closed: null, cur: 1, n: 0, hf: new Float64Array(4096), hi: new Int32Array(4096), expanded: 0 };
 const PF_DX = [1, -1, 0, 0, 1, 1, -1, -1], PF_DY = [0, 0, 1, -1, 1, -1, 1, -1]; // neighbour offsets (were rebuilt for every neighbour)
 function pfInit(n) {
   if (PF.n === n) return;
@@ -207,6 +208,7 @@ function pfGrid(map, sx, sy, goal, passFn, maxNodes, lim) {
   const end = found >= 0 ? found : best, chain = [];
   for (let c = end; c !== -1 && chain.length <= n * n; c = par[c]) chain.push(c);   // no 4,000-point cap: a chain is at most every tile once
   chain.reverse();
+  PF.expanded += expanded;   // every search's expanded tiles, counted (hpa.js charges a blocked click's own searches by them)
   return { chain, ok: found >= 0, budget, expanded };
 }
 // String-pull smoothing of a tile chain into waypoints (tile centres), leaving out the start tile. Each step looks at
@@ -416,6 +418,9 @@ function carveMountainsAndObstacles(n, type, seed, starts, water, ter, elev, dW,
     }
   }
 }
+// The version of the generator. A save records it with the options that regenerate its map (session.js specStub), so a
+// later phase that changes what a seed makes can tell which generator a saved map came from. A save without one is 1.
+const GEN_VERSION = 1;
 function generateMapSpec(opts) {
   const n = MAP_SIZES[opts.size] || (Number.isInteger(opts.size) ? opts.size : 80);
   const seed = opts.seed >>> 0;

@@ -5,24 +5,27 @@
 // ---------- path-finding budget ----------
 // In big battles dozens of units ask for a new route in the same tick. A unit that still has a route keeps it and
 // retries a moment later once the tick's budget is spent; units without any route are always served.
+// Group orders (hpa.js) charge their route search and every member's join here too, and hpaJoinDue holds members back
+// while the tick's budget is spent.
 const PATHB = { perTick: 24, tick: -1, used: 0, deferred: 0, world: null };
 function pathBudgetSameGoal(a, b) {
   return !!a && ['x0', 'y0', 'x1', 'y1'].every(k => a[k] === b[k]);
 }
+// Starts a new count when the world or the tick changed.
+function pathBudgetTick() { if (W && (W !== PATHB.world || W.tick !== PATHB.tick)) { PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0; } }
 if (typeof pathTo === 'function') {
   const _pt = pathTo;
   pathTo = function (u, rect, r) {
-    if (W && (W !== PATHB.world || W.tick !== PATHB.tick)) { PATHB.world = W; PATHB.tick = W.tick; PATHB.used = 0; }
-    // a group member taking its group's route (hpa.js) is not charged: the group's one search is, when it runs
-    const shared = typeof hpaShares === 'function' && hpaShares(u);
-    if (!shared && PATHB.used >= PATHB.perTick && u.path && u.pi < u.path.length && u.goalRect &&
+    pathBudgetTick();
+    if (PATHB.used >= PATHB.perTick && u.path && u.pi < u.path.length && u.goalRect &&
         pathBudgetSameGoal(u.goalRect, rect) && u.goalR === r &&
         u._pathMapVersion === W.map.version) {
       PATHB.deferred++;
       u.repathT = 0.1 + simRandomSafe() * 0.3;
       return u.pathOk;
     }
-    if (!shared) PATHB.used++;
+    PATHB.used++;
+    if (typeof hpaOwnReset === 'function') hpaOwnReset(u);   // before hpaShared marks a fresh join
     const ok = _pt(u, rect, r);
     u._pathMapVersion = W.map.version;
     return ok;

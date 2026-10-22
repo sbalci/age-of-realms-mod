@@ -32,8 +32,12 @@ const HPA = {
   joinSlack: 1,           // ...and a waypoint this much dearer than the cheapest is joined too when it is in sight (saves a search)
   joinShare: 10,          // ...or a neighbour's search to the same waypoint, when its first point is in sight within this many tiles
   joinNodes: 600,         // a group member's own search onto the shared route
+  ownUnit: 400,           // a blocked click's member is charged 1 more to PATHB for every this many tiles its own search expands
+  ownSlack: 2,             // ...and takes that search's path when it is at most this many tiles longer than what is left of its own, if it does not turn the unit round
   groupR: 12,             // units farther than this from their group's leader route on their own
-  stats: { queries: 0, near: 0, routed: 0, unreachable: 0, fallback: 0, rebuilt: 0, groups: 0, shared: 0 },
+  upkeepEvery: 20,        // hpaUpkeep rebuilds dirty clusters every this many ticks...
+  upkeepRows: 48,         // ...and refills at most this many intra-edge rows a tick
+  stats: { queries: 0, near: 0, routed: 0, unreachable: 0, fallback: 0, rebuilt: 0, groups: 0, shared: 0, waits: 0, own: 0, ownTaken: 0 },
 };
 if (typeof location !== 'undefined' && location.search) { const q = new URLSearchParams(location.search).get('hpa'); if (q === 'off') HPA.enabled = false; else if (q === 'on') HPA.enabled = true; }
 
@@ -45,14 +49,18 @@ function hpaClassOf(u) {
 }
 // The passability a class's graph is built on: the game's own passLand / passNaval (with terra.js's bridges), with
 // built gates open and, for 'mounted', trench tiles closed.
+// Building the graph never writes the map: passLand and passNaval clear an occupancy id whose entity is gone when
+// they meet one, and a graph built at load (hpaWarm) visits every tile, so a resumed match would lose such ids that an
+// uninterrupted one keeps. The id is put back; the graph counts the tile as open, as passLand does.
 function hpaPassFn(cls) {
-  const map = W.map;
-  if (cls === 'naval') return passNaval();
-  const base = passLand(0), tr = cls === 'mounted' ? map.trench : null;
+  const map = W.map, blk = map.blk;
+  const keep = f => i => { const b = blk[i], r = f(i); if (blk[i] !== b) blk[i] = b; return r; };
+  if (cls === 'naval') return keep(passNaval());
+  const base = keep(passLand(0)), tr = cls === 'mounted' ? map.trench : null;
   return i => {
     if (tr && tr[i]) return false;
     if (base(i)) return true;
-    const b = map.blk[i], e = b ? W.ents.get(b) : null;
+    const b = blk[i], e = b ? W.ents.get(b) : null;
     return !!(e && e.type === 'gate' && e.built);
   };
 }
@@ -137,7 +145,7 @@ function hpaRebuild(G) {
   for (const k of cr) { hpaCorner(G, k); touched.add(k + 1); touched.add(k + cw); touched.add(k + cw + 1); }
   for (const k of [...touched].sort((a, b) => a - b)) hpaNodes(G, k);
   hpaComponents(G);
-  G.dirty.fill(0); G.any = false;
+  G.dirty.fill(0); G.any = false; G.rowsDue = true;   // hpaNodes cleared the rows of the touched clusters (hpaUpkeep refills them)
   HPA.stats.rebuilt += dirty.length;
 }
 // Connected areas inside cluster k (the same moves, kept inside the cluster).
@@ -406,11 +414,14 @@ function hpaFindPath(map, sx, sy, goal, passFn, cls) {
 // ---------- group orders ----------
 // A group order computes one route. orderMove and the attack-move command hand their units to hpaGroupOrder: per
 // movement class, the unit nearest the group's middle leads, and every unit of the leader's owner within HPA.groupR
-// of it is a member. A member's first path request for the order (setOrder's moveToPoint, or attack-move's first
-// tick) takes the group route, which the first such request computes once from the leader to the order point:
-// a short leg onto the route, the shared waypoints, then the member's own slot. Every later request, including
-// followPath's repath when the member is blocked, searches on its own. The one search counts against PATHB.
-// cmdFindBreach keeps one breach answer per group and target (hpaGroupOf).
+// of it is a member. Nothing is searched in the click: a member makes its first path request on its own first tick
+// (a 'move' order carries join: 1 until then; attack-move already waits for its first tick), and hpaJoinDue spreads
+// those requests over the ticks through the path budget (polish.js PATHB). The first member to tick runs the
+// group's one route search, from the leader to the order point, alone in that tick; from the next tick on the
+// members join it, each charged to PATHB: a short leg onto the route, the shared waypoints, then the member's own
+// slot. Every later request, including followPath's repath when the member is blocked, searches on its own.
+// cmdFindBreach keeps one breach answer per group and target (hpaGroupOf). Group state is never saved: a member still
+// waiting when the match is saved makes its own search after loading.
 const HPA_GROUP = new WeakMap();   // unit -> { g, o, used }: its group and the order object it was given
 // units: the ordered units; slotOf(u) -> {x, y} its destination; (x, y) the order point; t 'move' or 'attackmove'.
 function hpaGroupOrder(units, slotOf, x, y, t) {
@@ -428,15 +439,58 @@ function hpaGroupOrder(units, slotOf, x, y, t) {
     const g = { cls, leader: L, owner: L.owner, x: Math.max(0.3, Math.min(W.n - 0.3, x)), y: Math.max(0.3, Math.min(W.n - 0.3, y)), route: null, breach: null, solo };
     for (const u of grp) if (u.owner === g.owner && Math.hypot(u.x - L.x, u.y - L.y) <= HPA.groupR) groupOf.set(u, g);
   }
+  const sizes = new Map(); for (const g of groupOf.values()) sizes.set(g, (sizes.get(g) || 0) + 1);
+  for (const [g, n] of sizes) g.size = n;   // members, for the join quota (hpaJoinDue)
   for (const u of units) {
     const o = orderFor(u), g = groupOf.get(u);
     if (g) HPA_GROUP.set(u, { g, o, used: false }); else HPA_GROUP.delete(u);
+    if (g && !g.solo && t === 'move') o.join = 1;   // its path is made on its first tick (hpaJoinDue), not in the click
     setOrder(u, o);
   }
   HPA.stats.groups += new Set(groupOf.values()).size;
 }
-// Will u's next path request take its group's route? (polish.js does not charge such a request to PATHB.)
+// The group's one route, from the leader (or u, when the leader is gone) to the order point, charged to the path budget.
+function hpaRoute(g, u) {
+  const L = g.leader.dead || g.leader.dying || g.leader.inside ? u : g.leader;
+  if (typeof PATHB === 'object') PATHB.used++;
+  // aim at a passable tile: the click may be on a tree, a mine or a building, which the search cannot end on
+  const lp = unitPass(L), tg = hpaSnap(W.map, g.x | 0, g.y | 0, lp);
+  const e0 = PF.expanded, res = findPath(W.map, L.x | 0, L.y | 0, { x0: tg.x, y0: tg.y, x1: tg.x, y1: tg.y, r: 0 }, lp, undefined, g.cls);
+  // blocked: the click was on a tile the leader cannot stand on (a mine, a tree, a building, water), so the route ends
+  // beside it; size: the tiles the search expanded
+  g.route = { pts: res.pts, ok: res.ok, sx: L.x | 0, sy: L.y | 0, blocked: tg.x !== (g.x | 0) || tg.y !== (g.y | 0), size: PF.expanded - e0 };
+}
+// Called on a unit's tick before its first path request for a 'move' (o.join) or 'attackmove' order: may it make the
+// request now? The first member to tick runs the group's route search alone in that tick (charged to PATHB, filling the
+// rest of its budget). After that each group joins at most ceil(members / 2) members a tick, whatever other units have
+// spent of the tick's budget: so every member has its path by the third tick, and a tick's join work stays bounded. The
+// joins are still charged to PATHB (polish.js), but the shared budget never defers them. Anything else (no group, a group without a
+// shared route, an order loaded from a save) makes its request at once. Clears o.join when the answer is yes.
+function hpaJoinDue(u, o) {
+  const rec = HPA_GROUP.get(u);
+  if (rec && !rec.used && !rec.g.solo && u.order === rec.o && typeof PATHB === 'object' && W) {
+    const g = rec.g;
+    pathBudgetTick();
+    if (!g.route) { hpaRoute(g, u); PATHB.used = Math.max(PATHB.used, PATHB.perTick); g.joinTick = W.tick; g.joinN = Infinity; HPA.stats.waits++; return false; }
+    if (g.joinTick === W.tick && g.joinN >= Math.ceil((g.size || 2) / 2)) { HPA.stats.waits++; return false; }
+    if (g.joinTick !== W.tick) { g.joinTick = W.tick; g.joinN = 0; }
+    g.joinN++;
+  }
+  if (o.join) delete o.join;
+  return true;
+}
+// Will u's next path request take its group's route?
 function hpaShares(u) { const r = HPA_GROUP.get(u); return !!(r && !r.used && !r.g.solo && u.order === r.o); }
+// The units whose route still depends on group state: waiting to join their group's route (hpaShares), or a blocked-click
+// member whose own search is still due (hpaOwnPending). Group state is not saved: a save made while this is above 0
+// resumes with those members routing on their own (session.js).
+function hpaPending() { let c = 0; for (const u of idxAll('unit')) if (hpaShares(u) || hpaOwnPending(u)) c++; return c; }
+// Is a own search still due for u (a blocked click's member that has joined the shared route)? The resume gate counts it
+// besides hpaShares: it is deferred work that a save does not hold, so a match saved now would not replay as the
+// uninterrupted one. False once the search has run, the member got another path (pathTo) or another order.
+function hpaOwnPending(u) { const r = HPA_GROUP.get(u); return !!(r && r.own && u.order === r.o); }
+// A path request of u's own (polish.js pathTo) replaces any path the pending own search would have compared with.
+function hpaOwnReset(u) { const r = HPA_GROUP.get(u); if (r) r.own = false; }
 // The group of u's current order, if it has one.
 function hpaGroupOf(u) { const r = HPA_GROUP.get(u); return r && u.order === r.o ? r.g : null; }
 // pathTo's first call for a member: its route from the group's, or null to search on its own.
@@ -445,18 +499,42 @@ function hpaShared(u, rect, r) {
   if (!rec || rec.used || rec.g.solo || u.order !== rec.o) return null;
   rec.used = true;
   const g = rec.g;
-  if (!g.route) {
-    const L = g.leader.dead || g.leader.dying || g.leader.inside ? u : g.leader;
-    if (typeof PATHB === 'object') PATHB.used++;   // the group's one search, charged to the per-tick path budget
-    // aim at a passable tile: the click may be on a tree, a mine or a building, which the search cannot end on
-    const lp = unitPass(L), tg = hpaSnap(W.map, g.x | 0, g.y | 0, lp);
-    const res = findPath(W.map, L.x | 0, L.y | 0, { x0: tg.x, y0: tg.y, x1: tg.x, y1: tg.y, r: 0 }, lp, undefined, g.cls);
-    g.route = { pts: res.pts, ok: res.ok, sx: L.x | 0, sy: L.y | 0 };
-  }
-  // a request that falls through to the member's own full search is charged to the path budget like any other
+  if (!g.route) hpaRoute(g, u);   // a request that did not wait for hpaJoinDue (a rescue's moveToPoint, say)
+  // the member's request itself is charged to the path budget by polish.js, whether it joins or searches on its own
   const out = g.route.pts.length ? hpaJoin(u, g.route, rect) : null;
-  if (out) HPA.stats.shared++; else if (typeof PATHB === 'object') PATHB.used++;
+  if (out) HPA.stats.shared++;
+  if (out && g.route.blocked && g.route.ok) rec.own = true;   // and later its own search (hpaOwnDue)
   return out;
+}
+// A click on an obstacle (a mine, a tree, a building, water) that the route reaches. Along the shared route all the members
+// came round one side of it, past whatever stood there (tests/hpa-group.test.js: the wolves by the mine), where per-unit
+// searches came at it from their own sides. So the members set off along the shared route at once, and each one's own
+// search, from where it then stands to its slot, runs later on its own tick, once no member of its group has joined for a
+// tick: at least one per group a tick, more while the tick's budget can take searches the size of the group's route. Each is charged
+// to PATHB 1 more for every HPA.ownUnit tiles it expands (tiles, not time: the simulation stays deterministic). The member
+// takes the new path only when it is not longer than what is left of the shared one, plus HPA.ownSlack tiles when its
+// first leg heads the same way as its current leg (a positive dot product), and not at all longer when it would turn the
+// unit round: a unit never turns round onto a longer way. hpaOwnPending tells whether the search is still due. Called on every tick of a 'move' or 'attackmove'.
+function hpaOwnDue(u) {
+  const rec = HPA_GROUP.get(u);
+  if (!rec || !rec.own || u.order !== rec.o || !u.path || !u.goalRect || typeof PATHB !== 'object') return;
+  const g = rec.g;
+  pathBudgetTick();
+  if (W.tick - g.joinTick < 2) return;   // members still join (one at least every tick while any waits): they go first
+  if (g.ownTick === W.tick && PATHB.used + Math.floor(g.route.size / HPA.ownUnit) >= PATHB.perTick) return;
+  g.ownTick = W.tick; rec.own = false;
+  const r = u.goalRect, e0 = PF.expanded;
+  const res = findPath(W.map, u.x | 0, u.y | 0, { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, r: u.goalR }, unitPass(u), undefined, hpaClassOf(u));
+  PATHB.used += 1 + Math.floor((PF.expanded - e0) / HPA.ownUnit);
+  HPA.stats.own++;
+  if (!res.ok || !res.pts.length) return;
+  const len = (pts, i) => { let l = 0, x = u.x, y = u.y; for (; i < pts.length; i++) { l += Math.hypot(pts[i].x - x, pts[i].y - y); x = pts[i].x; y = pts[i].y; } return l; };
+  const end = u.path[u.path.length - 1], pts = res.pts.slice();
+  pts[pts.length - 1] = { x: end.x, y: end.y };   // the exact slot point the shared path ended at (moveToPoint)
+  const lead = (p, i) => { for (; i < p.length; i++) { const dx = p[i].x - u.x, dy = p[i].y - u.y; if (dx * dx + dy * dy > 0.04) return [dx, dy]; } return null; };
+  const c = lead(u.path, u.pi), n = lead(pts, 0), same = !c || !n || c[0] * n[0] + c[1] * n[1] > 0;
+  if (len(pts, 0) > len(u.path, u.pi) + (same ? HPA.ownSlack : 0)) return;
+  u.path = pts; u.pi = 0; HPA.stats.ownTaken++;
 }
 // The tile itself if passable, else the nearest passable tile in growing rings (up to 8 tiles out), else the tile.
 function hpaSnap(map, x, y, pass) {
@@ -526,6 +604,7 @@ function hpaJoin(u, route, rect) {
     if (T(pts[lastI]) === st) return { pts: head.concat(pts.slice(b, lastI), [slot]), ok: true };   // the order point is the slot
     // the slot is out of sight of the route's last leg (the click was on an obstacle, say): a short search from the waypoint before
     // the order point to the slot, so the members spread to their own slots instead of all converging on the order point
+    // (a blocked click's members also make their own searches later: hpaOwnDue)
     const body = pts.slice(b, lastI), prev = body.length ? T(body[body.length - 1]) : head.length ? T(head[head.length - 1]) : ui;
     const j = findPath(map, prev % n, (prev / n) | 0, tile(st), pass, HPA.joinNodes);
     return j.ok ? { pts: head.concat(body, j.pts), ok: true } : null;
@@ -552,8 +631,32 @@ function hpaJoin(u, route, rect) {
   }
   return { pts: all.concat(j.pts), ok: j.ok };
 }
+// ---------- upkeep between searches ----------
+// A search repairs what it meets: the dirty clusters (hpaRebuild) and every intra-edge row a rebuild cleared (hpaRow).
+// After 30 s of AI play at 256 x 256 that was up to 660 rows, 24 ms in the browser, inside one group order's route
+// search. So after every tick hpaUpkeep repairs a little: it rebuilds the dirty clusters every HPA.upkeepEvery ticks
+// and refills at most HPA.upkeepRows missing rows. The graph is a pure function of the map, so every route stays
+// exactly the same; only the moment the work is done moves.
+function hpaUpkeep() {
+  if (!HPA.enabled || !W || !W.map || HPA.map !== W.map || (W.settings && W.settings.editor)) return;
+  let left = HPA.upkeepRows;
+  for (const cls in HPA.g) {
+    const G = HPA.g[cls];
+    if (G.any) { if (W.tick % HPA.upkeepEvery) continue; hpaRebuild(G); }
+    if (!G.rowsDue) continue;
+    const cc = G.cl.length; let k = G.upk || 0, seen = 0;
+    for (; seen < cc; seen++, k = (k + 1) % cc) {
+      const c = G.cl[k];
+      for (let a = 0; a < c.nodes.length && left > 0; a++) if (!c.row[a]) { hpaRow(G, k, a); left--; }
+      if (!left) break;   // the budget ran out in cluster k: the next tick starts there
+    }
+    G.upk = k; if (seen >= cc) G.rowsDue = false;   // a whole pass found nothing left to fill
+    if (!left) break;
+  }
+}
+GameHooks.on('afterTick', hpaUpkeep);
 // A new or loaded match: build the land and naval graphs (and the mounted one on a map with trenches) and every intra edge now, so the first long order of the
-// match does not pay for them. (Rebuilds after changes stay lazy. The editor's worlds never route, so they are skipped.)
+// match does not pay for them. (Later repairs are spread over the ticks by hpaUpkeep; the editor's worlds never route, so they are skipped.)
 function hpaWarm() {
   if (!HPA.enabled || !W || !W.map || (W.settings && W.settings.editor)) return;
   for (const cls of W.map.trench ? ['land', 'mounted', 'naval'] : ['land', 'naval']) { const G = hpaGraph(cls); for (let k = 0; k < G.cl.length; k++) for (let a = 0; a < G.cl[k].nodes.length; a++) hpaRow(G, k, a); }

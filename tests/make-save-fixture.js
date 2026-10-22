@@ -2,8 +2,10 @@
 //   node tests/make-save-fixture.js <label> [--minutes=6]
 // Run it once per release (git checkout <tag> first, or use a worktree) and commit the file it writes to
 // tests/fixtures/saves/<label>.json.gz. Fixtures are never regenerated: they stand for saves players already have.
+// The fixture also records `replay`: the sha1 of signature() after this build loads the save, gives every slot to the
+// computer and plays 30 seconds. A later build that loads the save the same way must reach the same hash.
 'use strict';
-const fs = require('fs'), path = require('path'), zlib = require('zlib');
+const fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
 const label = process.argv[2];
 if (!label || !/^[\w.-]+$/.test(label)) throw new Error('usage: node tests/make-save-fixture.js <label> [--minutes=6]');
 const minutes = Number((process.argv.find(a => a.startsWith('--minutes=')) || '=6').split('=')[1]);
@@ -20,10 +22,13 @@ const text = run(`(() => {
   return MatchSave.serialize();
 })()`);
 if (warnings.length) console.warn(warnings.join('\n'));
+const replayRun = require('./engine-harness')().run;
+replayRun(`var __save = ${JSON.stringify(text)};`);
+const replay = crypto.createHash('sha1').update(replayRun(`(() => { MatchSave.restore(__save); for (const p of W.players.slice(1)) if (!p.ai) p.ai = new AIPlayer(p, 'standard'); for (let i = 0; i < 600; i++) worldTick(0.05); return signature(); })()`)).digest('hex');
 let commit = '';
 try { commit = require('child_process').execSync('git rev-parse --short HEAD', { cwd: __dirname }).toString().trim(); } catch (e) { /* not a repo */ }
 const dir = path.join(__dirname, 'fixtures/saves'); fs.mkdirSync(dir, { recursive: true });
 const file = path.join(dir, label + '.json.gz');
-const wrapped = JSON.stringify({ label, commit, made: new Date().toISOString().slice(0, 10), minutes, save: JSON.parse(text) });
+const wrapped = JSON.stringify({ label, commit, made: new Date().toISOString().slice(0, 10), minutes, replay, save: JSON.parse(text) });
 fs.writeFileSync(file, zlib.gzipSync(wrapped, { level: 9 }));
-console.log(`${path.relative(process.cwd(), file)}: ${(fs.statSync(file).size / 1024).toFixed(0)} KB (${(text.length / 1024).toFixed(0)} KB uncompressed), commit ${commit}`);
+console.log(`${path.relative(process.cwd(), file)}: ${(fs.statSync(file).size / 1024).toFixed(0)} KB (${(text.length / 1024).toFixed(0)} KB uncompressed), commit ${commit}, replay ${replay}`);
