@@ -4,9 +4,9 @@ Development is paused here. This page records where everything stands so work ca
 
 ## Where the code is
 
-- **`main`** holds phases 1–3 of the bigger maps work, plus phase 4 Tasks C1, C2 and 1–4. It merged `feat/maps-phase4-saves` at 1d03597.
+- **`main`** holds phases 1–3 of the bigger maps work, plus phase 4 Tasks C1, C2 and 1–4. It merged `feat/maps-phase4-saves` at 1d03597, then the Task 4 fix round at dccda02.
 - **`feat/maps-phase4-saves`** is the phase 4 branch, at 87e9759 and fully merged. New phase 4 work continues on it, or on a fresh branch from `main`.
-- **`wip/phase4-task4-fix`** (984cc79) holds the Task 4 fix round, stopped part-way and not reviewed. See "Phase 4: what is left".
+- **`wip/phase4-task4-fix`** (0de3e98) holds the Task 4 fix round: the editor undo fixes. It is finished, tested and merged, but **not yet re-reviewed**.
 - **Process notes:** `.superpowers/sdd/progress.md` (git-ignored) is the phase 4 ledger, with every task's review results and the deferred minor findings. Its key content is copied below so it survives a clean checkout.
 
 ## Known effect of merging before Task 5
@@ -46,19 +46,15 @@ The design is `specs/2026-10-18-bigger-maps-design.md`, and the plan for all 9 p
   - custom sizes;
   - imports up to 256 MB, plain or gzip.
 
-Tests at 87e9759: `npm test` passed 488 checks, and the browser saves and game specs passed 14 tests.
+Tests at 0de3e98: `npm test` passed 489 checks, and the browser saves and game specs passed 14 tests.
 
 ## Phase 4: what is left, in order
 
-**1. Finish the Task 4 fix round** (start from `wip/phase4-task4-fix`, then re-run the tests and the review). The findings are in `.superpowers/sdd/task-4-review.md`.
-- **Important:** the civ, colour and team handlers must call `snapshot()`. Today redo loses a colour change.
-- **Important:** `Editor.open()` must clear the undo stacks. Today the old map's diffs can throw on, or corrupt, the newly opened map. `doUndo`/`doRedo` should move an entry only after the reload succeeds.
-- **Minor:**
-  - `openLoad` must capture its modal nodes before the await, so stale buttons can't land in a reused `#modal`;
-  - generated custom sizes need a working minimum;
-  - generate first, then take the snapshot;
-  - `remove()` must roll back on failure;
-  - the import picker must accept `.gz` files.
+**1. Re-review the Task 4 fix round** (0de3e98; findings in `.superpowers/sdd/task-4-review.md`). It is already merged and tested: `npm test` 489 checks, editor.test 8/8, browser saves and game specs 14/14. What it fixed:
+- `Editor.open()` clears the undo history, so the old map's diffs can no longer throw on, or corrupt, the newly opened map;
+- `doUndo`/`doRedo` move an entry only after the reload succeeds;
+- civ, colour and team changes take a snapshot, so redo keeps them;
+- the Minors: `openLoad` keeps its own modal nodes, generated custom maps need a side of 64 or more, a failed generation leaves redo alone, `remove()` rolls back, and the import picker accepts `.gz`.
 
 **2. Task 5, migration** (brief: `.superpowers/sdd/task-5-brief.md`; plan section "Task 5"). It copies the old localStorage saves and maps into IndexedDB. It must also:
 - move the `aor:*` keys that fallback sessions write;
